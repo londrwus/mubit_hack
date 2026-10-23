@@ -13,8 +13,8 @@ Our entry for **Night Shift London**, the $65K Mubit hackathon (23–25 Oct 2026
 **Benchmark working name:** `night/bench`, which complements Mubit's own `latte/bench` (theirs measures note-based learning; ours measures weight learning on real tasks, costed in GPU $).
 
 ## Priorities (D20)
-1. **MUST:** a fair benchmark vs Opus 5.5 that proves **train faster, better model, less money** (`docs/06_benchmark_beat_opus.md`, `docs/architecture.md`).
-2. **OPTIONAL:** `sapling-research`, our fine-tune of Mubit's Banyan Sapling for spotting fake improvements in AI-research results (`docs/21_sapling_research_model.md`). It never takes time from #1. Hard stop at Sat 18:00.
+1. **MUST:** a fair benchmark vs Opus 5.5 that proves **train faster, better model, less money** (`docs/benchmark.md`, `docs/architecture.md`).
+2. **OPTIONAL:** `sapling-research`, our fine-tune of Mubit's Banyan Sapling for spotting fake improvements in AI-research results (`docs/sapling_research.md`). It never takes time from #1. Hard stop at Sat 18:00.
 
 ## Hard rules (breaking these disqualifies us)
 1. **Every LLM call must go through Mubit.** Never call OpenAI/Anthropic/Gemini directly.
@@ -28,7 +28,7 @@ Our entry for **Night Shift London**, the $65K Mubit hackathon (23–25 Oct 2026
 4. **Code freeze: Sun 25 Oct, 10:00 London time.** Clocks go back at 02:00 on Sunday.
 
 ## Judging (equal weight)
-Use of Mubit (correction → model update) · Usefulness (real recurring task) · Technical execution (works, holds up under questions) · Demo (clear, live, under the time limit). Details: `docs/02_hackathon_brief.md`.
+Use of Mubit (correction → model update) · Usefulness (real recurring task) · Technical execution (works, holds up under questions) · Demo (clear, live, under the time limit). Details: `docs/context.md`.
 
 ## Tech stack (decided; don't propose alternatives unless asked)
 | Layer | Choice |
@@ -49,20 +49,20 @@ README.md          ← human-facing overview
 docs/              ← all planning, research and design docs (index: docs/README.md)
 backend/           ← (planned) FastAPI app, agent loop, benchmark harness
 frontend/          ← (planned) Vite React race dashboard
-workers/           ← (planned) targets (nanochat, RL, CIFAR speedrun), runners (local, modal), verifier
+workers/           ← (planned) targets (LM speedrun, RL, CIFAR speedrun), runners (local, modal), verifier
 design/            ← (planned) Pen.dev design files
 ```
 The planned architecture, data model and API are in `docs/architecture.md`.
 
 ## Conventions
 - **Results log:** every measurement goes into `docs/results_log.md`, **including results where we're worse**. Never delete, hide, or cherry-pick re-runs. Slides and the README may quote only logged numbers and must not omit a worse result on the same comparison.
-- **Claims discipline:** never put an unmeasured number in the UI, README or slides. Placeholders in the docs are labelled as placeholders. Don't claim "better than Opus 5.5" per call. The claim is **better at a fixed GPU/time/$ budget** (see `docs/06_benchmark_beat_opus.md`).
+- **Claims discipline:** never put an unmeasured number in the UI, README or slides. Placeholders in the docs are labelled as placeholders. Don't claim "better than Opus 5.5" per call. The claim is **better at a fixed GPU/time/$ budget** (see `docs/benchmark.md`).
 - **Fairness in benchmarks:** both arms get the same GPUs, concurrency, wall-clock, $ cap, seeds and starting code. Only the LLM in the loop differs. Always include a non-LLM baseline (Optuna/random search).
 - **Freeze prompts early.** Mubit groups calls into a task by an *identical* model, instructions, tools, tool choice and output format. Any prompt drift splits the task and resets example collection (25 kept examples are needed before the first training).
 - **Log everything traceable:** store the Mubit request ID, Modal call ID, seed and config for every experiment in SQLite, and export to JSONL for verification.
 - **Secrets:** the Anthropic key is stored only in Mubit → Provider keys and a git-ignored `.env`. The app uses `MUBIT_API_KEY` only. Never commit keys.
-- **Budgets:** LLM ≈ $287 Anthropic + $25 Mubit (see `docs/17_llm_budget.md`); GPU = Modal $30, which is the real bottleneck. **No local GPUs**: the laptop runs mock/tiny CPU tests only, and everything else runs on Modal (10 GPUs / 100 containers at once).
-- **LLM cost rules** (`docs/18_llm_cost_optimization.md`):
+- **Budgets:** LLM ≈ $287 Anthropic + $25 Mubit (see `docs/budget.md`); GPU = Modal $30, which is the real bottleneck. **No local GPUs**: the laptop runs mock/tiny CPU tests only, and everything else runs on Modal (10 GPUs / 100 containers at once).
+- **LLM cost rules** (`docs/budget.md`):
   - stateless calls, laid out as system → target spec → dynamic digest, cached
   - structured outputs
   - batch K proposals per call; diagnose only on failures, judge only on a new best
@@ -72,14 +72,15 @@ The planned architecture, data model and API are in `docs/architecture.md`.
 - **Budget guard:** check estimated GPU $ before launching sweeps. Never launch H100s without a reason (the L4 at $0.80/h is the default).
 - **Python:** type hints, Pydantic models for API schemas, `uv` for dependency management.
 - **Frontend:** dark theme, large type (it is shown on a stage screen), shadcn components before custom ones.
-- **UI copy is plain language** (`docs/20_plain_language.md`): "GPUs waiting", "Cost to reach the goal", "Model quality", "Fake improvement caught". Never show jargon (val_bpb, adapter, RL, idle %) as a main label; raw metrics only on hover or in the export.
+- **UI copy is plain language** (`docs/demo.md`, `docs/pitch.md`): "GPUs waiting", "Cost to reach the goal", "Model quality", "Fake improvement caught". Never show jargon (val_bpb, adapter, RL, idle %) as a main label; raw metrics only on hover or in the export.
 - **Git:** commit or push only when the user asks. End commit messages with the Co-Authored-By line from the session's attribution reminder.
 
 ## Mubit facts agents get wrong
 - Adapters are **graded against the provider model's answers** ("Passed" means close enough to the provider), not against ground truth.
 - Limits: **3 adapter starts per org per UTC day**, a daily training limit, a pause between trainings, and cold starts of up to about 20 minutes. Plan the training schedule; don't trigger trainings casually.
 - Mubit routes to a dedicated model only when it performs better (per the 23 Oct launch).
-- Mubit launched on 23 Oct 2026: the **platform**, **Banyan Sapling** (open verifier model) and **latte/bench**. See `docs/11_launch_day_news.md`.
+- Pipeline timing (toy task): calls are grouped ~10 minutes after they arrive, reviewed, and trained in ~5 minutes, so roughly 20–25 minutes from calls to adapter. A trained adapter serves nothing until it passes its exam (85% quality target vs the provider), goes through shadow, and has a route pointing to it.
+- Mubit launched on 23 Oct 2026: the **platform**, **Banyan Sapling** (open verifier model) and **latte/bench**. See `docs/context.md`.
 
 ## Open questions
 These are tracked in `docs/decisions.md`. Resolve them with the Mubit team at office hours before building anything that depends on them.
