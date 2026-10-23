@@ -32,15 +32,15 @@ The event is called Night Shift, so lean in: two AI researchers work the night s
 ## The 3-minute script
 | Time | Beat | Screen |
 |---|---|---|
-| 0:00–0:20 | Hook: "Labs and banks are GPU-bound. Your AI researcher's GPUs sit idle while it thinks." | Opus side alone, GPUs mostly grey |
+| 0:00–0:20 | Hook: "AI labs are GPU-bound. Your AI researcher's GPUs sit idle while it thinks." | Opus side alone, GPUs mostly grey |
 | 0:20–0:40 | "Same GPUs, same budget, one change: its brain runs through Mubit." Start the race. | Split screen goes live |
 | 0:40–1:30 | Race runs. Narrate the idle %, experiment counts and new bests. | Tiles, curves, ticker |
 | 1:30–2:10 | Leakage trap → flag → v1→v2 in the Mubit console → rejection | Console and trap replay |
-| 2:10–2:40 | Full results: 1 hour × 3 seeds on nanochat / RL / fraud, plus the H100 replication | One clean results chart |
-| 2:40–3:00 | "Same discoveries, X× more experiments per GPU-dollar. AI labs for discovery, banks for fraud models." | Logo and one line |
+| 2:10–2:40 | Full results: 1 hour × 3 seeds on nanochat / RL / CIFAR, plus the H100 replication | One clean results chart |
+| 2:40–3:00 | "Same GPUs. Less money. Better models. Built for AI labs." | Logo and one line |
 
 ## Build notes
-- **Stack:** a FastAPI + WebSocket backend. Modal training workers stream metrics (loss, step, GPU busy/idle) to it. The frontend is a single page (React or plain HTML with Chart.js). Use a dark theme and big fonts readable from the back of the room.
+- **Stack:** a FastAPI + WebSocket backend. Training runs (local or Modal runner) stream metrics (loss, step, GPU busy/idle) to it. The frontend is Vite + React + shadcn/ui + Tailwind, designed first in Pen.dev (see `architecture.md`). Use a dark theme and big fonts readable from the back of the room.
 - **The race has to be real:** 2 L4s per arm for 3 minutes (about $0.20). Pre-warm the Modal containers so there's no cold start on stage.
 - **Fallback:** record a perfect run on Saturday night and keep it ready to play if the Wi-Fi or Modal fails. Say so openly if it's used.
 - **Expo table (10:30–12:30):** loop the race on a monitor continuously, with a QR code to the repo and results JSONL. People stop to watch races.
@@ -48,6 +48,6 @@ The event is called Night Shift, so lean in: two AI researchers work the night s
 
 ## Team split (if 3–4 people)
 1. Agent loop + Mubit integration + corrections
-2. Modal training harness (nanochat, RL, fraud) + metrics streaming
+2. Targets (nanochat, RL, CIFAR) + runners (local, Modal) + metrics streaming
 3. Race dashboard UI + demo script
 4. Benchmark runs + results chart + pitch

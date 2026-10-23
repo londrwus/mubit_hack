@@ -1,5 +1,41 @@
 # Modal compute plan ($30 budget)
 
+## ⭐ UPDATE (D21): concurrency limits shape the benchmark
+**Starter limits: 10 GPUs at once, 100 containers at once (CPU).** Plan races around them.
+
+### GPU slots (10)
+| Use | GPUs | Notes |
+|---|---|---|
+| Opus arm | 4 × L4 | LM speedrun / CIFAR speedrun |
+| Mubit arm | 4 × L4 | identical |
+| Sapling verifier | 1 × H100 (80 GB) | only while the verifier is in use; otherwise give it to the baseline |
+| Spare / Optuna baseline | 1 | run the baseline arm separately if needed (same 4 GPUs, a separate time slot) |
+- GPU seeds run **one after another** (3 seeds × 2 arms × 1 h ≈ 24 L4-hours ≈ $19 per GPU target). **Only one GPU target gets the full 3 × 1 h treatment** within $30; the second GPU target runs 30-minute races.
+
+### CPU containers (100): the cheap scale story
+- **Move the RL target to CPU** (gymnax classic environments run fast in JAX on CPU). CPU costs ~$0.05/core-hour, so it's almost free.
+- **Scale race:** each arm gets **32 CPU workers** (2 arms = 64 containers, leaving room for the Optuna baseline at 32). Every seed can run in parallel at once.
+- This is where the **"GPUs waiting" effect is biggest**: with 32 workers, a slow-thinking assistant can't keep them all fed, while the fast one can. It's the most dramatic version of the demo, and it's cheap: 64 cores × 1 h ≈ $3 (plus memory).
+- Plain-language line: *"With 32 machines, the standard assistant keeps most of them waiting. Ours keeps them all working."*
+- CPU containers also run the **dataset generator** for `ml-claims` (doc 21) and any analysis jobs.
+
+### Fairness (unchanged)
+Both arms get identical slots and both batch K proposals per call. The difference is only how fast and how cheaply the assistant decides.
+
+### Revised $30 split
+| Bucket | Cost |
+|---|---|
+| Dev / smoke tests (T4/L4 + CPU) | ~$3 |
+| GPU target A (LM speedrun): 3 seeds × 2 arms × 1 h × 4 L4 | ~$19 → **reduce to 30 min ($10)** if Sapling needs H100 time |
+| GPU target B (CIFAR speedrun): 30-minute races | ~$5 |
+| CPU target (RL, 32 workers per arm, all seeds in parallel) | ~$3 |
+| Sapling stages 1–2 on H100 | ~$5 |
+| Live demo | ~$1 |
+| **Total** | ~$30 (tight; ask about GPU credits, Q6) |
+
+---
+*(Original plan below, kept for reference.)*
+
 ## Modal prices (Starter plan, checked 23 Oct 2026)
 | Resource | $/hour | 5-min run costs |
 |---|---|---|

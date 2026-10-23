@@ -28,7 +28,7 @@ Use a **standard benchmark harness plus RE-Bench's fixed-budget method**:
 
 Using a **published benchmark's tasks and scoring** is what makes the result believable. Judges can't dismiss it as a benchmark we built to win.
 
-## Update: we have GPUs + CPUs. Upgraded plan
+## Update: GPU + CPU plan (⚠️ all compute is Modal, with no local GPUs, D22)
 Run the parallel tracks on separate hardware:
 | Hardware | Target | Why |
 |---|---|---|

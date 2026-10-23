@@ -7,5 +7,7 @@
 | Frontend | **Vite + React** | The race dashboard (see 09_demo_showcase.md) |
 | UI components | **shadcn/ui + Tailwind CSS** | Dark theme, large type for the stage |
 | Design | **Pen.dev** | Dashboard mockups before building |
-| Compute | **Modal** | GPU/CPU training workers ($30 budget, see 08_modal_compute_budget.md) |
+| Compute | **Pluggable runners** (`local`, `modal`) | The product is compute-agnostic; **Modal is only test/demo compute** ($30 budget, see 08_modal_compute_budget.md) |
 | LLM routing | **Mubit gateway** | Every LLM call goes through `api.mubit.ai` (hackathon rule) |
+
+See `architecture.md` for how these fit together.
