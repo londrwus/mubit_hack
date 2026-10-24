@@ -61,7 +61,11 @@ class LagRunner(CurveRunner):
         self.cancel_at[handle.run_id] = now()
 
         async def later() -> None:
-            await asyncio.sleep(self.lag_s)
+            # Hold the lag on the wall clock the scheduler stamps with (now()): on Windows
+            # asyncio.sleep can wake ~15-20 ms early against it (timer granularity).
+            due = self.cancel_at[handle.run_id] + self.lag_s
+            while (left := due - now()) > 0:
+                await asyncio.sleep(left)
             t.cancel()
 
         asyncio.get_running_loop().create_task(later())

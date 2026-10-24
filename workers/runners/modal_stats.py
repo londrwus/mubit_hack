@@ -238,11 +238,12 @@ class GpuSampler:
     def stop(self, *, final_sample: bool = True, join_timeout_s: float | None = None) -> dict[str, Any]:
         """Stop the thread; ``final_sample=False`` skips the closing read (the container path,
         so the run's result is never held back by a GPU read). With ``final_sample=False`` the
-        join waits at most 0.5 s by default (a read stuck in nvidia-smi is left to the daemon
-        thread, which emits nothing useful after the run's queue is closed)."""
+        join waits at most 0.05 s by default: an idle sampler wakes at once, and a read stuck in
+        nvidia-smi is left to the daemon thread, which emits nothing useful after the run's queue
+        is closed, so a hung read never holds the run's result (or its slot) back."""
         self._stop.set()
         if join_timeout_s is None:
-            join_timeout_s = max(2.0, 2 * self.interval_s) if final_sample else 0.5
+            join_timeout_s = max(2.0, 2 * self.interval_s) if final_sample else 0.05
         if self._thread is not None:
             self._thread.join(timeout=join_timeout_s)
         if final_sample:

@@ -1,4 +1,62 @@
-# Video script: the 3-minute demo video (pre-recorded)
+# Video script: the 2-minute demo video (D55)
+
+Mubit's rules (D55): the video is **at most 2:00**, MP4 or MOV, **≤ 300 MB**, uploaded with the submission (no YouTube link, no deck). This 2:00 cut is the one we submit. It shows **one user flow end to end**: landing → Get started → Compare (a replay of logged race R78) → the Mubit console (a correction, then the model's version history) → our open model on Hugging Face. The old 3:00 script is kept below as an **archive**; its rules (logged numbers only, worse result beside each win, D54 wording, the "never say" list in section (d)) still apply to every frame here.
+
+**Word budget:** 283 spoken words in 2:00 (≈ 1:57 at 145 words a minute, leaving ~3 s of pauses). If a beat runs long, cut words, don't speed up.
+
+## 2:00 version (current)
+
+| # | Time | Beat | Narration (words) | Visual | Captions (R-ids) |
+|---|---|---|---|---|---|
+| 1 | 0:00–0:10 | **The problem** | "AI labs let Opus plan their training sweeps. The planner is most of the bill, and while it thinks, the machines wait." (22) | Dark title card, large type: "The AI planner is most of the bill. While it thinks, the machines wait." | "90.6% of a standard Opus 5.5 sweep's spend was AI calls (game-playing, R48 races, R54)" · "Machines waiting 69% of the time (30 cloud CPU workers, R48)" |
+| 2 | 0:10–0:25 | **What it is** | "This is Busy Machines: compute intelligence for training sweeps. Same Opus 5.5 planner, called only when it's worth it; every machine kept busy by a no-AI tuner; fake wins blocked. It runs on Mubit." (34) | Built landing page `http://localhost:5173/`, slow scroll through the engine section. **Start below the hero** unless its copy has been changed: the built hero still says "Your GPUs should never wait" / "Same GPUs, more science", which is "GPUs" alone (D54) | "Busy Machines: compute intelligence for training sweeps · Runs on Mubit (D54)" · "Every AI call goes to https://api.mubit.ai/anthropic (set in backend/agent/llm_base.py line 29; any other host rejected, backend/agent/mubit_client.py lines 354–357)" |
+| 3 | 0:25–0:38 | **Get started** | "Getting started takes three steps: paste your Mubit key, so every AI call goes through Mubit's gateway; connect your own compute; and start a sweep from a preset." (28) | `http://localhost:5173/app`: mouse over step 1 (Mubit key), step 2 (compute), step 3 (Start a sweep: the API block, then the CLI line). Don't click Copy on camera | "One key, MUBIT_API_KEY: the app never reads a provider key" · "Steps 1–2 are shown as already set up; 'Start a sweep' copies the real command, since a real sweep is paid (frontend/README.md)" |
+| 4 | 0:38–1:08 | **Compare: replay of R78** | "Here's a logged race, replayed. Same Opus planner, same 30 machines and clock on both sides. In this run, the standard agent's machines wait 69% of the time; ours, 1.4%. It ends a tie on model quality, for $3.30 of AI against 70 cents. Over three runs: a quarter of the AI bill. Tabular tuning too, though the standard agent was slightly ahead every run, and our first setting there failed." (71) | `http://localhost:5173/app/compare` → select **"Game-playing sweep"** (R78 run 1, race `4ca4ed27`). 0:38–0:41 the select; 0:41–0:51 the replay at 90× (the 15-minute race in 10 s); **0:51–1:08 hold the end frame**: AI bill $3.30 vs $0.70, machines waiting 69.0% vs 1.4%, experiments 497 vs 1,594, model quality −155.0 vs −154.9, then the chips ("4× cheaper, mean of 3 runs", "Same quality") and the "Where it falls short" line. Slow push-in on the two AI bill counters | Top-right tag (set by the server): "Replay of logged race R78, run 1 of 3 · 90× speed" · "Run 1 of 3 (R90). 3-run means: AI bill $0.83 vs $3.30, a tie on quality, −154.3 vs −154.5 (R78)" · "Tabular, pre-registered: 0.8884 vs 0.8897, standard agent ahead in all 3 runs, AI bill $0.70 vs $2.77 (R82). Chosen after the first setting FAILED: 7% more errors (R75)" · "Long runs on real L4 GPUs: AI bill 0.22×, but 5% more errors; FAILED (R85)" · footer: "AI $ at list price · tabular machine time simulated" |
+| 5 | 1:08–1:35 | **Mubit: a correction, then the model's version history** | "Mubit records the agent's recurring steps as tasks. Here, Opus called a real improvement 'unsure'; ten re-runs say it's real. We rate that reply Bad, on its exact request. A rating alone doesn't retrain; new examples do: 25 trigger a new version. Here's the version history: versions come from recorded examples. Our best small model matches Opus on 58.3%; the bar is 95%, so Opus keeps answering." (67) | Mubit console, ~3 s still on each page, slow mouse: (1) 1:08–1:11 project A → **Tasks** · (2) 1:11–1:17 workspace B → **Requests** → `mreq_01a16c07cc1d7c70ae96381f78916256`, Opus's reply `unsure · insufficient_evidence` · (3) 1:17–1:21 click **Rate this reply: Bad** (once) · (4) 1:21–1:28 B → Tasks → judge v1 `ln_5d9ea82de398d3c492ec873f` → Adapters → **History** · (5) 1:28–1:35 workspace C → judge v1 `ln_dfe18721334e06d23c32f338` → Adapters card `ad_lane_52d6d485` (58.3%) | "The agent's steps as Mubit tasks: planning, checking, debugging (R29, R46)" · "Opus: 'unsure'. Ten re-runs: a real improvement (R34, R39)" · "Rated Bad in Mubit. Mubit has no corrections API, so the rating hasn't changed a model" · "A new version after 25 new examples (R58); 40 more recorded (R71)" · "Best small checker: 58.3% match with Opus on 24 test cases; bar 95% (R79). Same data in another workspace: 11.4% of 35 (R70). None serves yet" |
+| 6 | 1:35–1:48 | **Our open model on Hugging Face** | "We also fine-tuned Mubit's open verifier, Banyan Sapling. On real claims from our races, the published model caught none of 109 fakes; ours caught 57, approving none. Opus still caught all 109." (32) | `https://huggingface.co/busy-machines/sapling-research` (public, R92): model card top, then a slow scroll to its results and "Where it loses" | "152 real race claims with known answers: fakes caught 0 / 57 / 109 of 109 (published Sapling / ours, looser setting / Opus); fakes approved 0 for all (R81)" · "Real improvements confirmed: 0 of 7 for all, Opus included (R81)" · "A community fine-tune, not an official MubitLabs model · published (R92)" |
+| 7 | 1:48–2:00 | **Close** | "Mubit can make each call cheaper; we decide how many a sweep needs. About the same model, a quarter of the AI bill. On long real-GPU runs, not yet." (29) | Dark end card: "Busy Machines" / "Compute intelligence for training sweeps · Runs on Mubit" / "Same Opus 5.5. Same machines. About the same model for a quarter of the AI bill." / `github.com/londrwus/mubit_hack`. Last 1 s silent | Small line: "Game-playing: a tie (R78) · Tabular: slightly behind in every run (R82), after a failed first setting (R75) · Long runs on real L4 GPUs: 5% more errors (R85) · measured before any Mubit model served · every number in docs/results_log.md" |
+
+**Spoken total:** 22 + 34 + 28 + 71 + 67 + 32 + 29 = **283 words**.
+
+**Variant lines (swap in only once the R-row is logged):**
+- **B shows a v2** in its History: in beat 5 replace "Here's the version history." with "Here's v2, trained on 40 more checks." (+3 words). Caption: "v1 → v2: [v2 score and test-case count, R-new]". Never say v2 learned from the correction.
+- **C's bar lowered to 55% (D52) and shown:** add the caption "(bar lowered to 55% by us, workspace C only, D52) [R-new]". Never "passed Mubit's exam".
+
+**Never in this cut:** the 60-second live demo (R89); "Mubit beats Opus" or any Mubit-arm number; "it learned from our correction" / "the correction changed the model"; "GPUs" alone for R78 or R82; "Live" over a replay; R87's "89% cheaper / 72% faster" (no time for its caveat). Full list: section (d) of the archive below.
+
+### Recording checklist (2:00 cut)
+1. **Before 05:00:** read the script once against a stopwatch (target 1:52–1:56 spoken).
+2. **Servers** (PowerShell, repo root):
+   ```powershell
+   $env:PYTHONUTF8="1"; $env:PYTHONIOENCODING="utf-8"
+   $env:BUSY_MACHINES_REPLAY_SOURCES="data/bench/bench.db"   # or "data/bench" (the committed .jsonl exports) in a fresh clone
+   python -m uv run --extra ml --with onnxruntime==1.29.0 uvicorn backend.app:app --port 8765
+   # second terminal
+   cd frontend; npm run dev    # http://localhost:5173
+   ```
+   A replay makes no LLM call and no Modal call ($0). Check once that the Compare page shows "Replay of logged race R78, run 1 of 3" and not the "Backend offline" label.
+3. **Browser:** Chrome "video" profile, window 1920×1080, bookmarks bar hidden, extensions off. Zoom 100% for the app, 125% for the Mubit console, 110% for Hugging Face. Never open Mubit → Provider keys, Modal tokens or `.env` on screen; crop any account e-mail. Log in to the Mubit console fresh (it signs out after 15 minutes idle).
+4. **Tabs, in this order:**
+   1. `http://localhost:5173/` (landing; start below the hero, see beat 2)
+   2. `http://localhost:5173/app` (Get started)
+   3. `http://localhost:5173/app/compare`, example **"Game-playing sweep"** (R78 run 1, `4ca4ed27`). Reload the page just before the take, so the replay starts from 0
+   4. Mubit, project A → **Tasks**
+   5. Mubit, workspace B → **Requests** → search `mreq_01a16c07cc1d7c70ae96381f78916256` (session `collect-judgev1-2026-10-24/noise_set/7`; Opus's reply `unsure · insufficient_evidence`)
+   6. Mubit, workspace B → Tasks → judge v1 `ln_5d9ea82de398d3c492ec873f` → Adapters → **History**
+   7. Mubit, workspace C → Tasks → judge v1 `ln_dfe18721334e06d23c32f338` → Adapters (`ad_lane_52d6d485`, 58.3%)
+   8. `https://huggingface.co/busy-machines/sapling-research`
+5. **Console stills first (insurance):** screenshot tabs 4–7 before anything is clicked (save to the scratchpad, not the repo).
+6. **The Bad rating can be done only once.** Click **Rate this reply: Bad** once on `mreq_01a16c07cc1d7c70ae96381f78916256`. If the take fails after the click, retake on the **workspace C copy `mreq_01a16d547a3770d186869108a305e42e`** (same case), and then show C's judge v1 History in shot (4) instead of B's. **Log every rating you make as an R-row** (main session), including a failed take's.
+7. **Capture** (OBS, 1920×1080, 30 fps): one take per tab group: app (tabs 1–3), console (tabs 4–7), Hugging Face (tab 8). Then the voice-over: 3 whole takes, keep the best (no splicing inside a number).
+8. **Edit:** picture to the voice-over; captions as in the table (white on a 70% black bar, ≥ 4 s each, R-ids inside the caption). The end card is made in the editor.
+9. **Check before export:** every caption against `docs/results_log.md` by R-id; drop any `[R-new]` caption whose row wasn't logged; the R78 replay tag reads "Replay of logged race"; no "GPUs" alone for R78/R82; no jargon as a main label.
+10. **Export:** MP4, H.264, 1920×1080, 30 fps, ~8 Mbps, AAC 48 kHz, **≤ 2:00.0** (about 120 MB, under the 300 MB limit). File `busy-machines-demo-2min.mp4`. Upload it with the submission between 00:00 and 08:00 (D55; our own freeze is 06:00, D53).
+
+---
+
+# Archive: the 3:00 version (superseded by D55, kept for reference)
+
+Not the submitted cut: the limit is 2:00 (D55). Its rules, commands and never-say list still apply.
 
 The demo is a **3:00 pre-recorded video**, not a live run. This file is the script, the shot list, the commands for every terminal visual, the "never say" list and a 20-second backup cut. It reuses the framing and number rules of `demo_script.md` (D46, D48), the slide copy of `slides_outline.md`, the IDs in `evidence_pack.md` and the Q&A answers in `qa_mubit_constraints.md`.
 
@@ -13,10 +71,10 @@ The demo is a **3:00 pre-recorded video**, not a live run. This file is the scri
 - **The race visual is the R78 replay on the live-compare screen** (Pen frame `eGVso`, "Platform · Sweep detail (live compare)"). It is **not** the 60-second live demo (`demo-live-60s`). In that demo's one test run the standard agent was slightly ahead on model quality and AI bill at 60 s (R89: 0.8090 vs 0.8064, $0.133 vs $0.142). R89 shows that the demo tool works. It is not a result, and none of its numbers go in the video.
 - **Design frames** (`C:/Users/Lenovo/Documents/mubit.pen`; open it only through the pencil MCP, never Read it). The PNG exports are in `design/exports/final/<id>.png`, and their numbers are checked in that folder's `README.md`. A frame goes on screen only if every number on it is logged, and it is tagged "design screen" whenever it is a still rather than the built app. The landing page `pOKAY` has five screens: hero `KekD1`, engine `QYavo`, our model `MgmgS`, benchmarks `oT6Ad`, call to action `c50WCZ`. The platform frames are `bxWh3` (Overview) and `eGVso` (Sweep detail, live compare). Conditions before use:
   - `KekD1` says "Your GPUs should never wait" and "Same GPUs, more science", which is "GPUs" alone (against D54). It is **not used** until that copy is changed in Pen (on the user's go).
-  - `MgmgS` cites "99.9% vs 88.7% on fresh data", a figure that is not in `results_log.md`. It is **not used** until that figure is removed or logged.
+  - `MgmgS` cites "99.9% vs 88.7% on fresh data" (R54). That is R54's figure for **one run** of the no-AI tool's shipped image model (self-reported 0.9994, held-out 0.8874), not a Sapling result. Use the frame only if that line is captioned "no-AI tool, 1 of 3 runs (R54)" or cropped out.
   - `oT6Ad` shows R87's time to the goal without its easy-goal caveat, and it shows neither R75 nor R85. It is **not in the main cut**.
   - The `bxWh3` and `eGVso` run-1 values are logged in R90. Their headline numbers are 3-run means (R78).
-- **Built app or stills.** The frontend is built only on the user's go. If it is built, record the `eGVso` layout live from the replay WebSocket. If it isn't, the moving race comes from `scripts/replay_tui.py` (same race, same speed), and the Pen exports appear only as stills.
+- **Built app or stills.** The frontend is built (R91): `/app/compare` (`frontend/README.md`; Pen frame `GKsLR`, "Compare") replays R78 run 1 live from the replay WebSocket and ends exactly on the R90 values. It replays at **90×**, so its server tag reads "· 90× speed": either caption the take at 90× (the beat timings below then shrink the race to 10 s) or record the 30× take with `scripts/replay_tui.py` (same race). Its landing hero still says "Your GPUs should never wait" (D54), so the built landing hero is not used either. If the built app fails, the moving race comes from `scripts/replay_tui.py`, and the Pen exports appear only as stills.
 - No adapter has served a call (R70, R79). So never say "Mubit beats Opus", and never give a Mubit-arm number.
 - **Workspace C's bar (D52):** if C's card or settings are shown with the bar at 55%, say "we lowered the bar to 55% in that one test workspace". Never say "passed Mubit's exam". No R-row yet logs that the bar was changed or that C went live. Show it only once that row exists.
 
@@ -32,7 +90,7 @@ The demo is a **3:00 pre-recorded video**, not a live run. This file is the scri
 | **Narration (40 words)** | "AI labs now let an AI plan their training sweeps, and the AI is the expensive part. On our game-playing sweep, 90.6% of a standard Opus 5.5 sweep's spend was its own thinking. And while it thinks, the machines wait." |
 | **Visual** | Clip **C01**: the **live-compare screen** (`eGVso` layout) replaying race `4ca4ed27` (R78 run 1) at 30×. It opens on the first frame: both sides' 30 machines and AI bill counters at $0. Let it start running from ~0:06. Variant: if the hero `KekD1` has had its "GPUs" copy fixed, show it for 0:00–0:04 first, then cut to C01 |
 | **Caption** | "90.6% of a standard Opus 5.5 sweep's spend was AI calls: $10.01 of $11.06 over 3 earlier game-playing runs on cloud CPU workers (R48 races, R54)" · top-right tag (from the screen's header): "Replay of logged race R78, run 1 of 3 · 30× speed" |
-| **Fallback** | Frontend not built: clip **C01-tui** (`scripts/replay_tui.py 4ca4ed27 --speed 30 --record`), with the same caption and the tag "Replayed from a logged race (R78) · 30× speed". Terminal unusable: chart 2 (`2-gpus-waiting-r78-dark.png`) as a still, with a slow zoom. Never the 60-second live demo (R89) |
+| **Fallback** | Built app unusable, or a 30× take wanted: clip **C01-tui** (`scripts/replay_tui.py 4ca4ed27 --speed 30 --record`), with the same caption and the tag "Replayed from a logged race (R78) · 30× speed". Terminal unusable: chart 2 (`2-gpus-waiting-r78-dark.png`) as a still, with a slow zoom. Never the 60-second live demo (R89) |
 
 ### Beat 2 · 0:17–0:40 · What Busy Machines is (compute intelligence for training sweeps)
 | | |
@@ -54,7 +112,7 @@ The demo is a **3:00 pre-recorded video**, not a live run. This file is the scri
 | | |
 |---|---|
 | **Narration (51 words)** | "Why it works: in the game-playing race the standard agent's machines sat waiting 68.8% of the time while Opus planned. Busy Machines' waited 1.5%. With longer runs the standard agent waits less: 10.9% in our image races. That waiting is where the experiments are lost; our engine fills those idle machines." |
-| **Visual** | 1:11–1:24: `2-gpus-waiting-r78-dark.png`. 1:24–1:33: the landing page's **engine screen** `QYavo` ("I · The engine: Same model. We changed when it thinks"; `design/exports/final/QYavo.png`, slow push-in on its busy/waiting strip and three steps). Or, if the frontend is built, the same section of the live landing page |
+| **Visual** | 1:11–1:24: `2-gpus-waiting-r78-dark.png`. 1:24–1:33: the landing page's **engine screen** `QYavo` ("I · The engine: Same model. We changed when it thinks"; `design/exports/final/QYavo.png`, slow push-in on its busy/waiting strip and three steps). Or the same section of the built landing page (R91) |
 | **Captions** | "Machines waiting (here 30 cloud CPU workers per side): 68.8% vs 1.5%, game-playing, 3-run means (R78) · chart: one run of 3 (seed 1)" → "Longer image-recognition runs on real L4 GPUs: the standard agent waited 10.9% (R53) and 12.0% (R85); there Busy Machines was 4.5× cheaper on AI but had 5% more errors (R85, failed)" → on `QYavo`: "The engine: plans less often, fills idle machines, checks every gain · 69% vs 2% waiting is R78's 68.8% vs 1.5%, rounded" · tag: "Design screen" (stills only) |
 | **Variant (paid, only on the user's go)** | Clip **C04**: the two Modal app dashboards side by side, left `busy-machines-opus` and right `busy-machines-bm` (Apps → app → containers / GPU view), from a `demo-cifar-modal-5m` run (not run yet). Sped up 8× in the edit. Tag, top-right, fixed: "**Demo run, not a benchmark result** · image recognition, 3 L4 per side, 5 min · sped up 8×". To use it, swap the last sentence for "Here is a five-minute demo on real cloud GPUs, one Modal app per side." (14 words, same count). Never describe what the dashboards "show" beyond what is visibly on screen, and never read out the demo run's numbers. This is not the 60-second live demo (R89), which is not used |
 | **Fallback** | `QYavo` export unreadable at 1080p: keep chart 2 for the whole beat, same narration |
@@ -65,7 +123,7 @@ The demo is a **3:00 pre-recorded video**, not a live run. This file is the scri
 | **Narration (34 words)** | "A better number only counts if it's real. Busy Machines' side tried a fake shortcut 847 times, mostly from its tuner. The checker let none through. One burst of checks did cost 56 cents." |
 | **Visual** | Clip **C02**: the live-compare screen (`eGVso` layout) replaying race `145c2a2d` (R78 run 3) at 30×, over the stretch where "Fake improvement caught" fires again and again and Busy Machines' AI bill counter climbs (the burst). About 14 s cut from the 30 s replay. Use `start_s` to begin just before the burst (section c) |
 | **Caption** | "Fake shortcut runs accepted as the best model: 0 of 847 on Busy Machines' side, 3 runs (R78)" → "That run's burst: 143 checks, $0.56, that run's AI bill 0.34× of the standard agent's, vs 0.21× in the other two runs (R78)" · tag (from the header): "Replay of logged race R78, run 3 of 3 · 30× speed" |
-| **Fallback** | Frontend not built: C02-tui (`scripts/replay_tui.py 145c2a2d --speed 30 --record`) with the same captions. Or slide 6's checker line as a still: "Real improvements confirmed 7 of 7 vs Opus alone 1 of 7; fakes through 0 of 32, offline on stored verdicts (R37). It accepted 1 of 36 lucky results; Opus 0 (R34)" (and change the narration to match these R37 words) |
+| **Fallback** | Built app unusable, or a 30× take wanted: C02-tui (`scripts/replay_tui.py 145c2a2d --speed 30 --record`) with the same captions. Or slide 6's checker line as a still: "Real improvements confirmed 7 of 7 vs Opus alone 1 of 7; fakes through 0 of 32, offline on stored verdicts (R37). It accepted 1 of 36 lucky results; Opus 0 (R34)" (and change the narration to match these R37 words) |
 
 ### Beat 6 · 1:47–2:23 · Mubit: a correction, and how the model updates (rule #3)
 | | |
@@ -81,9 +139,9 @@ The demo is a **3:00 pre-recorded video**, not a live run. This file is the scri
 | | |
 |---|---|
 | **Narration (48 words)** | "We also fine-tuned Mubit's open verifier, Banyan Sapling, for research claims. On real claims from our races, the published model caught none of 109 fakes; ours caught 57 and approved none, in a tenth of a second each. Opus is still the better judge: it caught all 109." |
-| **Visual** | 2:23–2:37 `4-sapling-real-claims-dark.png` (pan from "Fakes caught" to "Real improvements confirmed: 0 for all four"). 2:37–2:44 clip **C08**: the Hugging Face model page **if published** (needs the user's HF name, login and go), else the model card file (`data/sapling/sapling_v2/hf_release/README.md`, Markdown preview, scrolled from "# sapling-research v2" to "## Where it loses"). The landing page's **our-model screen** `MgmgS` may replace the file view only after its unlogged "99.9% vs 88.7% on fresh data" figure is removed or logged. Its R81 numbers (0 vs 57 of 109) are fine |
-| **Captions** | "152 real race claims with known answers: fakes caught 0 / 57 / 109 of 109 (published Sapling / ours, looser setting / Opus); fakes approved 0 for all (R81)" → "Real improvements confirmed: 0 of 7 for all, Opus included (R81)" → "~0.1 s per check on an H100 (R76) vs ~1.7 s for Opus (R81)" → on C08: "A community fine-tune, not an official MubitLabs model" + (file version) "Model card file · not published". Small, optional: "A later version (v4) failed its pre-declared gate; v2 stays the release (R83)" |
-| **Fallback** | HF not published: show the file (as above), never a link that doesn't exist. Editing time short: drop C08 and hold the chart |
+| **Visual** | 2:23–2:37 `4-sapling-real-claims-dark.png` (pan from "Fakes caught" to "Real improvements confirmed: 0 for all four"). 2:37–2:44 clip **C08**: the Hugging Face model page https://huggingface.co/busy-machines/sapling-research (public, R92), or as the fallback the model card file (`data/sapling/sapling_v2/hf_release/README.md`, Markdown preview, scrolled from "# sapling-research v2" to "## Where it loses"). The landing page's **our-model screen** `MgmgS` may replace the file view only with its "99.9% vs 88.7% on fresh data" field note captioned as R54's one run of the no-AI tool, or cropped out. Its R81 numbers (0 vs 57 of 109) are fine |
+| **Captions** | "152 real race claims with known answers: fakes caught 0 / 57 / 109 of 109 (published Sapling / ours, looser setting / Opus); fakes approved 0 for all (R81)" → "Real improvements confirmed: 0 of 7 for all, Opus included (R81)" → "~0.1 s per check on an H100 (R76) vs ~1.7 s for Opus (R81)" → on C08: "A community fine-tune, not an official MubitLabs model" + "huggingface.co/busy-machines/sapling-research · published (R92)" (file version: "Model card file · published at huggingface.co/busy-machines/sapling-research"). Small, optional: "A later version (v4) failed its pre-declared gate; v2 stays the release (R83)" |
+| **Fallback** | HF page unreachable during capture: show the file (as above). Editing time short: drop C08 and hold the chart |
 
 ### Beat 8 · 2:44–3:00 · Close
 | | |
@@ -108,7 +166,7 @@ The demo is a **3:00 pre-recorded video**, not a live run. This file is the scri
   | `S2 Browser` | Window capture: Chrome, "video" profile, 1920×1080 window |
   | `S3 Modal side by side` | Two window captures, Chrome window A (`busy-machines-opus`) left 960×1080 and window B (`busy-machines-bm`) right 960×1080; text source fixed top-right "Demo run, not a benchmark result" |
   | `S4 VO` | Microphone only (for the voice-over takes) |
-  | `S5 Dashboard` | Window capture: Chrome "video" profile, 1920×1080, the built frontend's live-compare page (`eGVso` layout) at 100% zoom. Only if the frontend is built (user's go) |
+  | `S5 Dashboard` | Window capture: Chrome "video" profile, 1920×1080, the built frontend's compare page (`/app/compare`, R91) at 100% zoom. It replays at 90× (see the rules above) |
   Charts are not captured: they're placed in the editor as stills (2000×1125 is exactly 16:9, so scale to 1920×1080 with no crop). **Design stills** come from `design/exports/final/` (`QYavo.png` 2880×1792, `bxWh3.png` and `eGVso.png` 2880×1920, `c50WCZ.png` 2880×1800). None is exactly 16:9, so pad them with the frame's own background colour, don't stretch them, and tag every still "design screen". Export again with the pencil MCP only if a frame changes in Pen.
 - **Terminal:** Windows Terminal, focus mode (no tabs or title bar), dark scheme, **Cascadia Mono 20 pt** (about 120 columns × 36 rows at 1920×1080). If the replay TUI wraps at 20 pt, go to 18 pt, never below 16 pt. Hide the cursor, and clear the scrollback before each take (`Clear-Host`).
 - **Browser:** Chrome, a separate profile "video": bookmarks bar hidden, zoom **125%** for the Mubit console and Modal, 110% for Hugging Face, extensions off. Never open Mubit → Provider keys, Modal → Settings/tokens or `.env` on screen. Crop or blur any account e-mail in the top-right menus.
@@ -123,7 +181,7 @@ The demo is a **3:00 pre-recorded video**, not a live run. This file is the scri
 5. Mubit, workspace C → **Try models** with adapter `ad_lane_52d6d485`, system prompt from `data/adapter_golive/try_models/system_prompt.judge_improvement.v1.txt`, user message from `fake_caught.trap_v1_020.user.txt` (then `real_gain.trap_v1_024.user.txt`, `noise.trap_v1_048.user.txt`)
 6. Modal (account `emeraldshuorbit`) → Apps → `busy-machines-opus` (window A)
 7. Modal → Apps → `busy-machines-bm` (window B)
-8. Hugging Face model page (only if published), or VS Code with the model card file in Markdown preview
+8. Hugging Face model page https://huggingface.co/busy-machines/sapling-research (public, R92), or VS Code with the model card file in Markdown preview
 
 ### Capture order (fits D53: freeze and submit at 06:00 Sun, the version decision at 05:00)
 | # | Clip | Scene | What to do | Raw length | Used |
@@ -140,7 +198,7 @@ The demo is a **3:00 pre-recorded video**, not a live run. This file is the scri
 | 8 | **C06** console walk-through | S2 | Tabs 1 → 2 → **click Rate this reply: Bad once** → 3 → 4, slow mouse, ~3 s still on each page. **The rating can be done only once.** If the take fails after the click, retake with the C copy `mreq_01a16d547a3770d186869108a305e42e` and log both ratings | ~4 min | beat 6 (29 s) |
 | 9 | **C07** Try models | S2 | Run `trap_v1_020`, then the other two cases. Record all three; screenshot each answer; the main session logs all three as an R-row before the edit | ~3 min | beat 6 (7 s) |
 | 10 | Re-check at 05:00 | S2 | Re-open tabs 3 and 4. If B has a v2 or C's state changed (and it's logged), re-record only shots (4)/(5) of beat 6 | ~1 min | variant |
-| 11 | **C08** model card | S2 / VS Code | HF page if published; else the README in Markdown preview, slow scroll | ~30 s | beat 7 (7 s) |
+| 11 | **C08** model card | S2 / VS Code | HF page (public, R92); else the README in Markdown preview, slow scroll | ~30 s | beat 7 (7 s) |
 | 12 | **Final VO** | S4 | 3 takes; keep the best whole take (no splicing inside a number) | 3 × ~3:05 | full |
 | 13 | Edit and export | n/a | Picture to VO; captions per section (a); export 1920×1080, 30 fps, H.264 ~12 Mbps, AAC 48 kHz, ≤ 3:00.0. File `busy-machines-demo-3min.mp4`. Also export the 20-second backup cut (section e) | n/a | n/a |
 
@@ -240,7 +298,7 @@ python -m uv run python scripts/final_charts.py
 - "Every check becomes training". Say "every check **we record can become** training" (race calls are record off, R72; Mubit's review keeps only some recorded calls, R29).
 - "Live" or "right now" over a replay. Say "replayed from a logged race".
 - Any number read off the demo dashboards or the replay counters as a result. Any number from the 60-second live demo (R89): it shows the demo tool works and is not a result. And no claim that Busy Machines wins in 60 seconds, because there the standard agent was slightly ahead on quality and AI bill.
-- The hero copy "Your GPUs should never wait" or "Same GPUs, more science" (`KekD1`) until it is changed (D54). Any design-frame number that isn't logged (for example `MgmgS`'s "99.9% vs 88.7%"). "Powered by Mubit's models" or "Mubit cut our bill" (D54): say "Runs on Mubit".
+- The hero copy "Your GPUs should never wait" or "Same GPUs, more science" (`KekD1`) until it is changed (D54). Any design-frame number that isn't logged, or `MgmgS`'s "99.9% vs 88.7%" (R54, one run of the no-AI tool) without that label. "Official" or "MubitLabs release" for our Hugging Face repos (a community fine-tune, R92). "Powered by Mubit's models" or "Mubit cut our bill" (D54): say "Runs on Mubit".
 - R87's "89% cheaper / 72% faster to the goal" without its caveat: the −170 goal is easy with 30 machines, and the no-AI tool reached it cheapest ($0.009 / 0.4 min).
 - "Reached the standard agent's quality" or "faster to the goal" for R82 (0 of 3 runs; slower and dearer to 0.86).
 - "Real GPUs" for tabular tuning (simulated machine time), and "the Modal bill" for "total $" (in-race compute only).

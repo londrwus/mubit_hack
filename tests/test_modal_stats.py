@@ -116,7 +116,7 @@ def test_sampler_thread_samples_while_running_and_once_at_stop() -> None:
 
 
 def test_sampler_never_blocks_the_run_on_a_slow_or_hung_read() -> None:
-    """start() returns at once and stop(final_sample=False) waits at most ~0.5 s, even when a GPU
+    """start() returns at once and stop(final_sample=False) waits at most ~0.05 s, even when a GPU
     read hangs (e.g. nvidia-smi stuck): the training run is never held back by telemetry."""
     release = threading.Event()
 
@@ -130,7 +130,7 @@ def test_sampler_never_blocks_the_run_on_a_slow_or_hung_read() -> None:
     time.sleep(0.1)
     t1 = time.monotonic()
     s.stop(final_sample=False)
-    assert time.monotonic() - t1 < 1.0
+    assert time.monotonic() - t1 < 0.4
     release.set()
 
 

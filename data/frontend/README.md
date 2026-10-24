@@ -15,7 +15,7 @@ python -m uv run --with onnxruntime==1.29.0 --extra ml python scripts/build_show
 
 ## Display rules
 1. Show the `worse_side` of a card on the same screen as the card.
-2. Every number in the file is logged (`in_log` is `true`; the build refuses anything else). R78's time and cost to the goal are shown as the logged values only (1.0 vs 0.3 min, $0.20 vs $0.022), with no ratio, because the ratios are not in the log and `dashboard_spec.md` §6 forbids unlogged ratios. To show a ratio, log it first and add it to the build.
+2. Every number in the file is logged (`in_log` is `true`; the build refuses anything else). R78's time and cost to the goal are shown as the logged values only (1.0 vs 0.3 min, $0.20 vs $0.022), with no ratio. R87 has since logged the ratios (89% cheaper, 72% faster; ≈9× cheaper, ≈3.6× faster), but they may be shown only with R87's caveat (the −170 goal is easy with 30 machines, and the no-AI tool reached it cheapest, $0.009 / 0.4 min), and the build does not carry them yet. `dashboard_spec.md` §6 forbids unlogged ratios: to show one, add it to the build with its R-id and caveat.
 3. AI $ is a list-price estimate. The tabular races (R82, R75, R38) use simulated GPU time, so their GPU $ is simulated too. The JSON carries both notes.
 4. Card `vs_no_ai_tool` has `placement: "secondary"`. It is for a second slide or Q&A, not the main screen (D46).
 5. Labels are plain language (CLAUDE.md "UI copy"). Raw metric names appear only in `hover`. Game-playing (R78) ran on CPU workers and tabular (R82) uses simulated GPU time, so both say "Machines waiting", not "GPUs waiting" (`dashboard_spec.md` §3.1, §6); the hover says what the machines were.
@@ -97,5 +97,5 @@ Item = { text: string, r_id: R-id, numbers: [Number] }
 - Sapling: `published_sapling`, `ours_v2_strict`, `ours_v2_looser`, `ours_v4_strict`, `ours_v4_looser`, `opus`
 
 ## Known log rounding (tolerances recorded in the JSON)
-- **R85, Busy Machines AI bill:** the log says $0.233, but the recomputed value is $0.2325 (which would round to $0.232). Tolerance $0.001. It is displayed as $0.23.
+- **R85, Busy Machines AI bill:** the log says $0.233, but the recomputed value is $0.2325 (which would round to $0.232). Tolerance $0.001. It is displayed as $0.23. Docs quote the logged $0.233.
 - **R85, standard model quality spread:** the log says ± 0.0010, but the recomputed sample spread is 0.00095. Tolerance 0.0001. The logged ± 0.0010 is displayed.

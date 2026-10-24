@@ -86,11 +86,11 @@ Invoke-RestMethod -Method Post "http://127.0.0.1:8765/api/demo/start?preset=demo
 ## 4. Hugging Face and Sapling
 - [ ] Stock card: https://huggingface.co/MubitLabs/banyan-sapling
 - [ ] Mubit's hosted Sapling endpoint (D33): parity 30/30 raw labels (R42)
-- [ ] `sapling-research` v2: **not published** (R69). The local package `data/sapling/sapling_v2/hf_release/` reproduces R42 on CPU (550/550 labels, R69). [HF link pending: publish decision]. Never show a link that doesn't exist
+- [ ] `sapling-research` v2: uploaded to https://huggingface.co/busy-machines/sapling-research (18 files incl. `heads_ensemble_delta.safetensors` 94.8 MB) and the data to https://huggingface.co/datasets/busy-machines/ml-claims (5 files), uploaded private and verified by API listing (R91), then switched public by the user and checked by an anonymous API call (R92). The local package `data/sapling/sapling_v2/hf_release/` reproduces R42 on CPU (550/550 labels, R69) and ran end to end on an H100 (R76)
 - [ ] Results doc: `docs/sapling_results_v2.md` (R42)
 - [ ] Published Sapling vs v2 vs Opus on 226 real race claims: `data/sapling/compare_published/compare_published.json` (R81)
 - [ ] v4 **failed its gate**, so v2 stays the release (R83). At α 0.01 on R81's real claims v4 caught 97 of 109 fakes, approved 0 and confirmed 5 of 7 real gains. It regressed on general claims, ContractNLI and trap50. Files: `data/sapling/sapling_v4/heads/final_v4.json`, `gate_result.json`; the kept files are `release_v4_failed_gate/`, not released
-- [ ] HF publish of v2 needs the user's HF name, `hf auth login` and "go"
+- [ ] Both HF repos are public (R92). The HF token appeared in chat and must be rotated after the event (R91)
 
 ## 5. Compute and money
 - [ ] Modal: new account `emeraldshuorbit`, $0.00 metered at the switch; old account `flagformgaze51` retired at $26.49 metered (R73). Demo reserve ≥$6 (R73)
@@ -102,9 +102,11 @@ Invoke-RestMethod -Method Post "http://127.0.0.1:8765/api/demo/start?preset=demo
 ## 5b. Backend checks and design frames
 - [ ] Backend smoke test: API + live events + replay, $0 (R86). Open item: `GET /api/races/{id}` returned null fields for the TestClient id
 - [ ] Freeze check: patches 06–09 applied, full suite 817 passed / 3 skipped / 0 failed, scans clean, Optuna contention 2.52× / 2.49× → 1.40× / 1.46× slower, reduced not removed (R88). Logs in the scratchpad: `final_pytest.log`, `contention_rl600*.json`
+- [ ] After live Modal metrics and a timer-flake fix: full suite **840 passed, 3 skipped, 0 failed** (R91)
+- [ ] Frontend (R91): `frontend/`, `npm run build` passes; `/` landing, `/app` Get started, `/app/compare` live replay (R78 run 1 ends exactly on the R90 values: $3.30 vs $0.70, 69.0% vs 1.4%, 497 vs 1,594, −155.0 vs −154.9); run steps in `frontend/README.md`. Its hero still says "Your GPUs should never wait" (D54); its 'View on Hugging Face' link points at the model page (R92)
 - [ ] Demo endpoint: `demo-live-60s` test run `15ab6dfc` (R89). **Demo tool works; not a result**
 - [ ] Design frames in `mubit.pen` (open it only through the pencil MCP). The PNGs are in `design/exports/final/<id>.png`, and the number check is in `design/exports/final/README.md`:
-  - **Landing page `pOKAY`:** hero `KekD1` (copy says "GPUs" alone; fix before use, D54), engine `QYavo` (R78), our model `MgmgS` (R81; its "99.9% vs 88.7%" is not logged, so remove it before use), benchmarks `oT6Ad` (R78, R82, R87; add R75, R85 and the R87 caveat before use), call to action `c50WCZ`.
+  - **Landing page `pOKAY`:** hero `KekD1` (copy says "GPUs" alone; fix before use, D54), engine `QYavo` (R78), our model `MgmgS` (R81; its "99.9% vs 88.7%" field note is R54's one run of the no-AI tool's shipped image model, 0.9994 self-reported vs 0.8874 held-out, so show it only with that label), benchmarks `oT6Ad` (R78, R82, R87; add R75, R85 and the R87 caveat before use), call to action `c50WCZ`.
   - **Platform:** Overview `bxWh3` (R78, R82, R90) and Sweep detail (live compare) `eGVso` (R78 run 1, R90).
 
 ## 6. Docs to have open for Q&A

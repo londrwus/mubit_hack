@@ -43,23 +43,22 @@
   --color-code-line: #262c42;
 }
 
-html,
-body {
-  margin: 0;
-  background: var(--color-cream);
-  color: var(--color-ink);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+/* Base styles live in the base layer so Tailwind utilities (text colours on links) win. */
+@layer base {
+  html,
+  body {
+    margin: 0;
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-body {
-  overflow-x: hidden;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 /* Paper texture plate (Pen "Paper texture", generated-4.png) */

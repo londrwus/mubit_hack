@@ -3,9 +3,11 @@
 Available time: Fri 19:30 → Sun 10:00 ≈ **39 hours** (clocks go back, +1 h). Realistically ~26–30 working hours per person after sleep and food. **Superseded by D53: code freeze and submission are Sun 06:00 London (= 06:00 UTC).**
 Estimates are **person-hours** for someone fluent in Python/React and new to Modal/Mubit. With Claude Code writing much of the boilerplate (API, schemas, UI components), expect the low end.
 
-## 0. Night brief (Sat 24 Oct ~23:30 BST): start here
+## 0. Night brief (Sat 24 Oct ~23:30 BST, updated Sun ~00:50 with R91 and R92): start here
 
-**Deadline (D53):** code freeze and submission **Sun 06:00 London** (clocks go back at 02:00, so that is 06:00 UTC). Demo version decision at **05:00** (`demo_script.md` §0, written as a new R-row). Final push by ~05:30, only on the user's word.
+**Deadline (D53):** code freeze and submission **Sun 06:00 London** (clocks go back at 02:00, so that is 06:00 UTC). Demo version decision at **05:00** (`demo_script.md` §0, written as a new R-row). Final push by ~05:30, only on the user's word. 06:00 is our own target; Mubit's hard limit is 08:00 (D55).
+
+**Submission (D55):** Mubit's rules: submit Sun 00:00–08:00 via `/submit` (the latest submission counts); judged = `main` as it is at 08:00, the README and a video of at most 2:00 (MP4/MOV, ≤ 300 MB, no deck, no YouTube). Our 06:00 freeze stays (D53). Done in docs: README top section (user + recurring task, what the demo shows, the Mubit base URL with the guarding lines in `backend/agent/mubit_client.py`), the 2:00 video script (`video_script.md`, 3:00 kept as archive), the form fields in `submission.md` (members' names and e-mails still to fill in). Left: record and export the 2:00 video, fill in the members, push `main` on the user's word, submit.
 
 **Positioning (D54):** "Busy Machines: compute intelligence for training sweeps". It is the compute layer under the AI planner. It decides when the planner is worth calling, keeps every machine busy with a no-AI sampler, and blocks fake improvements. Mubit is the cheap-AI layer next to it ("Runs on Mubit"). Say "machines" or "compute", never "GPUs" alone. Never say "AI research agent", "powered by Mubit's models" or "Mubit cut our bill".
 
@@ -17,26 +19,28 @@ Estimates are **person-hours** for someone fluent in Python/React and new to Mod
 - **Limits (always shown with the headline):**
   - **R75, FAILED:** planning every 90 s gave an 8.2× lower AI bill but 7% more errors.
   - **R85, image recognition on real L4 GPUs, quality line FAILED:** AI bill 0.22× ($0.233 vs $1.056), but 5% more errors (0.9424 vs 0.9451). It was also slower and dearer to the 0.94 goal, and its shipped model (0.9395) missed the goal.
-- **Sapling, R83:** v4 **failed its gate**, so v2 stays the release (not published). At its strict setting v4 caught 97 of 109 fakes in real race claims, approved none and confirmed 5 of 7 real gains. It regressed on general claims, ContractNLI and trap50.
+- **Sapling, R83:** v4 **failed its gate**, so v2 stays the release. v2 is **published** at https://huggingface.co/busy-machines/sapling-research and the data at https://huggingface.co/datasets/busy-machines/ml-claims (uploaded private in R91, switched public by the user in R92). At its strict setting v4 caught 97 of 109 fakes in real race claims, approved none and confirmed 5 of 7 real gains. It regressed on general claims, ContractNLI and trap50.
 - **Backend and demo:**
   - **R86:** the API, live events and replay smoke test passed. Open item: `GET /api/races/{id}` returned null fields for the TestClient id.
   - **R88:** review patches 06–09 applied. Samplers run in their own processes: Optuna's contention fell from 2.52× / 2.49× to 1.40× / 1.46× slower, which is less but not zero. Dashboard API added. Full suite **817 passed, 3 skipped, 0 failed**, and the scans are clean. Verdict: **go for the freeze**.
   - **R89:** the 60-second live demo **works as a tool, not a result**. At 60 s the standard agent was slightly ahead on quality (0.8090 vs 0.8064) and on AI bill ($0.133 vs $0.142). So the video uses the R78 replay, not the live demo.
   - **R90:** the per-run values shown on the design frames.
+  - **R91:** live Modal metrics in the backend (demo races only), the Windows timer-flake fix, full suite **840 passed, 3 skipped, 0 failed**. **Frontend built** (`frontend/`: `/` landing, `/app` Get started, `/app/compare` live replay); `npm run build` passes, no console errors at 1440 and 1920 wide, and the Compare replay of R78 run 1 ends exactly on the R90 values. HF repos uploaded (private), then made public (R92). The HF and Modal tokens appeared in chat: rotate them after the event.
 - **Designs** are in `C:/Users/Lenovo/Documents/mubit.pen`. Open it only through the pencil MCP. PNG exports and the number check are in `design/exports/final/README.md`.
   - **Landing `pOKAY`** ("Landing v2 · Compute intelligence (A+)"), 5 screens: hero `KekD1`, engine `QYavo`, our model `MgmgS`, benchmarks `oT6Ad`, call to action `c50WCZ`.
   - **Platform:** "Platform · Overview" `bxWh3` and "Platform · Sweep detail (live compare)" `eGVso`.
   - **Fix before showing** (changes in Pen, on the user's go):
     - `KekD1` says "Your GPUs should never wait" and "Same GPUs, more science", which is "GPUs" alone (against D54).
-    - `MgmgS` cites "99.9% vs 88.7% on fresh data" (labelled R54). That figure is **not in `results_log.md`**: remove it, or log it first.
+    - `MgmgS` cites "99.9% vs 88.7% on fresh data" (labelled R54). It is R54's figure for **one run** of the no-AI tool's shipped image model (self-reported 0.9994, held-out 0.8874), not a Sapling result: show it only with that label (the built landing page shows it as "A sweep reported 99.9%. On fresh data it scored 88.7%. (R54)").
+    - The built hero (`frontend/`) still says "Your GPUs should never wait" (D54).
     - `oT6Ad` shows R87's time to the goal and has no R75 or R85 on the frame. Show it only with those added in the caption.
 - **Mubit:** no adapter serves. The best is workspace C judge v1 at 58.3% against a 95% bar (R79); diagnose scored 8.3% (R80). The D52 bar change in C (55%) is not logged as done or live.
 
 **Left before 06:00:**
-1. **Frontend build** (Vite + React, the `bxWh3` / `eGVso` layouts on the dashboard API): **only on the user's go**. Without it, the video uses the Pen exports as stills and `scripts/replay_tui.py` for the moving race (`video_script.md`).
-2. **Hugging Face publish of sapling-research v2:** needs the user's HF name, `hf auth login` and "go". Until then every doc says "not published", and no link is shown.
-3. **Commit and push:** only on the user's word, by ~05:30. Many files are untracked (`backend/dashboard.py`, `backend/demo.py`, `backend/agent/study_worker.py`, `design/`, `data/frontend/`, `data/dashboard_*`, new tests and scripts). Check `git status` before committing.
-4. **Record the video** (`video_script.md`, ≤ 3:00): the console stills first, the 05:00 console re-check, then export.
+1. ~~Frontend build~~ **done (R91).** Left in code, on the user's go: the hero's "GPUs" copy (D54) (`frontend/README.md`); the 'View on Hugging Face' link now points at the model page (R92). The Compare page replays at 90×; for a 30× video take use `scripts/replay_tui.py` (`video_script.md`).
+2. ~~Hugging Face~~ **done:** both repos public (R92).
+3. **Commit and push:** only on the user's word, by ~05:30. Uncommitted now: `frontend/` pages and components, `frontend/README.md`, and edits to `backend/app.py`, `workers/runners/modal_stats.py`, tests and docs. Check `git status` before committing.
+4. **Record the video** (`video_script.md`, 2:00 version, ≤ 2:00 and ≤ 300 MB, D55): the console stills first, the 05:00 console re-check, then export.
 5. Fill in the team names (`submission.md`).
 6. At 05:00: the console check and the demo version decision, logged as an R-row by the main session.
 

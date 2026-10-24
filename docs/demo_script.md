@@ -5,7 +5,7 @@
 
 The stage plan for Sunday 25 Oct. It replaces the timing table in `demo.md` §3 for the D46–D48 framing. `demo.md` still holds the label rules (§1) and the measured-line rules (§3.1). Q&A answers are in `qa_mubit_constraints.md`, slide copy is in `slides_outline.md`, and what to have open on stage is in `evidence_pack.md`.
 
-**Positioning (D54).** **"Busy Machines: compute intelligence for training sweeps."** Busy Machines is the compute layer under the AI planner of a hyperparameter or RL training sweep: it decides when the planner is worth calling, keeps every machine busy in between with a no-AI sampler, and blocks fake improvements. Mubit is the cheap-AI layer next to it: it makes each call cheaper. The two multiply, and our measured 4× came before any Mubit model served. Customer: ML and RL teams at AI labs. Never call Busy Machines an "AI research agent" or "research assistant" (that is the planner it sits under). Say "machines" or "compute", never "GPUs" alone: R78 ran on cloud CPU workers, R82 on simulated GPU time, and the real-GPU race (R85) failed its quality line.
+**Positioning (D54).** **"Busy Machines: compute intelligence for training sweeps."** Busy Machines is the compute layer under the AI planner of a hyperparameter or RL training sweep: it decides when the planner is worth calling, keeps every machine busy in between with a no-AI sampler, and blocks fake improvements. Mubit is the cheap-AI layer next to it: it makes each call cheaper. The two multiply, and our measured 4× came before any Mubit model served. Mubit wording: **"Runs on Mubit"** / "built on Mubit" (every AI call through Mubit's gateway, recorded and traceable; Mubit trains small models on our calls; we fine-tuned Mubit's Sapling); never "powered by Mubit's models" or "Mubit cut our bill". Customer: ML and RL teams at AI labs. Never call Busy Machines an "AI research agent" or "research assistant" (that is the planner it sits under). Say "machines" or "compute", never "GPUs" alone: R78 ran on cloud CPU workers, R82 on simulated GPU time, and the real-GPU race (R85) failed its quality line.
 
 **Framing (D46, D48).** Two sides with the same model (Opus 5.5), the same machines, budget, clock, seeds and starting code:
 - **Standard AI assistant (the Opus-driven sweep):** the plain Opus 5.5 research loop a lab would run (propose v1, plain Opus judge).
@@ -36,13 +36,13 @@ A passed adapter that **doesn't** show Served by on any request counts as FALLBA
 ---
 
 ## 1. Screens (no frontend needed)
-| Window | Shows | Frontend replacement (if it ships) |
+| Window | Shows | Frontend replacement (built, R91: `/` landing, `/app/compare` replay of logged races; `frontend/README.md`) |
 |---|---|---|
-| **T1 terminal: live race** | `bench.py run` progress lines every 10 s: `[ <t>s / 180s] opus: <n> done, idle <x>%, $<y>, best <z> \| opus_bm: …` (format from `scripts/bench.py`; no example numbers on purpose, so none can be mistaken for a prediction) | Split screen: GPU tiles, model-quality bars, cost panel (`demo.md` §1) |
+| **T1 terminal: live race** | `bench.py run` progress lines every 10 s: `[ <t>s / 180s] opus: <n> done, idle <x>%, $<y>, best <z> \| opus_bm: …` (format from `scripts/bench.py`; no example numbers on purpose, so none can be mistaken for a prediction) | Split screen: machine tiles, model-quality bars, cost panel (`demo.md` §1) |
 | **T2 terminal: results** | `scripts/headline.py` table for the logged races (D47 race ids in `evidence_pack.md`) | Results panel |
 | **T3 terminal: correction** | `curl` POST flag → JSON with `correction_id`, then `GET /api/corrections` showing the SQLite row (`sent_to_mubit_at: null`) | "Flag" button and corrections list |
 | **Browser tab set 1: Mubit console** | Workspace B: Tasks → judge v1 → Adapters (card, History); Requests (filtered by session); workspace C: same; project A: Tasks page | Not replaced: the console is the proof |
-| **Browser tab 2: Hugging Face** | `huggingface.co/MubitLabs/banyan-sapling` (stock card). Our `sapling-research` is **not published** (R69); show it only if it's published by then | n/a |
+| **Browser tab 2: Hugging Face** | `huggingface.co/MubitLabs/banyan-sapling` (stock card). Our fine-tune is **published** at https://huggingface.co/busy-machines/sapling-research and its data at https://huggingface.co/datasets/busy-machines/ml-claims (public since R92; v2, a community fine-tune, not an official MubitLabs release) | n/a |
 | **Slides** | `slides_outline.md` | n/a |
 
 Plain-language rule for the terminal: the CLI says `idle` and `best`. Say "machines waiting" and "model quality" out loud, and never read the raw metric name.

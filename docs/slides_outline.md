@@ -7,10 +7,10 @@ Exact copy for each slide, the logged numbers that go on it (with R-ids for the 
 **Design source (Pen, `mubit.pen`; open it only through the pencil MCP; exports in `design/exports/final/<id>.png`, number check in its `README.md`).** Slide visuals can reuse these frames. A frame carries only logged numbers, and the worse-side rules below still apply to it.
 | Slide | Frame | Condition before use |
 |---|---|---|
-| 1 Hook | landing hero `KekD1` (in `pOKAY`) | Its copy says "Your GPUs should never wait" / "Same GPUs, more science": change it to "machines" first (D54), or use only its layout |
+| 1 Hook | landing hero `KekD1` (in `pOKAY`) | Its copy says "Your GPUs should never wait" / "Same GPUs, more science": change it to "machines" first (D54), or use only its layout. The built landing page (`frontend/`, R91) still has the same "Your GPUs should never wait" copy |
 | 3 What it is | landing engine `QYavo` | 69% vs 2% waiting = R78's 68.8% vs 1.5%, rounded: say so in the notes |
 | 4 The result | landing benchmarks `oT6Ad` | It has no R75 or R85, and shows R87's time to the goal without its caveat. Add both blocks and the caveat, or keep the slide 4 tables |
-| 7b Sapling | landing our model `MgmgS` | Its "99.9% vs 88.7% on fresh data" is **not in the log**: remove it or log it first. R81's 0 vs 57 of 109 is fine |
+| 7b Sapling | landing our model `MgmgS` | Its "99.9% vs 88.7% on fresh data" field note is R54's figure for **one run** of the no-AI tool's shipped image model (self-reported 0.9994, held-out 0.8874; the other two runs: 1.0 → 0.8852, 0.9994 → 0.914). Keep it only labelled that way (no-AI tool, 1 of 3 runs, R54), never as a Sapling result. R81's 0 vs 57 of 109 is fine. Its Hugging Face link points at the published model page (R92) |
 | 8 Close | call to action `c50WCZ` | Add the close's small line (R85) |
 | demo / Q&A | Platform · Overview `bxWh3`, Platform · Sweep detail (live compare) `eGVso` | Run-1 values are R90. Headline numbers stay the 3-run means (R78, R82) |
 
@@ -101,7 +101,7 @@ Exact copy for each slide, the logged numbers that go on it (with R-ids for the 
 **Title:** Even the standard assistant beats a no-AI tuning tool on quality, on 2 of 3 tasks
 | Task (3 runs each) | Standard Opus assistant vs the tool | The tool's side |
 |---|---|---|
-| Tabular tuning | 28% fewer errors (0.856 vs 0.799, R38; repeated in R44) | More experiments per $ (80.9 vs 22.7); faster and cheaper to the goal in 1 of 3 runs (R38) |
+| Tabular tuning | 28% fewer errors (0.856 vs 0.799, R38; repeated in R44) | More experiments per $ (80.9 vs 22.7); faster and cheaper to the goal in seed 2 (108 s / $0.38 vs 193 s / $0.96, R38) |
 | Image recognition | 22% fewer errors (0.9448 vs 0.9294); goal reached 3/3 vs 0/3 (R53) | Cheaper per race ($0.60 vs $1.65), more experiments per $ (81.2 vs 38.7) |
 | Game-playing AI | A tie on the best model (−156.9 vs −155.2, within noise); shipped model −156.9 vs −177.1 (R48) | Its best model is slightly better (−155.2); goal reached sooner and cheaper ($0.007 / 0.3 min vs $0.222 / 1.1 min); 4,585 vs 137 experiments per $ |
 **Line:** Unchecked, the tool accepted fakes as its best **59 times** in 9 races and shipped a fake in **6 of 9**; the assistant **0** (R54).
@@ -111,6 +111,7 @@ Exact copy for each slide, the logged numbers that go on it (with R-ids for the 
 Show it if the timing allows, or as the first backup slide in Q&A. It keeps the number "Slide 8" for the close, so the `demo_script.md` timings stay valid. Full sources and caveats: `sapling_vs_published.md`.
 **Title:** We didn't just reuse Mubit's checker. We fine-tuned it for AI research.
 **Line:** "We fine-tuned Banyan Sapling's verification head, backbone frozen. It is our community fine-tune, not an official MubitLabs model."
+**Link (small, footer):** "huggingface.co/busy-machines/sapling-research · data: huggingface.co/datasets/busy-machines/ml-claims" (both public, R92).
 | | Published Banyan Sapling | Our fine-tune (strict / looser) | Opus 5.5 |
 |---|---|---|---|
 | Real claims from our races: fakes caught (of 109, R81) | 0 | 8 / 57 | 109 |
@@ -152,5 +153,5 @@ Show it if the timing allows, or as the first backup slide in Q&A. It keeps the 
 - On slide 7b: real-claims numbers that aren't in R81 (e.g. the per-source split); "matches Opus" or "beats Opus"; "confirms real gains"; our fine-tune called "Mubit's model" or official; the 77.3% → 84.3% ContractNLI figure as a reproduction of the card's 86.32%.
 - Any number from the live demo race as a result (fingerprint differs, never logged as a comparison). That includes the 60-second live demo test (R89), which is "demo tool works; not a result": in its one run the standard assistant was slightly ahead on quality and AI bill at 60 s. Nor do backend checks (R86, R88) count as results.
 - R87's "89% cheaper / 72% faster to the goal" without "the goal is easy, and the no-AI tool reached it cheapest".
-- A design-frame number that isn't logged (`MgmgS`'s "99.9% vs 88.7%"), or the hero copy "Your GPUs should never wait" / "Same GPUs, more science" (D54).
+- A design-frame number that isn't logged, `MgmgS`'s "99.9% vs 88.7%" (R54, one run of the no-AI tool) without its label, or the hero copy "Your GPUs should never wait" / "Same GPUs, more science" (D54).
 - "Powered by Mubit's models" or "Mubit cut our bill" (D54). Say "Runs on Mubit".

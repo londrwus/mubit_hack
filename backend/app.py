@@ -62,6 +62,9 @@ DEFAULT_DB_PATH = os.environ.get("BUSY_MACHINES_DB", "data/busy_machines.db")
 # Extra read-only sources of finished races to replay (.db files, .jsonl exports or folders of
 # them), separated by os.pathsep (";" on Windows). The app's own DB is always a source.
 REPLAY_SOURCES_ENV = "BUSY_MACHINES_REPLAY_SOURCES"
+# Browser origins allowed to call the API (comma-separated). Unset = the Vite dev server; "" = none.
+CORS_ORIGINS_ENV = "BUSY_MACHINES_CORS_ORIGINS"
+DEFAULT_CORS_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
 
 MOCK_LLM_PATH = "backend.agent.mock_llm.MockLLM"
 MUBIT_CLIENT_PATH = "backend.agent.mubit_client.MubitClient"
@@ -408,6 +411,15 @@ def create_app(
         state.db.flush_metrics()
 
     app = FastAPI(title="Busy Machines", version="0.1.0", lifespan=lifespan)
+    # CORS for the Vite dev frontend only (frontend/, http://localhost:5173). HTTP only: it changes
+    # no route and no race behaviour. BUSY_MACHINES_CORS_ORIGINS="" turns it off; a comma list replaces it.
+    cors_env = os.environ.get(CORS_ORIGINS_ENV)
+    cors_origins = list(DEFAULT_CORS_ORIGINS) if cors_env is None else [o.strip() for o in cors_env.split(",") if o.strip()]
+    if cors_origins:
+        from fastapi.middleware.cors import CORSMiddleware
+
+        app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST"],
+                           allow_headers=["*"])
     app.state.bm = state
     app.state.replays = ReplayStore()
     app.include_router(replay_router(replays, app.state.replays))

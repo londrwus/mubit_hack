@@ -51,7 +51,6 @@ export function OurModel() {
             sapling-research catches hallucinated wins: results that look real but never replicate.
           </p>
           <div className="flex items-center gap-7 pt-[14px]">
-            {/* TODO(release): HUGGING_FACE_URL is a placeholder ("#hf") until the model page is published. */}
             <a
               href={HUGGING_FACE_URL}
               data-todo="hugging-face-url"

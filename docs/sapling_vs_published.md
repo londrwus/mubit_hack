@@ -2,7 +2,9 @@
 
 **The question this answers:** did we just reuse Mubit's model, or did we improve it? We fine-tuned Banyan Sapling's verification head, backbone frozen (D23), and refit its calibration for ML-research claims. The result is `sapling-research` v2, a community fine-tune. It is **not** an official MubitLabs model, and MubitLabs has not reviewed it. In races the checker is still Opus plus a seed-spread rule. Sapling runs offline only (D28).
 
-**Status of the numbers (24 Oct):**
+**Links (published, R92):** https://huggingface.co/busy-machines/sapling-research (the model, v2) and https://huggingface.co/datasets/busy-machines/ml-claims (the claims data). Both are public; the card says it is a community fine-tune, not an official MubitLabs release. v3 and v4 failed their gates and are not released (R77, R83).
+
+**Status of the numbers (24 Oct; re-checked against the log up to R92):**
 - The real-claims comparison (`data/sapling/compare_published/compare_published.json`, `per_row.jsonl`, `scripts/sapling_compare_published.py`) is now logged as **R81**. Numbers below marked **(R81)** may go on a slide or on stage.
 - A few details from that run are **not in R81** and are marked **(not logged)**: keep them out of slides and stage lines.
 - Every other number cites its R-id.
@@ -61,7 +63,8 @@ These are our own `ml-claims` sets from our generator, not Mubit's data.
 - **The looser setting is less trustworthy.** Its 95% guarantee falls to 77.8% on new claim types (R42). Its answers are right less often than v1's (75.5% vs 88.9%). It wrongly rejects more genuine gains (12 → 43 of 132).
 - **The synthetic tables are synthetic.** Every number in them comes from claims our own generator planted. The real-claims table is small: only 7 real gains, so quote counts, not rates.
 - **v3 failed.** Training on these judge-format rows made the model worse on 5 of 7 gate checks. We kept v2 (R77).
-- **The ContractNLI number is not a reproduction of Mubit's card.** The card reports 86.32% on its own 731 ContractNLI cases. Our 400 cases are a stratified draw from the `contractnli_a` test split, in our own input layout, because Sapling's layout isn't published. Published Sapling scores 77.3% on them. "77.3% → 84.3%" compares published Sapling and v2 on the same rows (R33, R42).
+- **v4 failed too (R83).** Trained on 844 new ground-truth judge-format rows from other races, with R81's claims held out. On R81's real claims at the strict setting it caught 97 of 109 fakes, approved 0 and confirmed 5 of 7 real gains (v2 and Opus: 0 of 7), but at the looser setting it approved 1 fake, and it regressed on general claims (answers 56.4% vs 63.8%), trap50 (33 vs 36) and ContractNLI (79.5% vs 84.25%). v2 stays the release; never show v4 as the released model.
+- **The ContractNLI number is not a reproduction of Mubit's card.** The card reports 86.32% on its own 731 ContractNLI cases. Our 400 cases are a stratified draw from the `contractnli_a` test split, in our own input layout, because Sapling's layout isn't published. Published Sapling scores 77.3% on them. "77.3% → 84.3%" compares published Sapling and v2 on the same rows (R33, R42; correction logged in R81).
 - **The unanchored first v2 collapsed** to 52.0% on ContractNLI. We added the anchor after seeing that result (R42).
 
 ## The pitch sentence
