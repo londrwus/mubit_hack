@@ -98,9 +98,11 @@ def _construct(cls: Any, **candidates: Any) -> Any:
     return cls(**{k: v for k, v in candidates.items() if k in params})
 
 
-def _make_runner(cfg: RaceConfig, spec: TargetSpec) -> Any:
+def _make_runner(cfg: RaceConfig, spec: TargetSpec, kind: ArmKind | None = None) -> Any:
     """A fresh runner per arm with exactly ``gpus_per_arm`` slots of the target's hardware.
-    Local runs are laptop CPU at $0 (dev only: GPU $ shows 0, idle % is still real)."""
+    Local runs are laptop CPU at $0 (dev only: GPU $ shows 0, idle % is still real).
+    Demo races with per-arm Modal apps (``cfg.modal_apps``, never a benchmark) pass the arm's
+    app name; every other race builds the runner exactly as before (default app)."""
     n = cfg.gpus_per_arm
     if cfg.runner == "local":
         return _construct(_load(LOCAL_RUNNER_PATH), max_slots=n, hardware="CPU", price_per_second_usd=0.0)
@@ -109,6 +111,9 @@ def _make_runner(cfg: RaceConfig, spec: TargetSpec) -> Any:
         # arm's runner reads the same BUSY_SURROGATE_RUNTIME_MULT (refused if the env disagrees).
         apply_surrogate_runtime_mult(cfg)
         return _construct(_load(SURROGATE_RUNNER_PATH), max_slots=n, hardware=spec.hardware, preload=[spec.name])
+    app_name = cfg.modal_app_for(kind) if kind is not None else None
+    if app_name is not None:
+        return _construct(_load(MODAL_RUNNER_PATH), slots={spec.hardware: n}, app_name=app_name)
     return _construct(_load(MODAL_RUNNER_PATH), slots={spec.hardware: n})
 
 
@@ -117,7 +122,7 @@ def default_arm_deps(race_id: str, cfg: RaceConfig, spec: TargetSpec, kind: ArmK
     every LLM arm the same researcher class, prompts and retry -> Opus-fallback policy.
     The recording mode is per arm (``cfg.record_mode_for(kind)``): ``off`` | ``metadata`` |
     ``full``, sent as ``x-middleware-record`` on every call of that arm (fallbacks included)."""
-    runner = _make_runner(cfg, spec)
+    runner = _make_runner(cfg, spec, kind)
     if kind == ArmKind.optuna:
         from backend.agent.optuna_arm import OptunaResearcher
 

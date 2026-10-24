@@ -207,6 +207,9 @@ def dev_reasons(rows: Rows) -> list[str]:
     why: list[str] = []
     if _truthy(race.get("is_dev", True)) or race.get("mode") != "benchmark":
         why.append(f"dev race (mode={race.get('mode')})")
+    demo = (race.get("config") or {}).get("demo_label")
+    if demo:  # RaceConfig.demo_label (demo presets only; absent from every other race's config)
+        why.append(f"demo race: {demo}")
     if race.get("llm_mode") in DEV_LLM_MODES:
         why.append(f"llm_mode={race.get('llm_mode')}")
     for a in rows.get("arms", []):

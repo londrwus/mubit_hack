@@ -15,6 +15,7 @@ dependencies = [
     "numpy",
     "modal",
     "websockets",
+    "rich>=15.0.0",
 ]
 
 [project.optional-dependencies]

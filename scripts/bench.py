@@ -59,6 +59,14 @@ strict checks as a benchmark but are never headline races: they go to ``data/ben
 (exports in ``data/bench/ablation/``), are stored as dev (``is_dev=1``), and
 ``scripts/headline.py`` refuses them.
 
+Demo presets (``RaceConfig.demo_label``, e.g. ``demo-cifar-modal-5m``: "demo run for the video, not
+a benchmark result") run in dev mode, go to ``data/bench/demo.db`` (exports in ``data/bench/demo/``),
+carry a ``[demo run]`` name tag and a ``demo`` entry in the fairness manifest, and
+``scripts/headline.py`` refuses them. ``demo-cifar-modal-5m`` also gives each arm its own deployed
+Modal app (``RaceConfig.modal_apps``; deploy / tear down with
+``python -m workers.runners.modal_runner arm-apps deploy|stop``), pre-warmed per app, so Modal's
+own dashboard shows each arm separately. Benchmark and ablation presets cannot use per-arm apps.
+
 Paid runs need ``--yes``. ``--dry-run`` swaps in the mock LLM and the local CPU runner (the
 in-process surrogate runner stays for surrogate presets: it is $0 either way) (dev race, $0,
 mock numbers: never a benchmark result) and, unless overridden, caps the race at 2 slots x
@@ -107,16 +115,23 @@ DRYRUN_DB = BENCH_DIR / "dryrun.db"
 DRYRUN_DIR = BENCH_DIR / "dryrun"  # mock-race JSONL exports (data/bench/*.jsonl stays real races only)
 ABLATION_DB = BENCH_DIR / "ablation.db"   # real (paid) ablation races: never next to the headline races
 ABLATION_DIR = BENCH_DIR / "ablation"
+DEMO_DB = BENCH_DIR / "demo.db"           # demo runs for the video (RaceConfig.demo_label): never a result
+DEMO_DIR = BENCH_DIR / "demo"
 
 # Mirrors modal_runner.CPU_CORES (not imported: that would import modal).
 CPU_CORES_PER_SLOT = float(os.environ.get("BUSY_MODAL_CPU_CORES", "1"))
+# Mirrors modal_runner.SCALEDOWN_WINDOW_S and ModalRunner.warm_up's default timeout_s: the demo plan's
+# upper bound on pre-warm + scale-down GPU $ (containers billed before t0 and after the race).
+MODAL_SCALEDOWN_S = int(os.environ.get("BUSY_MODAL_SCALEDOWN_S", "60"))
+WARM_UP_TIMEOUT_S = 300.0
 # Mirrors modal_runner.STARTER_MAX_GPUS / STARTER_MAX_CONTAINERS (Modal Starter plan).
 MODAL_MAX_GPUS = 10
 MODAL_MAX_CONTAINERS = 100
 DRY_RUN_MAX_SLOTS = 2
 DRY_RUN_MAX_MINUTES = 2.0
 # Checks that only inform (a provisional goal; an ablation label); every other check gates ``run``.
-INFO_ONLY_CHECKS = frozenset({"target_value frozen", "ablation (never a headline race)", "planner prompt per arm"})
+INFO_ONLY_CHECKS = frozenset({"target_value frozen", "ablation (never a headline race)", "planner prompt per arm",
+                              "demo (never a headline race)", "Modal app per arm"})
 
 
 class Refused(RuntimeError):
@@ -244,7 +259,33 @@ def checks(cfg: RaceConfig, goals: Mapping[str, float] | None = None, *,
                     ", ".join(f"{a}={m}" for a, m in cfg.record_modes().items())))
     if cfg.is_ablation or is_prompt_ablation(cfg) or any(a in ABLATION_ONLY_ARMS for a in cfg.arms):
         out.append(("ablation (never a headline race)", True, ablation_note(cfg)))
+    if cfg.is_demo:
+        out.append(("demo (never a headline race)", True, demo_note(cfg)))
+    if cfg.modal_apps:
+        out.append(("Modal app per arm", True, modal_apps_note(cfg)))
     return out
+
+
+def demo_note(cfg: RaceConfig) -> str:
+    """How a demo race is labelled everywhere (plan, checks)."""
+    return (f"{cfg.demo_label}; mode={cfg.mode}; stored in {DEMO_DB.relative_to(ROOT)}, "
+            "refused by scripts/headline.py")
+
+
+def modal_apps_note(cfg: RaceConfig) -> str:
+    """Per-arm Modal apps (demo only): which deployed app each arm's runner uses."""
+    return ", ".join(f"{a.value} -> {cfg.modal_app_for(a)}" for a in cfg.arms) + (
+        " (deploy both: python -m workers.runners.modal_runner arm-apps deploy; "
+        "tear down: ... arm-apps stop)")
+
+
+def demo_warm_allowance_usd(cfg: RaceConfig, price: float) -> float:
+    """Upper bound on GPU $ outside the race clock for a pre-warmed race: every pinned container
+    billed for the whole warm-up timeout before t0 plus the scale-down window after the race."""
+    if not cfg.prewarm or cfg.runner != "modal":
+        return 0.0
+    n = cfg.gpus_per_arm * len(cfg.arms) + cfg.prewarm_spare * (len(cfg.arms) if cfg.modal_apps else 1)
+    return n * (WARM_UP_TIMEOUT_S + MODAL_SCALEDOWN_S) * price
 
 
 def apply_propose_variants(cfg: RaceConfig, deps: list[Any]) -> None:
@@ -315,6 +356,14 @@ def gating_ok(res: list[tuple[str, bool, str]]) -> bool:
 # --------------------------------------------------------------------------- race configs
 
 
+DEMO_SEEDS: tuple[int, ...] = (0,)   # a demo run is one race, not a seed set
+
+
+def default_seeds(base: RaceConfig) -> tuple[int, ...]:
+    """Seeds run when --seed is not given: the benchmark seeds, or one seed for a demo preset."""
+    return DEMO_SEEDS if base.is_demo else BENCH_SEEDS
+
+
 def parse_arms(value: str | None) -> list[ArmKind] | None:
     """``--arms opus,optuna`` -> [ArmKind.opus, ArmKind.optuna] (None: the preset's arms)."""
     if not value:
@@ -339,6 +388,8 @@ def build_races(preset: str, *, seeds: list[int] | None = None, minutes: float |
         upd["record_mode"] = {k: v for k, v in base.record_mode.items() if k in arms}
         upd["engine_features"] = {k: v for k, v in base.engine_features.items() if k in arms}
         upd["feature_params"] = {k: v for k, v in base.feature_params.items() if k in arms}
+        if base.modal_apps:
+            upd["modal_apps"] = {k: v for k, v in base.modal_apps.items() if k in arms}
     if dry_run:
         # The surrogate runner is in-process and $0, so a surrogate preset keeps it (its pacing
         # is what the median rule reads); every other preset swaps in the local CPU runner.
@@ -361,10 +412,12 @@ def build_races(preset: str, *, seeds: list[int] | None = None, minutes: float |
     if goal is not None:
         upd.update(target_value=goal.value, provisional=goal.provisional)
     tags = (" [dry run]" if dry_run else "") + (" [provisional goal]" if goal is not None and goal.provisional else "")
+    if base.is_demo:
+        tags += " [demo run]"
     if dry_run and base.launch_cutoff_s is not None and "budget_s" in upd and base.launch_cutoff_s >= upd["budget_s"]:
         upd["launch_cutoff_s"] = None  # a 2-minute dry run of a short race: keep it valid
     out = []
-    for s in (list(seeds) if seeds else list(BENCH_SEEDS)):
+    for s in (list(seeds) if seeds else list(default_seeds(base))):
         d = {**base.model_dump(), **upd, "seed": int(s), "name": f"{base.name} seed {s}{tags}"}
         out.append(RaceConfig.model_validate(d))  # re-validated: overrides go through the same checks
     return out
@@ -418,7 +471,21 @@ def live_checks(cfg: RaceConfig) -> list[tuple[str, bool, str]]:
     out: list[tuple[str, bool, str]] = []
     if cfg.llm == "mubit":
         out.extend(mubit_key_checks(cfg))
-    if cfg.runner == "modal":
+    if cfg.runner == "modal" and cfg.modal_apps:
+        # Demo races: every arm's own deployed app must have the function (name lookups only).
+        spec = get_target(cfg.target).spec
+        for kind in cfg.arms:
+            app = cfg.modal_app_for(kind)
+            try:
+                from workers.runners.modal_runner import ModalRunner
+
+                runner = ModalRunner({spec.hardware: 1}, app_name=str(app), deployed=True)
+                runner._function(spec.hardware).hydrate()
+                out.append((f"Modal app {app} deployed", True, f"{kind.value}: {spec.hardware} function found"))
+            except Exception as e:  # noqa: BLE001
+                out.append((f"Modal app {app} deployed", False, f"{kind.value}: {type(e).__name__}: {str(e)[:200]} "
+                            "(deploy: python -m workers.runners.modal_runner arm-apps deploy)"))
+    elif cfg.runner == "modal":
         spec = get_target(cfg.target).spec
         try:
             from workers.runners.modal_runner import APP_NAME, ModalRunner
@@ -447,6 +514,8 @@ async def prewarm_pool(cfg: RaceConfig, deps: list[Any], *, log: Any = print) ->
     fairness manifest, or None when the race does not pre-warm."""
     if not cfg.prewarm or cfg.runner != "modal":
         return None
+    if cfg.modal_apps:
+        return await prewarm_pool_per_arm(cfg, deps, log=log)
     runner = deps[0].runner
     if not hasattr(runner, "warm_up"):
         return None
@@ -460,8 +529,52 @@ async def prewarm_pool(cfg: RaceConfig, deps: list[Any], *, log: Any = print) ->
     return res
 
 
+async def prewarm_pool_per_arm(cfg: RaceConfig, deps: list[Any], *, log: Any = print) -> dict[str, Any] | None:
+    """Demo races with one Modal app per arm (``cfg.modal_apps``): each arm pins and warms its
+    own ``gpus_per_arm`` (+ ``prewarm_spare``) containers on its own app, all arms at once, before
+    t0. Same per-arm warmth, so still symmetric. Returns the merged manifest record."""
+    if not all(hasattr(d.runner, "warm_up") for d in deps):
+        return None
+    hw = _arm_hardware(cfg, deps)
+    n = cfg.gpus_per_arm + cfg.prewarm_spare
+    t = time.time()
+
+    async def one(d: Any) -> dict[str, Any]:
+        app = cfg.modal_app_for(d.kind)
+        await d.runner.prewarm(hw, n)
+        res = await d.runner.warm_up(hw, n, target=cfg.target, log=lambda m, app=app: log(f"[{app}] {m}"))
+        return {**res, "app": app}
+
+    results = await asyncio.gather(*(one(d) for d in deps))
+    per_arm = {d.kind.value: r for d, r in zip(deps, results)}
+    return {"hardware": hw, "wanted": n * len(deps), "warm": sum(int(r.get("warm") or 0) for r in results),
+            "ok": all(bool(r.get("ok")) for r in results),
+            "rounds": [x for r in results for x in (r.get("rounds") or [])],
+            "seconds": max((float(r.get("seconds") or 0.0) for r in results), default=0.0),
+            "per_arm": per_arm, "pinned": n * len(deps), "slots_total": cfg.gpus_per_arm * len(cfg.arms),
+            "spare": cfg.prewarm_spare * len(deps), "started_at": t, "ended_at": time.time(),
+            "note": "before t0: not in busy/idle/race $; one Modal app per arm (demo)"}
+
+
 async def cooldown_pool(cfg: RaceConfig, deps: list[Any]) -> None:
     if not cfg.prewarm or cfg.runner != "modal" or not deps:
+        return
+    if cfg.modal_apps:
+        # One pinned pool per arm app: unpin every one, even if another fails, then report.
+        hw = _arm_hardware(cfg, deps)
+        errors: list[str] = []
+        for d in deps:
+            if hasattr(d.runner, "cooldown"):
+                try:
+                    await d.runner.cooldown(hw, reset_scaledown=True)
+                except Exception as e:  # noqa: BLE001
+                    errors.append(f"{cfg.modal_app_for(d.kind)}: {e!r}")
+        for d in deps:
+            drain = getattr(d.runner, "drain_background", None)
+            if drain is not None:
+                await drain()
+        if errors:
+            raise RuntimeError("cooldown failed for " + "; ".join(errors))
         return
     runner = deps[0].runner
     if hasattr(runner, "cooldown"):
@@ -683,6 +796,20 @@ def cmd_run(args: argparse.Namespace) -> int:
                   f"GPU $ <= {b_est:.2f} per seed (guard {base.max_estimated_gpu_usd})")
     if cfg.is_ablation or is_prompt_ablation(cfg) or any(a in ABLATION_ONLY_ARMS for a in cfg.arms):
         print(f"      ABLATION, NEVER A HEADLINE RACE: {ablation_note(cfg)}")
+    if cfg.is_demo:
+        print(f"      DEMO RUN, NEVER A HEADLINE RACE: {demo_note(cfg)}")
+        d_base = PRESETS[args.preset]
+        if d_base.modal_apps:
+            d_hw = get_target(d_base.target).spec.hardware
+            d_price = price_per_s(d_hw)
+            d_est = estimate_gpu_cost_usd(d_base, d_price)
+            d_warm = demo_warm_allowance_usd(d_base, d_price)
+            where = "paid run" if cfg.runner == "modal" else f"paid preset; this dry run uses the {cfg.runner} runner"
+            print(f"      Modal app per arm ({where}): {modal_apps_note(d_base)}")
+            print(f"      paid GPU $ estimate: {len(d_base.arms)} arms x {d_base.gpus_per_arm} {d_hw} x "
+                  f"{d_base.budget_s:.0f} s x ${d_price:.6f}/s = ${d_est:.2f} per race, plus pre-warm/scale-down "
+                  f"<= ${d_warm:.2f} (upper bound: {WARM_UP_TIMEOUT_S:.0f} s warm-up timeout + {MODAL_SCALEDOWN_S} s "
+                  f"scale-down per container); per-arm GPU+LLM cap ${d_base.cost_cap_usd}")
     print(f"      goal {spec.metric} {'<=' if spec.direction == 'min' else '>='} {goal.value:g} "
           f"({goal.source}{', PROVISIONAL' if goal.provisional else ''})")
     if cfg.runner != "local":
@@ -716,6 +843,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     from backend.scheduler import AsymmetricRaceError
 
     default_db, default_dir = (DRYRUN_DB, DRYRUN_DIR) if mock else (
+        (DEMO_DB, DEMO_DIR) if cfg.is_demo else
         (ABLATION_DB, ABLATION_DIR) if cfg.is_ablation or is_prompt_ablation(cfg) else (BENCH_DB, None))
     db_path = Path(args.db) if args.db else default_db
     out_dir = Path(args.out_dir) if args.out_dir else (default_dir or db_path.parent)
@@ -743,6 +871,10 @@ def cmd_run(args: argparse.Namespace) -> int:
                 + f"; checks: {'; '.join(prop.get('checks') or []) or '-'}")
             if mock:
                 print("MOCK NUMBERS (mock LLM, laptop CPU, $0) - not a benchmark result")
+                if c.is_demo:
+                    print(f"DEMO: {c.demo_label}")
+            elif c.is_demo:
+                print(f"DEMO RUN ({c.demo_label}): never quote it as a benchmark number")
             elif c.is_ablation or is_prompt_ablation(c):
                 print(f"ABLATION (never a headline result): {ablation_note(c)}")
             elif c.provisional:
@@ -821,7 +953,7 @@ def main(argv: list[str] | None = None) -> int:
         res = checks(cfg, load_goals(args.goals))
         for name, ok, note in res:
             print(f"[{'ok' if ok else 'NO'}] {name}: {note}")
-        print(f"{len(BENCH_SEEDS)} races (seeds {list(BENCH_SEEDS)})")
+        print(f"{len(default_seeds(cfg))} races (seeds {list(default_seeds(cfg))})")
         return 0 if all(ok for _, ok, _ in res) else 1
     return cmd_run(args)
 

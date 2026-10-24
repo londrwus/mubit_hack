@@ -9,6 +9,8 @@ Estimates are **person-hours** for someone fluent in Python/React and new to Mod
 
 **Running (workflows):** `bm-cost-cut` (cadence build → LCBench wide race, pre-registration in `docs/preregistration_lcbench_wide.md` → RL cadence gate → RL race on Modal); `sapling-v3-and-gpu-check` (H100 end-to-end check, gated v3, hard stop 18:00); `demo-and-pitch-pack` (demo script primary/fallback, correction beat, Mubit Q&A, slides outline, evidence pack).
 
+**DEADLINE (D53): code freeze and submission Sun 06:00 London (06:00 UTC).** Races done ~00:30 → patches 06–09 + full tests ~02:30 → final numbers/docs ~04:30 → demo decision 05:00 → final push ~05:30.
+
 **Needs the user:** HF name + `hf auth login` + "go" to publish; Discord replies (stuck jobs, adapter header); B's page when v2 appears; "commit" when wanted. Deadline: everything except frontend by Sun 09:00 UTC.
 
 ## 0b. Earlier: morning brief (Sat 24 Oct ~06:50 BST)

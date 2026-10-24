@@ -145,6 +145,19 @@ DEFAULT_ENGINE_FEATURES: dict[ArmKind, tuple[str, ...]] = {
 # Arms that must get identical engine features when they meet in one race.
 BUSY_MACHINES_ARMS: frozenset[ArmKind] = frozenset({ArmKind.opus_bm, ArmKind.mubit})
 
+# ---- Demo runs for the video (never a benchmark result).
+# How every demo race is labelled (plan output, race name tag, fairness manifest "demo", and the
+# refusal notes of scripts/headline.py / scripts/analyze_races.py).
+DEMO_LABEL = "demo run for the video, not a benchmark result"
+# Per-arm Modal apps (RaceConfig.modal_apps; DEMO ONLY): the same functions (run_l4, run_cpu,
+# prepare_data from workers/runners/modal_runner.py) deployed once per arm under its own app name
+# (BUSY_MODAL_APP=<name> at deploy time), so Modal's own dashboard shows each arm's containers and
+# GPU use separately. Every benchmark / ablation race uses the single app "busy-machines-runner"
+# (the default, unchanged); strict races refuse per-arm apps. Mirrored in
+# workers.runners.modal_runner.PER_ARM_APP_NAMES (a test checks the mirror; configs stays modal-free).
+PER_ARM_MODAL_APPS: dict[ArmKind, str] = {ArmKind.opus: "busy-machines-opus", ArmKind.opus_bm: "busy-machines-bm"}
+_MODAL_APP_NAME_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-_.")
+
 
 class RaceConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -218,6 +231,15 @@ class RaceConfig(BaseModel):
     # live demo uses this to show a correction turning into a model update). Dev races always
     # apply them.
     benchmark_corrections: Literal["refuse", "record"] = "refuse"
+    # DEMO ONLY (dev mode, never a headline race). Both fields are left out of every dump while
+    # unset (exclude_if), so the stored config of every benchmark / ablation race, and of every
+    # earlier race, is byte-for-byte what it was before they existed.
+    #   modal_apps  arm -> deployed Modal app that arm's ModalRunner looks its functions up in
+    #               (PER_ARM_MODAL_APPS); empty = every arm uses the default app (unchanged path).
+    #   demo_label  set on demo presets (DEMO_LABEL): printed in the plan, tagged on the race name,
+    #               written into the fairness manifest ("demo"), refused by scripts/headline.py.
+    modal_apps: dict[ArmKind, str] = Field(default_factory=dict, exclude_if=lambda v: not v)
+    demo_label: str | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def _check(self) -> RaceConfig:
@@ -303,7 +325,37 @@ class RaceConfig(BaseModel):
             raise ValueError("median_stop_fractions must be non-empty, each in (0, 1)")
         if sorted(self.median_stop_fractions) != list(self.median_stop_fractions):
             raise ValueError("median_stop_fractions must be increasing")
+        if self.demo_label is not None:
+            if not self.demo_label.strip():
+                raise ValueError("demo_label must not be empty")
+            if self.mode != "dev":
+                raise ValueError(f"a demo race ({self.demo_label}) runs in dev mode only, never mode={self.mode!r}")
+        if self.modal_apps:
+            if self.strict:
+                raise ValueError(f"per-arm Modal apps are a demo feature: never in a {self.mode} race "
+                                 "(benchmark and ablation races use the single default app)")
+            if self.demo_label is None:
+                raise ValueError("per-arm Modal apps need demo_label (demo races only)")
+            if set(self.modal_apps) != set(self.arms):
+                raise ValueError(f"modal_apps must name every arm exactly once: arms "
+                                 f"{sorted(a.value for a in self.arms)}, modal_apps "
+                                 f"{sorted(a.value for a in self.modal_apps)}")
+            names = list(self.modal_apps.values())
+            if len(set(names)) != len(names):
+                raise ValueError(f"modal_apps must give each arm its own app: {names}")
+            for n in names:
+                if not n or set(n) - _MODAL_APP_NAME_CHARS:
+                    raise ValueError(f"invalid Modal app name {n!r} (lowercase letters, digits, - _ .)")
         return self
+
+    @property
+    def is_demo(self) -> bool:
+        """A demo run for the video (``demo_label`` set): dev mode, never a headline race."""
+        return self.demo_label is not None
+
+    def modal_app_for(self, kind: ArmKind | str) -> str | None:
+        """The deployed Modal app this arm's runner uses; None = the default single app."""
+        return self.modal_apps.get(ArmKind(kind))
 
     def features_for(self, kind: ArmKind | str) -> tuple[str, ...]:
         """The engine features this arm runs with (sorted, for comparison)."""
@@ -574,6 +626,24 @@ PRESETS: dict[str, RaceConfig] = {
         cost_cap_usd=5.0, max_estimated_gpu_usd=2.0,
         record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
     ),
+    # CIFAR + PLANNER CADENCE 60 s on Busy Machines (offline gate sim_cadence_cifar: 60 s projects
+    # BM's LLM $ at ~0.25-0.34x the standard Opus agent's with the same final quality; 0 s and 30 s
+    # fail on cost; a PROJECTION until raced). Identical to cifar-bm-15m (3 L4/arm x 3 arms = 9 of
+    # Starter's 10 GPUs, no spare, 45 s runs, 15 min, goal "cifar" 0.94 frozen, arms opus / opus_bm /
+    # optuna, same caps, pre-warm, record off) except that opus_bm also runs planner_cadence: a
+    # propose call at most every 60 s between call starts, K = min(8, LLM demand), judge calls not
+    # throttled (preset-declared, disclosed in the fairness manifest). Its fingerprint differs from
+    # cifar-bm-15m's (cadence): never pooled.
+    "cifar-bm-cadence-15m": RaceConfig(
+        name="CIFAR speedrun 15 min, Busy Machines with Opus + planner cadence 60 s", target="cifar",
+        arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna],
+        budget_s=900, gpus_per_arm=3, max_proposals_per_call=8, prewarm=True, prewarm_spare=0,
+        mode="benchmark", llm="mubit", runner="modal",
+        cost_cap_usd=5.0, max_estimated_gpu_usd=2.0,
+        record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+        engine_features={ArmKind.opus_bm: ["backfill", "judge_policy", "lean_planner", "planner_cadence"]},
+        feature_params={ArmKind.opus_bm: {"planner_cadence": {"min_propose_interval_s": 60.0}}},
+    ),
     # LCBench surrogate: identical to lcbench-15m (opus, opus_bm, optuna; 16 virtual L4 slots).
     "lcbench-bm-15m": RaceConfig(
         name="LCBench surrogate 15 min, Busy Machines with Opus", target="lcbench",
@@ -630,6 +700,26 @@ PRESETS: dict[str, RaceConfig] = {
         budget_s=180, gpus_per_arm=2, mode="benchmark", llm="mubit", runner="modal",
         cost_cap_usd=3.0, max_estimated_gpu_usd=0.5, record_mode=dict(BENCH_RECORD_MODES),
         benchmark_corrections="record",
+    ),
+    # DEMO RUN FOR THE VIDEO, NOT A BENCHMARK RESULT (dev mode: is_dev=1; bench.py stores it in
+    # data/bench/demo.db; scripts/headline.py refuses it). The standard Opus agent vs Busy Machines
+    # with Opus on CIFAR, each arm on ITS OWN deployed Modal app (PER_ARM_MODAL_APPS: opus ->
+    # busy-machines-opus, opus_bm -> busy-machines-bm, the same functions deployed twice), so the
+    # presenter can put Modal's own app dashboards side by side: Modal's independent container / GPU
+    # metrics show the standard agent's GPUs waiting and Busy Machines' busy. 3 L4 per arm (6 of
+    # Starter's 10 GPUs), the target's default 45 s runs (goal key "cifar"), 5 min, K <= 8, each
+    # arm's pool pre-warmed on its own app before t0, record off on both arms (Opus on every step,
+    # project A). Arms otherwise get their default features (opus: none; opus_bm: backfill + judge
+    # policy + lean planner). GPU $ <= 2 x 3 x 300 s x $0.000222 = $0.40 plus pre-warm / scale-down
+    # (printed by bench.py); per-arm cap $3 (GPU + LLM).
+    "demo-cifar-modal-5m": RaceConfig(
+        name="CIFAR demo for the video 5 min (one Modal app per arm)", target="cifar",
+        arms=[ArmKind.opus, ArmKind.opus_bm],
+        budget_s=300, gpus_per_arm=3, max_proposals_per_call=8, prewarm=True, prewarm_spare=0,
+        mode="dev", llm="mubit", runner="modal",
+        cost_cap_usd=3.0, max_estimated_gpu_usd=0.5,
+        record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+        modal_apps=dict(PER_ARM_MODAL_APPS), demo_label=DEMO_LABEL,
     ),
 }
 

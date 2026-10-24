@@ -1963,7 +1963,15 @@ class RaceEngine:
                 "prewarm": self.prewarm_info,
                 "mubit_projects": self._mubit_projects,
                 "corrections_policy": "allowed (dev)" if not self.cfg.strict else self.cfg.benchmark_corrections,
-                "corrections": [dict(c) for c in self.corrections]}
+                "corrections": [dict(c) for c in self.corrections],
+                # Demo races only (RaceConfig.demo_label): the key is absent from every other
+                # manifest, so benchmark / ablation manifests are unchanged.
+                **({"demo": self.demo_manifest()} if self.cfg.is_demo else {})}
+
+    def demo_manifest(self) -> dict[str, Any]:
+        """How a demo race is labelled in its manifest (never a headline result)."""
+        return {"headline": False, "label": self.cfg.demo_label,
+                "modal_apps": {k.value: v for k, v in self.cfg.modal_apps.items()}}
 
     # ------------------------------------------------------------------ run
 

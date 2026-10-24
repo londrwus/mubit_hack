@@ -32,7 +32,10 @@ prints, per race setup (target, budget, slots, run budget, goal):
    - **ablation races are refused** (``mode="ablation"``, or any ablation-only arm such as
      ``fast`` = a smaller faster model in the same loop, not a Mubit adapter): ``--preset`` of an
      ablation preset exits with an error, and ablation races selected any other way are dropped
-     with a note (and, defensively, blocked if they ever reach a setup).
+     with a note (and, defensively, blocked if they ever reach a setup);
+   - **demo races are refused** the same way ("demo run for the video, not a benchmark result":
+     ``demo_label`` / per-arm Modal apps in the config, a ``demo`` manifest entry, or the
+     ``[demo run]`` name tag; e.g. ``demo-cifar-modal-5m``).
    Each column's engine features and LLM setup are printed; early stopping is shown as slot
    time freed (never $, never in a $ framing); a judge-policy rule with sigma = 0 (LCBench's
    deterministic surrogate) is marked DEGENERATE and its counts are not real-gain stats.
@@ -525,11 +528,30 @@ def is_ablation_race(rows: Rows) -> bool:
     return bool(kinds & ABLATION_ARMS)
 
 
+# Demo runs for the video (backend.benchmark.configs.DEMO_LABEL / RaceConfig.demo_label).
+DEMO_REASON = "demo run for the video, not a benchmark result: never a headline result"
+
+
+def is_demo_race(rows: Rows) -> bool:
+    """``demo_label`` in the race config, a ``demo`` entry in the fairness manifest, or the
+    ``[demo run]`` name tag scripts/bench.py adds."""
+    race = rows["races"][0]
+    cfg = _race_config(rows)
+    f = race.get("fairness")
+    if cfg.get("demo_label") or cfg.get("modal_apps"):
+        return True
+    if isinstance(f, Mapping) and f.get("demo"):
+        return True
+    return "[demo run]" in str(race.get("name") or "")
+
+
 def race_blockers(rows: Rows, is_dev: bool) -> list[str]:
     race = rows["races"][0]
     rid = str(race["id"])[:8]
     cfg = _race_config(rows)
     why: list[str] = []
+    if is_demo_race(rows):
+        why.append(f"race {rid} is a {DEMO_REASON}")
     if is_ablation_race(rows):
         why.append(f"race {rid} is an {ABLATION_REASON}")
     if race.get("status") != "finished":
@@ -1806,6 +1828,9 @@ def refuse_ablation_preset(preset: str) -> None:
     if base is not None and (base.mode == "ablation" or any(canon_arm(a.value) in ABLATION_ARMS for a in base.arms)):
         raise SystemExit(f"refused: preset {preset!r} is an {ABLATION_REASON}; "
                          f"read it with scripts/analyze_races.py, not headline.py")
+    if base is not None and (base.demo_label is not None or base.modal_apps):
+        raise SystemExit(f"refused: preset {preset!r} is a {DEMO_REASON}; "
+                         f"read it with scripts/analyze_races.py, not headline.py")
 
 
 def select_preset(races: list[Rows], preset: str) -> list[Rows]:
@@ -1836,11 +1861,14 @@ def run(*, db: str | Path | None = None, race_ids: Sequence[str] | None = None, 
         races = select_preset(races, preset)
     refused = [r for r in races if is_ablation_race(r)]
     races = [r for r in races if not is_ablation_race(r)]
+    demos = [r for r in races if is_demo_race(r)]
+    races = [r for r in races if not is_demo_race(r)]
     # Keep dev and unfinished races so they show up stamped "not measured" instead of vanishing;
     # probe/collection races and orphan rows are still removed (analyze_races.screen).
     kept, ex = ar.screen(races, allow_dev=True, include_unfinished=True)
     groups, notes = build_groups(kept, best_known=best_known, min_seeds=min_seeds, pairs=pairs)
     notes = list(notes) + [f"refused race {str(r['races'][0]['id'])[:8]}: {ABLATION_REASON}" for r in refused]
+    notes += [f"refused race {str(r['races'][0]['id'])[:8]}: {DEMO_REASON}" for r in demos]
     return groups, ex, notes
 
 

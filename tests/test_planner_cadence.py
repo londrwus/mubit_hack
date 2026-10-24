@@ -52,6 +52,7 @@ BM_FEATS = ["backfill", "judge_policy", "lean_planner", "planner_cadence"]
 PRESET = "lcbench-wide-bm-15m"
 RL_PRESET = "rl-wide-bm-cadence-15m"   # rl-wide-bm-15m + planner cadence 60 s on opus_bm (cadence gate)
 C30_PRESET = "lcbench-wide-bm-c30-15m"   # lcbench-wide-bm-15m with the cadence at 30 s (D49, pre-registered)
+CIFAR_PRESET = "cifar-bm-cadence-15m"   # cifar-bm-15m + planner cadence 60 s on opus_bm (CIFAR cadence gate)
 
 
 def _load(name: str) -> Any:
@@ -90,7 +91,7 @@ def test_off_by_default_and_label() -> None:
     assert ENGINE_FEATURE_LABELS["planner_cadence"] == (
         "calls the AI planner at most every N seconds; the no-AI sampler keeps GPUs busy in between")
     for name, p in PRESETS.items():
-        if name not in (PRESET, RL_PRESET, C30_PRESET):
+        if name not in (PRESET, RL_PRESET, C30_PRESET, CIFAR_PRESET):
             assert not any("planner_cadence" in p.features_for(a) for a in p.arms), name
             assert not p.feature_params, name
     cfg = RaceConfig(target="bm-curve", arms=[ArmKind.opus, ArmKind.opus_bm], budget_s=1, gpus_per_arm=1)
@@ -460,3 +461,52 @@ def test_rl_cadence_preset_preflight_and_dry_run_config() -> None:
     paid = bench.build_races(RL_PRESET, seeds=[0, 1, 2])
     assert [r.seed for r in paid] == [0, 1, 2] and all(r.mode == "benchmark" for r in paid)
     assert all(r.min_propose_interval_for(ArmKind.opus_bm) == 60.0 for r in paid)
+
+
+# =========================================================================== CIFAR + cadence 60 s (CIFAR cadence gate)
+
+
+def test_cifar_cadence_preset_is_cifar_bm_plus_cadence_60() -> None:
+    p, ref = PRESETS[CIFAR_PRESET], PRESETS["cifar-bm-15m"]
+    diff = {k for k in RaceConfig.model_fields if getattr(p, k) != getattr(ref, k)}
+    assert diff == {"name", "engine_features", "feature_params"}, diff
+    assert p.target == "cifar" and p.runner == "modal" and p.mode == "benchmark" and p.llm == "mubit"
+    assert p.arms == [ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna]
+    assert p.gpus_per_arm == 3 and p.budget_s == 900 and p.run_budget_s is None and p.max_proposals_per_call == 8
+    assert p.prewarm and p.prewarm_spare == 0 and p.cost_cap_usd == 5.0
+    assert p.record_modes() == {"opus": "off", "opus_bm": "off"}
+    assert p.features_for(ArmKind.opus) == () and p.features_for(ArmKind.optuna) == ()
+    assert p.features_for(ArmKind.opus_bm) == tuple(sorted(BM_FEATS))   # lean_planner on
+    assert p.min_propose_interval_for(ArmKind.opus_bm) == 60.0
+    assert p.min_propose_interval_for(ArmKind.opus) is None
+    assert p.propose_setup_for(ArmKind.opus) == {"prompt_version": "v1", "effort": "medium", "source": "standard"}
+    assert p.propose_setup_for(ArmKind.opus_bm) == {"prompt_version": "v2", "effort": "low", "source": "lean_planner"}
+    assert p.model_for(ArmKind.opus) == p.model_for(ArmKind.opus_bm) == "claude-opus-5-5"
+    goals = json.loads((ROOT / "data" / "calibration" / "target_values.json").read_text(encoding="utf-8"))
+    assert goals.get("cifar") == pytest.approx(0.94)
+    hl = _load("headline")
+    assert not p.name.startswith(f"{ref.name} seed ") and not p.name.startswith(f"{PRESETS['cifar-15m'].name} seed ")
+    assert hl.preregistration_for([f"{p.name} seed 0"]) is None
+    st = sched.resolve_engine_state(p.model_copy(update={"seed": 1}), ArmKind.opus_bm, sched.race_spec(p))
+    assert st.min_propose_interval_s == 60.0 and st.sampler.manifest()["seed"] == 1
+
+
+def test_cifar_cadence_preset_preflight_and_dry_run_config() -> None:
+    bench = _load("bench")
+    p = PRESETS[CIFAR_PRESET]
+    res = {n: (ok, note) for n, ok, note in bench.checks(p, {"cifar": 0.94})}
+    assert bench.gating_ok([(n, o, t) for n, (o, t) in res.items()]), res
+    assert "opus_bm: at most one propose call per 60 s" in res["planner cadence"][1]
+    assert "9 L4 at once (9 slots + 0 spare" in res["fits Modal Starter caps"][1]
+    from workers.runners.base import DEFAULT_PRICE_PER_SECOND
+
+    est = estimate_gpu_cost_usd(p, DEFAULT_PRICE_PER_SECOND["L4"])
+    assert est == pytest.approx(1.80, abs=0.01) and est <= p.max_estimated_gpu_usd <= 2.5
+    assert res["GPU $ estimate within guard"][0]
+    assert bench.goal_key(p) == "cifar"
+    c = bench.build_races(CIFAR_PRESET, seeds=[2], dry_run=True)[0]
+    assert c.mode == "dev" and c.llm == "mock" and c.runner == "local" and c.seed == 2 and not c.prewarm
+    assert c.min_propose_interval_for(ArmKind.opus_bm) == 60.0
+    paid = bench.build_races(CIFAR_PRESET, seeds=[0, 1, 2])
+    assert [r.seed for r in paid] == [0, 1, 2] and all(r.mode == "benchmark" for r in paid)
+    assert all(r.min_propose_interval_for(ArmKind.opus_bm) == 60.0 and r.prewarm for r in paid)

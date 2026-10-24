@@ -25,7 +25,7 @@ Our entry for **Night Shift London**, the $65K Mubit hackathon (23–25 Oct 2026
    - **Claude Code itself is a dev tool, not the product's LLM.** Never use the coding session to stand in for runtime calls (the Opus arm, example collection, labelling, verification). Those must be API calls through Mubit. See D15 in `docs/decisions.md`.
 2. **All project code is written during the event** (from Fri 23 Oct, 19:30). Open-source libraries are fine.
 3. **The demo must show a correction turning into a model update** (judging criterion #1).
-4. **Code freeze: Sun 25 Oct, 10:00 London time.** Clocks go back at 02:00 on Sunday.
+4. **Code freeze: Sun 25 Oct, 06:00 London time: the LAST moment to push code and submit** (moved from 10:00 by the user on Sat 24 Oct, D53). Clocks go back at 02:00 on Sunday.
 
 ## Judging (equal weight)
 Use of Mubit (correction → model update) · Usefulness (real recurring task) · Technical execution (works, holds up under questions) · Demo (clear, live, under the time limit). Details: `docs/context.md`.

@@ -48,6 +48,19 @@ Usage
 - Ephemeral (scripts/smoke tests): ``async with app.run(): ModalRunner(deployed=False)``.
 - Smoke test: ``python -m workers.runners.modal_runner smoke [cifar|lm|rl] ['{json overrides}'] [budget_s]``
   (one short run of the default config; cifar/lm on one L4 ~ $0.01, rl on CPU ~ $0.001).
+
+Per-arm apps (DEMO ONLY, ``RaceConfig.modal_apps``; e.g. the ``demo-cifar-modal-5m`` preset)
+- The same three functions (``run_l4``, ``run_cpu``, ``prepare_data``) deployed under one app per
+  arm (``PER_ARM_APP_NAMES``: opus -> ``busy-machines-opus``, opus_bm -> ``busy-machines-bm``) by
+  setting ``BUSY_MODAL_APP`` at deploy time. Each arm's runner is ``ModalRunner(app_name=...)`` and
+  looks its functions up with ``modal.Function.from_name(app_name, fn)``, so Modal's own dashboard
+  shows each arm's containers and GPU use on its own app page. The Volume and the metrics Queue
+  are workspace objects shared by both apps (runs use distinct queue partitions). Benchmark and
+  ablation races never use this (configs refuses it): they keep the single default app.
+- Deploy both: ``python -m workers.runners.modal_runner arm-apps deploy`` (runs, per app,
+  ``BUSY_MODAL_APP=<name> modal deploy --name <name> workers/runners/modal_runner.py``).
+- Tear down both: ``python -m workers.runners.modal_runner arm-apps stop`` (``modal app stop -y <name>``).
+- ``arm-apps print`` only prints the commands and the dashboard pages (no Modal call).
 """
 
 from __future__ import annotations
@@ -98,7 +111,12 @@ async def _bounded(aw: Any, timeout: float, keep: set[asyncio.Task[Any]] | None 
         raise TimeoutError(f"Modal call did not return within {timeout:.1f}s")
     return task.result()
 
-APP_NAME = os.environ.get("BUSY_MODAL_APP", "busy-machines-runner")
+DEFAULT_APP_NAME = "busy-machines-runner"   # every benchmark / ablation race (single app, unchanged)
+APP_NAME = os.environ.get("BUSY_MODAL_APP", DEFAULT_APP_NAME)
+# Per-arm apps for demo races only (backend.benchmark.configs.PER_ARM_MODAL_APPS mirrors this; a
+# test checks it): the same functions deployed once per arm so Modal's dashboard shows each arm's
+# containers / GPU use on its own app page. ``arm-apps`` in the CLI below deploys and stops them.
+PER_ARM_APP_NAMES: dict[str, str] = {"opus": "busy-machines-opus", "opus_bm": "busy-machines-bm"}
 VOLUME_NAME = "busy-machines-data"
 QUEUE_NAME = "busy-machines-metrics"
 DATA_MOUNT = "/data"
@@ -355,6 +373,8 @@ class ModalRunner:
     """Runner backed by Modal Functions.
 
     slots: per-hardware concurrency for this runner, e.g. {"L4": 4, "CPU": 32}.
+    app_name: the deployed app to look functions up in (default ``APP_NAME``, the single app;
+        demo races with per-arm apps pass the arm's app, see ``PER_ARM_APP_NAMES``).
     deployed: True looks functions up in the deployed app ``app_name``; False uses this
         module's functions (call inside ``async with app.run():``).
     price_table: USD/s per hardware (CPU is per core and is multiplied by ``cpu_cores``).
@@ -878,10 +898,69 @@ def _smoke_cli(argv: list[str]) -> dict[str, Any]:
     return asyncio.run(smoke(budget, overrides, target=target))
 
 
+# --------------------------------------------------------------------------- per-arm apps (demo)
+
+ARM_APP_ACTIONS: tuple[str, ...] = ("print", "deploy", "stop")
+DASHBOARD_URL = "https://modal.com/apps/{workspace}/main/deployed/{app}"
+
+
+def arm_app_commands(action: str, apps: dict[str, str] | None = None,
+                     module_path: str = "workers/runners/modal_runner.py") -> list[tuple[dict[str, str], list[str]]]:
+    """(extra env, argv after ``python -m modal``) per per-arm app, for ``deploy`` or ``stop``.
+    Deploy sets ``BUSY_MODAL_APP`` (so ``APP_NAME`` is the arm's app) and passes ``--name`` too."""
+    apps = dict(PER_ARM_APP_NAMES if apps is None else apps)
+    if action == "deploy":
+        return [({"BUSY_MODAL_APP": name}, ["deploy", "--name", name, module_path]) for name in apps.values()]
+    if action == "stop":
+        return [({}, ["app", "stop", "-y", name]) for name in apps.values()]
+    raise ValueError(f"unknown action {action!r}; known: deploy, stop")
+
+
+def arm_apps_text(apps: dict[str, str] | None = None) -> str:
+    """The documented commands (PowerShell and bash) and dashboard pages; no Modal call."""
+    apps = dict(PER_ARM_APP_NAMES if apps is None else apps)
+    lines = ["# Deploy one app per arm (same functions; run from the repo root):"]
+    for env, argv in arm_app_commands("deploy", apps):
+        name = env["BUSY_MODAL_APP"]
+        lines.append(f"$env:BUSY_MODAL_APP='{name}'; python -m uv run modal {' '.join(argv)}; "
+                     "Remove-Item Env:BUSY_MODAL_APP   # PowerShell")
+        lines.append(f"BUSY_MODAL_APP={name} uv run modal {' '.join(argv)}   # bash")
+    lines.append("# Tear down both (stops the apps and terminates their containers):")
+    for _, argv in arm_app_commands("stop", apps):
+        lines.append(f"python -m uv run modal {' '.join(argv)}")
+    lines.append("# Dashboard pages (the deploy prints the exact 'View Deployment' URL):")
+    for arm, name in apps.items():
+        lines.append(f"{arm}: {DASHBOARD_URL.format(workspace='<workspace>', app=name)}")
+    return "\n".join(lines)
+
+
+def _arm_apps_cli(argv: list[str]) -> int:
+    """``arm-apps print|deploy|stop``: deploy / stop run the Modal CLI once per app."""
+    import subprocess
+
+    action = argv[0] if argv else "print"
+    if action not in ARM_APP_ACTIONS:
+        print(f"usage: python -m workers.runners.modal_runner arm-apps [{'|'.join(ARM_APP_ACTIONS)}]")
+        return 2
+    if action == "print":
+        print(arm_apps_text())
+        return 0
+    rc = 0
+    for env, args in arm_app_commands(action):
+        cmd = [sys.executable, "-m", "modal", *args]
+        print("$ " + " ".join([*(f"{k}={v}" for k, v in env.items()), "modal", *args]), flush=True)
+        r = subprocess.run(cmd, env={**os.environ, **env}, check=False)
+        rc = rc or r.returncode
+    return rc
+
+
 if __name__ == "__main__":
     import json
 
     if len(sys.argv) >= 2 and sys.argv[1] == "smoke":
         print(json.dumps(_smoke_cli(sys.argv[2:]), indent=2, default=str))
+    elif len(sys.argv) >= 2 and sys.argv[1] == "arm-apps":
+        raise SystemExit(_arm_apps_cli(sys.argv[2:]))
     else:
-        print("usage: python -m workers.runners.modal_runner smoke [cifar|lm|rl] ['{\"epochs\": 8}'] [budget_s]")
+        print("usage: python -m workers.runners.modal_runner smoke [cifar|lm|rl] ['{\"epochs\": 8}'] [budget_s]\n"
+              "       python -m workers.runners.modal_runner arm-apps [print|deploy|stop]   (demo: one app per arm)")

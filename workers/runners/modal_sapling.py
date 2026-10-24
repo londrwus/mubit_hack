@@ -30,6 +30,8 @@ CLI (deploy once: ``modal deploy workers/runners/modal_sapling.py``)
     python -m workers.runners.modal_sapling h100-smoke [deadline_s]  # reference + 5 rows + parity + head dump
     python -m workers.runners.modal_sapling extract <rows.jsonl> [more.jsonl ...] <run_name> [--chunk N] [--max-usd X] [--out DIR] [--deadline S] [--ephemeral]
     python -m workers.runners.modal_sapling fetch <volume_path> <local_path>
+    python -m workers.runners.modal_sapling heads-upload           # repo mirror for v4 head training -> Volume
+    python -m workers.runners.modal_sapling heads-v4 <out_dir> [--deadline S] [--max-usd X]  # L4, ephemeral app
 
 Rows are JSONL objects with ``id``, ``policy``, ``evidence``, ``claim``; any other keys
 (labels, generator metadata in ``data/ml_claims/*.jsonl``) are dropped before upload
@@ -444,6 +446,123 @@ def h100_v3_session(rows: list[dict[str, Any]], check_rows: list[dict[str, Any]]
     return out
 
 
+# --------------------------------------------------------------------------- v4 heads (one L4 call, D51)
+# Head training + scoring on cached features only (no backbone): ``scripts/sapling_stage_v4.py`` runs in a
+# subprocess on a mirror of the needed repo files in the Volume (``v4heads/repo``, uploaded by ``heads-upload``).
+# The stock head is copied from the Volume's own dump (``outputs/stock_head``) after a sha256 check, so the
+# 235 MB file is not uploaded again.
+
+HEADS_REPO = "v4heads/repo"
+HEADS_GPU = "L4"
+HEADS_CPU = 8.0
+HEADS_MEMORY_MB = 24 * 1024
+HEADS_TIMEOUT_S = 2400
+HEADS_FILES: tuple[str, ...] = (
+    "scripts/sapling_stage.py", "scripts/sapling_stage_v2.py", "scripts/sapling_stage_v3.py",
+    "scripts/sapling_stage_v4.py", "scripts/sapling_compare_published.py",
+    "data/ml_claims/train.jsonl", "data/ml_claims/test.jsonl", "data/ml_claims/trap50.jsonl",
+    "data/trap_set/trap_set_v1.jsonl", "data/sapling/contractnli/rows.jsonl",
+    "data/sapling/pkg/runtime/interaction_head.py", "data/sapling/pkg/runtime/conformal_calibrator.py",
+    "data/sapling/stock_head/calibration.json",
+    "data/sapling/sapling_v1/records.jsonl", "data/sapling/sapling_v1/ours_ids.jsonl",
+    "data/sapling/sapling_v1/ours_logits.npy", "data/sapling/sapling_v1/volume/*",
+    "data/sapling/sapling_v2/extra_train.jsonl", "data/sapling/sapling_v2/x_extract/records.jsonl",
+    "data/sapling/sapling_v2/x_extract/volume/*", "data/sapling/sapling_v2/final_v2_ids.jsonl",
+    "data/sapling/sapling_v2/final_v2_logits.npy", "data/sapling/sapling_v2/release/heads_ensemble_delta.safetensors",
+    "data/sapling/sapling_v2/release/calibration_a01.json", "data/sapling/sapling_v2/release/calibration_a05.json",
+    "data/sapling/sapling_v3/rows_train.jsonl", "data/sapling/sapling_v3/rows_eval_noise_test.jsonl",
+    "data/sapling/sapling_v3/x_extract/volume/*",
+    "data/sapling/compare_published/per_row.jsonl",
+    "data/sapling/sapling_v4/rows_train.jsonl", "data/sapling/sapling_v4/rows_val.jsonl",
+    "data/sapling/sapling_v4/gate_predeclared.json", "data/sapling/sapling_v4/gate_lowered_predeclared.json",
+    "data/sapling/sapling_v4/x_extract/volume/*",
+)
+
+
+@app.function(image=gpu_image, gpu=HEADS_GPU, volumes={MOUNT: volume}, cpu=HEADS_CPU, memory=HEADS_MEMORY_MB,
+              timeout=HEADS_TIMEOUT_S, scaledown_window=2, max_containers=1, retries=0)
+def heads_v4(stock_head_sha256: str, args: list[str]) -> dict[str, Any]:
+    import shutil
+    import subprocess
+
+    t_call = time.time()
+    volume.reload()
+    repo = Path(MOUNT) / HEADS_REPO
+    dst = repo / "data/sapling/stock_head/head.safetensors"
+    src = Path(MOUNT) / HEAD_FILE
+    if not dst.exists() or _sha256(dst) != stock_head_sha256:
+        if _sha256(src) != stock_head_sha256:
+            raise RuntimeError("Volume stock head dump does not match the local stock head sha256")
+        shutil.copyfile(src, dst)
+    out: dict[str, Any] = {"driver": _driver(), "versions": _versions(), "container_age_at_call_s": t_call - _CONTAINER_T0}
+    env = dict(os.environ) | {"PYTHONPATH": "/root", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+    proc = subprocess.Popen([sys.executable, str(repo / "scripts/sapling_stage_v4.py"), *args], cwd=str(repo), env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    lines: list[str] = []
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        print(line, end="", flush=True)
+        lines.append(line)
+    out["returncode"] = proc.wait()
+    out["log"] = "".join(lines)[-200_000:]
+    volume.commit()
+    res_dir = repo / "data/sapling/sapling_v4/heads"
+    out["files"] = {str(p.relative_to(res_dir)).replace("\\", "/"): p.read_bytes()
+                    for p in sorted(res_dir.rglob("*")) if p.is_file() and p.suffix != ".safetensors"} if res_dir.exists() else {}
+    out["volume_dir"] = f"{HEADS_REPO}/data/sapling/sapling_v4/heads"
+    out["call_s"] = time.time() - t_call
+    return out
+
+
+def cmd_heads_upload() -> dict[str, Any]:
+    import glob
+    import hashlib
+
+    root = Path(__file__).resolve().parents[2]
+    files = sorted({p for pat in HEADS_FILES for p in glob.glob(str(root / pat)) if Path(p).is_file()})
+    missing = [pat for pat in HEADS_FILES if not glob.glob(str(root / pat))]
+    if missing:
+        raise SystemExit(f"missing: {missing}")
+    vol = modal.Volume.from_name(VOLUME_NAME)
+    t0 = time.time()
+    total = 0
+    with vol.batch_upload(force=True) as b:
+        for p in files:
+            rel = Path(p).relative_to(root).as_posix()
+            b.put_file(p, f"{HEADS_REPO}/{rel}")
+            total += Path(p).stat().st_size
+    manifest = {Path(p).relative_to(root).as_posix(): hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files}
+    return {"files": len(files), "bytes": total, "upload_s": time.time() - t0, "sha256": manifest}
+
+
+def cmd_heads_v4(out_dir: str, *, deadline_s: float = 1800.0, max_usd: float = 1.5, args: list[str] | None = None) -> dict[str, Any]:
+    import hashlib
+
+    root = Path(__file__).resolve().parents[2]
+    worst = estimate_cost(deadline_s, gpu=HEADS_GPU, cpu_cores=HEADS_CPU, mem_gib=HEADS_MEMORY_MB / 1024)
+    print(f"[sapling] heads-v4 on {HEADS_GPU}: deadline {deadline_s:.0f}s = ${worst:.2f} worst case (cap ${max_usd:.2f})",
+          file=sys.stderr)
+    if worst > max_usd:
+        raise SystemExit(f"worst case ${worst:.2f} exceeds --max-usd {max_usd:.2f}")
+    sh = hashlib.sha256((root / "data/sapling/stock_head/head.safetensors").read_bytes()).hexdigest()
+    local = Path(out_dir)
+    local.mkdir(parents=True, exist_ok=True)
+    with modal.enable_output(), app.run():
+        t0 = time.time()
+        fc = heads_v4.spawn(sh, list(args or []))
+        print(f"[sapling] heads-v4 call {fc.object_id}", file=sys.stderr)
+        res = _get_with_deadline(fc, deadline_s)
+        wall = time.time() - t0
+    for name, data in res.pop("files").items():
+        (local / name).parent.mkdir(parents=True, exist_ok=True)
+        (local / name).write_bytes(data)
+    (local / "modal_log.txt").write_text(res.pop("log"), encoding="utf-8")
+    res |= {"call_id": fc.object_id, "client_wall_s": wall,
+            "est_usd_upper": estimate_cost(wall + 2, gpu=HEADS_GPU, cpu_cores=HEADS_CPU, mem_gib=HEADS_MEMORY_MB / 1024)}
+    (local / "report.json").write_text(json.dumps(res, indent=2, default=str), encoding="utf-8")
+    return res
+
+
 # --------------------------------------------------------------------------- client side
 
 
@@ -657,6 +776,22 @@ def main(argv: list[str]) -> None:
         _print(_summary(cmd_extract(pos[:-1], pos[-1], **opts)))
     elif cmd == "fetch":
         _print(cmd_fetch(rest[0], rest[1]))
+    elif cmd == "heads-upload":
+        res = cmd_heads_upload()
+        _print({k: v for k, v in res.items() if k != "sha256"})
+    elif cmd == "heads-v4":  # heads-v4 <out_dir> [--deadline S] [--max-usd X] [-- script args]
+        opts: dict[str, Any] = {}
+        extra: list[str] = []
+        it = iter(rest[1:])
+        for a in it:
+            if a == "--deadline":
+                opts["deadline_s"] = float(next(it))
+            elif a == "--max-usd":
+                opts["max_usd"] = float(next(it))
+            elif a == "--":
+                extra = list(it)
+        res = cmd_heads_v4(rest[0], args=extra, **opts)
+        _print({k: v for k, v in res.items() if k != "versions"})
     elif cmd == "v3-session":  # v3-session <check.jsonl> <run_name> <out_dir> <rows.jsonl> [more.jsonl ...]
         res = cmd_v3_session(rest[3:], rest[0], rest[1], rest[2])
         _print({k: v for k, v in res.items() if k != "v2_check"} | {"v2_check": {
