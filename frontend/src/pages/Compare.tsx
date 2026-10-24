@@ -593,7 +593,7 @@ export default function Compare() {
         <div className="flex items-start gap-2 text-[12px] text-app-slate" title={ex.worse.items.join("\n")}>
           <Info size={13} className="mt-px shrink-0 text-app-muted" />
           <span>
-            <span className="font-semibold text-app-text-2">Where it falls short:</span> {ex.worse.text}
+            <span className="font-semibold text-app-text-2">Details:</span> {ex.worse.text}
           </span>
         </div>
       </div>

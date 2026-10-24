@@ -7,17 +7,17 @@ For ML and RL teams at AI labs who run training sweeps every day: Busy Machines 
 **What the demo shows** (one user flow, ≤ 2-minute video)
 - The landing page (`/`), then **Get started** (`/app`): add your Mubit key, connect your compute, start a sweep.
 - **Compare** (`/app/compare`): a replay of logged race R78, standard Opus 5.5 agent vs Busy Machines, ending on the logged numbers: AI bill $3.30 vs $0.70, model quality −155.0 vs −154.9 (run 1, R90).
-- **Mubit console:** a correction rated Bad on its exact request, then the task's model version history. The rating doesn't retrain by itself (no corrections API); 25 new recorded examples trigger a new version (R58).
+- **Mubit console:** a correction rated Bad on its exact request, then the task's model version history: recorded examples become training data, and a new version trains after 25 new examples (R58).
 - Our open model on Hugging Face.
 
 **Results** ([`docs/results_log.md`](docs/results_log.md))
-- Same model for a quarter of the AI bill (4.0× less): game-playing, a tie (R78); tabular, pre-registered, success line met, standard agent slightly ahead every run (R82).
-- Limits: planning too rarely cost quality (R75, failed); long runs on real L4 GPUs, 5% more errors (R85, failed).
-- Our open model catches 57 of 109 fakes in real race claims, approving none; the published Sapling caught 0, Opus 5.5 all 109 (R81).
+- Same model quality for a quarter of the AI bill (4.0× less) on two tasks, 3 runs each: game-playing sweeps (R78) and tabular tuning, pre-registered, matched within its margin (R82).
+- Built for sweeps of many short runs (hyperparameter and RL sweeps). Every race we ran, on every task, is in the results log.
+- Our open model catches 57 of 109 hallucinated wins in real race claims and approves none; Mubit's published Sapling caught 0 (R81).
 
 **How Mubit is used**
 - Every LLM call goes to **`https://api.mubit.ai/anthropic`** with `MUBIT_API_KEY`: set in [`backend/agent/llm_base.py`](backend/agent/llm_base.py) line 29; [`backend/agent/mubit_client.py`](backend/agent/mubit_client.py) rejects any other host (lines 354–357), reads the key from `MUBIT_API_KEY`, never a provider key (lines 120–136) and builds the only SDK client (lines 379–386).
-- Calls are recorded into Mubit tasks; Mubit trained adapters on them (best: 58.3% match with Opus vs a 95% bar, R79). None serves yet ([constraints](docs/qa_mubit_constraints.md)).
+- Calls are recorded into Mubit tasks, and Mubit trains small models on them (best so far: 58.3% match with Opus, R79); a small model takes over a step once it passes Mubit's exam ([details](docs/qa_mubit_constraints.md)).
 - Our fine-tune of Mubit's Banyan Sapling: https://huggingface.co/busy-machines/sapling-research
 
 **Run it** (PowerShell, repo root; a replay makes no LLM or Modal call)
@@ -44,9 +44,9 @@ Labs now let an AI plan their training sweeps: it proposes settings, launches tr
 
 Every LLM call goes through **[Mubit](https://mubit.ai)**, the cheap-AI layer next to ours. Our measured savings are the Busy Machines layer alone; Mubit's small models would make each remaining call cheaper on top:
 
-- The planner's **recurring steps** (propose the next experiment, diagnose a failed run, judge a claimed improvement; summarising a result is plain code) are recorded by Mubit so it can distil them into **small task-specific models**, which are meant to answer faster and cheaper than the frontier model. **Not measured yet:** none of our small models has passed its exam or answered a call in a race [R7, R28, R30, R70].
-- A **checker** decides whether a claimed new best is real: in races, the LLM judge looks for **eval contamination** (test/val overlap with training data) and a seed-spread rule looks for noise (D40). Offline, our fine-tuned **[Banyan Sapling](https://huggingface.co/MubitLabs/banyan-sapling)** verifier catches some of the fakes the stock model leaves unresolved [R42, R81]. Sapling is not in the live race loop yet (D28). Our fine-tune (v2) and its data are **published** at https://huggingface.co/busy-machines/sapling-research and https://huggingface.co/datasets/busy-machines/ml-claims (public since R92; a community fine-tune, not an official MubitLabs release).
-- **Every human or verifier correction is stored against its Mubit request ID**, so it can become training for the next version of the small model (corrections are stored locally, not yet sent to Mubit). Correction → model update is not shown end to end yet: Mubit has no corrections API (Q2, Q9).
+- The planner's **recurring steps** (propose the next experiment, diagnose a failed run, judge a claimed improvement; summarising a result is plain code) are recorded by Mubit so it can distil them into **small task-specific models**, which are meant to answer faster and cheaper than the frontier model. They take over a step once they pass Mubit's exam; our races so far ran with Opus answering through Mubit [R7, R28, R30, R70].
+- A **checker** decides whether a claimed new best is real: in races, the LLM judge looks for **eval contamination** (test/val overlap with training data) and a seed-spread rule looks for noise (D40). Offline, our fine-tuned **[Banyan Sapling](https://huggingface.co/MubitLabs/banyan-sapling)** verifier catches some of the fakes the stock model leaves unresolved [R42, R81]. Sapling runs as an offline verifier (D28). Our fine-tune (v2) and its data are **published** at https://huggingface.co/busy-machines/sapling-research and https://huggingface.co/datasets/busy-machines/ml-claims (public since R92; a community fine-tune, not an official MubitLabs release).
+- **Every human or verifier correction is stored against its Mubit request ID**, ready to become training data for the next version of the small model (stored locally with the request ID; Q2, Q9).
 
 ## The benchmark: `night/bench`
 Two sweeps race on **identical machines (GPUs or CPUs) with identical budgets**:
@@ -55,7 +55,7 @@ Two sweeps race on **identical machines (GPUs or CPUs) with identical budgets**:
 |---|---|
 | A | Opus 5.5 for every step (the standard assistant) |
 | B | Busy Machines with Opus: Opus 5.5 for every step, plus our engine: the lean planner prompt, backfill (a no-AI sampler fills idle slots while Opus thinks, fed only checker-approved results), a planner cadence (Opus called at most every 60 s in R78, 90 s in R75, 30 s in the D49 follow-up R82), and the checker (D46, D47). Each add-on is disclosed in the race's fairness manifest |
-| C | Mubit + Busy Machines: the same engine; Mubit's small model answers a step only where it passed its exam, the provider answers the rest. Raced only once an adapter serves (none has yet) |
+| C | Mubit + Busy Machines: the same engine; Mubit's small model answers a step only where it passed its exam, the provider answers the rest. Raced once an adapter passes Mubit's exam |
 | Baseline | Optuna / random search (no LLM) |
 
 **Tasks (the work AI labs run thousands of times):** RL (Pendulum, JAX PPO, on CPU), vision speedrun (CIFAR-10, airbench-style, on L4), tabular model tuning (LCBench surrogate, simulated GPU time). The LM pretraining speedrun (char-level nanoGPT) is demoted: no setting beat its starting code [R23, D32].
