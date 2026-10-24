@@ -1,0 +1,58 @@
+{
+  "calls": 120,
+  "cost_usd": 0.24790964999999998,
+  "disagreements_full": [
+    {
+      "case": "lm:114a2bf3a947481eb2045e92e250611a:50",
+      "opus1": {
+        "decision": "continue"
+      },
+      "opus2": {
+        "decision": "stop"
+      }
+    },
+    {
+      "case": "lm:62dcfd8149c345ffa4add726ed6a5507:25",
+      "opus1": {
+        "decision": "stop"
+      },
+      "opus2": {
+        "decision": "continue"
+      }
+    }
+  ],
+  "distinct_candidate_inputs": 1121,
+  "first_request_id": "mreq_01a16bac56ad75f1896fe52fec24fbf9",
+  "inconsistent_pairs_opus": 0,
+  "indicative_passing_variants": [],
+  "n_haiku_pairs": 40,
+  "n_opus_pairs": 40,
+  "passes_min_inputs": true,
+  "prompt_fingerprint": "f1f3bf21aa79",
+  "recordable_variants": [],
+  "recorded_calls": 0,
+  "variants": {
+    "decision_only": {
+      "classes_opus": {
+        "continue": 52,
+        "stop": 28
+      },
+      "haiku_vs_opus1": 0.7,
+      "largest_class_share": 0.65,
+      "opus_self_agreement": 0.95,
+      "passes_balance": true,
+      "passes_ceiling": false
+    },
+    "full_output": {
+      "classes_opus": {
+        "('decision', 'continue')": 52,
+        "('decision', 'stop')": 28
+      },
+      "haiku_vs_opus1": 0.7,
+      "largest_class_share": 0.65,
+      "opus_self_agreement": 0.95,
+      "passes_balance": true,
+      "passes_ceiling": false
+    }
+  }
+}

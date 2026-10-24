@@ -1,0 +1,75 @@
+{
+  "target": "lcbench",
+  "task_id": "167168",
+  "yahpo_data_commit": "b627cb8b1862c1181b3dda2cd23ad83d4cb4c42b",
+  "budget_s": 300.0,
+  "n_random": 500,
+  "seed": 0,
+  "default": {
+    "config": {
+      "epochs": 26,
+      "batch_size": 91,
+      "learning_rate": 0.0031622777,
+      "momentum": 0.545,
+      "weight_decay": 0.050005,
+      "num_layers": 3,
+      "max_units": 256,
+      "max_dropout": 0.5,
+      "checkpoint_selection": "last_epoch"
+    },
+    "val": 0.44090163707733154,
+    "heldout": 0.4369393289089203,
+    "time_s": 65.20140838623047
+  },
+  "random_heldout": {
+    "p10": 0.2516562819480896,
+    "p25": 0.2669576033949852,
+    "p50": 0.3797949105501175,
+    "p75": 0.5381669849157333,
+    "p90": 0.7014285743236541,
+    "p95": 0.7366007477045059,
+    "p99": 0.7927580314874649,
+    "max": 0.8258710503578186,
+    "n_ok": 500,
+    "n_timeout": 0,
+    "share_at_or_above_goal": 0.016,
+    "median_time_s": 45.52263259887695,
+    "share_budget_hit": 0.02
+  },
+  "best_known": {
+    "rule": "best held-out of 500 random configs (seed 0)",
+    "heldout": 0.8258710503578186,
+    "val": 0.8272268772125244,
+    "config": {
+      "epochs": 52,
+      "batch_size": 27,
+      "learning_rate": 0.05017497465391288,
+      "momentum": 0.5919265725166277,
+      "weight_decay": 0.003869728229627644,
+      "num_layers": 3,
+      "max_units": 379,
+      "max_dropout": 0.0337956987021093,
+      "checkpoint_selection": "best_validation"
+    },
+    "time_s": 167.499755859375
+  },
+  "best_by_val": {
+    "heldout": 0.8258710503578186,
+    "val": 0.8272268772125244,
+    "config": {
+      "epochs": 52,
+      "batch_size": 27,
+      "learning_rate": 0.05017497465391288,
+      "momentum": 0.5919265725166277,
+      "weight_decay": 0.003869728229627644,
+      "num_layers": 3,
+      "max_units": 379,
+      "max_dropout": 0.0337956987021093,
+      "checkpoint_selection": "best_validation"
+    }
+  },
+  "goal": {
+    "rule": "floor_0.01(default + 0.9 x (best_known - default))",
+    "value": 0.78
+  }
+}

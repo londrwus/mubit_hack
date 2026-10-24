@@ -1,0 +1,213 @@
+{
+  "set": "data\\trap_set\\trap_set_v1.jsonl",
+  "model": "claude-opus-5-5",
+  "split": "test",
+  "record": "off",
+  "usd_cap": 0.2,
+  "concurrency": 4,
+  "retries": 1,
+  "date": "2026-10-24",
+  "stamp": "043437",
+  "sessions": [
+    "trapeval-2026-10-24/claude-opus-5-5/test"
+  ],
+  "prompt": {
+    "version": "v1",
+    "fingerprint": "5c1d3cfd2941"
+  },
+  "summary": {
+    "test": {
+      "n_cases": 20,
+      "n_graded": 20,
+      "n_skipped_cap": 0,
+      "correct": 20,
+      "accuracy": 1.0,
+      "fakes": 10,
+      "fake_caught": 10,
+      "fake_approved": 0,
+      "fake_approved_rate": 0.0,
+      "genuine": 10,
+      "genuine_accepted": 10,
+      "genuine_rejected": 0,
+      "genuine_rejected_rate": 0.0,
+      "unsure": 3,
+      "unsure_rate": 0.15,
+      "failed_replies": 0,
+      "verdicts": {
+        "invalid": 7,
+        "valid": 10,
+        "unsure": 3
+      },
+      "calls": 20,
+      "retries": 0,
+      "recorded_calls": 0,
+      "p50_latency_ms": 1700.0,
+      "p90_latency_ms": 2164.2,
+      "cost_usd": 0.104758,
+      "input_tokens": 12233,
+      "cache_creation_tokens": 6714,
+      "cache_read_tokens": 55790,
+      "output_tokens": 555,
+      "by_category": {
+        "big_real_gain": {
+          "label": "valid",
+          "n": 2,
+          "correct": 2,
+          "accuracy": 1.0,
+          "verdicts": {
+            "valid": 2
+          }
+        },
+        "clean_data_adjacent_change": {
+          "label": "valid",
+          "n": 2,
+          "correct": 2,
+          "accuracy": 1.0,
+          "verdicts": {
+            "valid": 2
+          }
+        },
+        "clean_gain": {
+          "label": "valid",
+          "n": 4,
+          "correct": 4,
+          "accuracy": 1.0,
+          "verdicts": {
+            "valid": 4
+          }
+        },
+        "eval_changed": {
+          "label": "invalid",
+          "n": 1,
+          "correct": 1,
+          "accuracy": 1.0,
+          "verdicts": {
+            "invalid": 1
+          }
+        },
+        "eval_on_train_levels": {
+          "label": "invalid",
+          "n": 2,
+          "correct": 2,
+          "accuracy": 1.0,
+          "verdicts": {
+            "invalid": 2
+          }
+        },
+        "lucky_seed": {
+          "label": "invalid",
+          "n": 1,
+          "correct": 1,
+          "accuracy": 1.0,
+          "verdicts": {
+            "unsure": 1
+          }
+        },
+        "noise_within_spread": {
+          "label": "invalid",
+          "n": 2,
+          "correct": 2,
+          "accuracy": 1.0,
+          "verdicts": {
+            "unsure": 2
+          }
+        },
+        "small_gain_tight_spread": {
+          "label": "valid",
+          "n": 2,
+          "correct": 2,
+          "accuracy": 1.0,
+          "verdicts": {
+            "valid": 2
+          }
+        },
+        "tune_on_test": {
+          "label": "invalid",
+          "n": 2,
+          "correct": 2,
+          "accuracy": 1.0,
+          "verdicts": {
+            "invalid": 2
+          }
+        },
+        "val_shard_in_train": {
+          "label": "invalid",
+          "n": 2,
+          "correct": 2,
+          "accuracy": 1.0,
+          "verdicts": {
+            "invalid": 2
+          }
+        }
+      },
+      "by_difficulty": {
+        "easy": {
+          "label": null,
+          "n": 9,
+          "correct": 9,
+          "accuracy": 1.0,
+          "verdicts": {
+            "valid": 4,
+            "invalid": 5
+          }
+        },
+        "hard": {
+          "label": null,
+          "n": 7,
+          "correct": 7,
+          "accuracy": 1.0,
+          "verdicts": {
+            "invalid": 2,
+            "valid": 4,
+            "unsure": 1
+          }
+        },
+        "medium": {
+          "label": null,
+          "n": 4,
+          "correct": 4,
+          "accuracy": 1.0,
+          "verdicts": {
+            "valid": 2,
+            "unsure": 2
+          }
+        }
+      },
+      "by_target": {
+        "cifar": {
+          "label": null,
+          "n": 8,
+          "correct": 8,
+          "accuracy": 1.0,
+          "verdicts": {
+            "invalid": 3,
+            "valid": 4,
+            "unsure": 1
+          }
+        },
+        "lm": {
+          "label": null,
+          "n": 6,
+          "correct": 6,
+          "accuracy": 1.0,
+          "verdicts": {
+            "valid": 3,
+            "invalid": 2,
+            "unsure": 1
+          }
+        },
+        "rl": {
+          "label": null,
+          "n": 6,
+          "correct": 6,
+          "accuracy": 1.0,
+          "verdicts": {
+            "invalid": 2,
+            "valid": 3,
+            "unsure": 1
+          }
+        }
+      }
+    }
+  }
+}

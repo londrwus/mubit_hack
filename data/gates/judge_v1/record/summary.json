@@ -1,0 +1,142 @@
+{
+ "step": "judge_improvement",
+ "prompt_version": "v1",
+ "prompt_fingerprint": "5c1d3cfd2941",
+ "wire_schema": {
+  "type": "object",
+  "properties": {
+   "verdict": {
+    "type": "string",
+    "enum": [
+     "valid",
+     "invalid",
+     "unsure"
+    ]
+   },
+   "reason_code": {
+    "type": "string",
+    "enum": [
+     "contamination_or_eval_leak",
+     "eval_setup_changed",
+     "gain_within_noise",
+     "insufficient_evidence",
+     "clean_gain"
+    ]
+   }
+  },
+  "required": [
+   "verdict",
+   "reason_code"
+  ],
+  "additionalProperties": false
+ },
+ "inputs": {
+  "n": 177,
+  "by_source": {
+   "trap_set": 30,
+   "noise_set": 35,
+   "collection": 63,
+   "race": 49
+  }
+ },
+ "recorded": {
+  "n_cases": 177,
+  "calls": 257,
+  "recorded_valid_calls": 177,
+  "failed_calls": 80,
+  "by_source": {
+   "collection": {
+    "invalid/contamination_or_eval_leak": 60,
+    "unsure/insufficient_evidence": 3
+   },
+   "noise_set": {
+    "unsure/insufficient_evidence": 19,
+    "invalid/contamination_or_eval_leak": 16
+   },
+   "race": {
+    "unsure/insufficient_evidence": 43,
+    "invalid/contamination_or_eval_leak": 6
+   },
+   "trap_set": {
+    "valid/clean_gain": 15,
+    "invalid/contamination_or_eval_leak": 9,
+    "unsure/gain_within_noise": 4,
+    "invalid/eval_setup_changed": 2
+   }
+  },
+  "verdict": {
+   "invalid": 93,
+   "unsure": 69,
+   "valid": 15
+  },
+  "reason_code": {
+   "contamination_or_eval_leak": 91,
+   "insufficient_evidence": 65,
+   "clean_gain": 15,
+   "gain_within_noise": 4,
+   "eval_setup_changed": 2
+  },
+  "max_verdict_share": 0.5254,
+  "code_verdict_mismatch": 0
+ },
+ "recheck": {
+  "n": 40,
+  "n_first": 40,
+  "n_recheck": 40,
+  "full_agree": 40,
+  "full_rate": 1.0,
+  "verdict_agree": 40,
+  "verdict_rate": 1.0,
+  "disagreements": {},
+  "pass": true
+ },
+ "trap_set_dev_accuracy": {
+  "trap_set_dev": {
+   "correct": 30
+  }
+ },
+ "token_delta_v1_minus_v0_by_source": {
+  "noise_set": {
+   "647": 35
+  },
+  "collection": {
+   "647": 63
+  },
+  "race": {
+   "647": 49
+  }
+ },
+ "cost_usd": {
+  "first": 0.1969,
+  "recheck": 0.1256,
+  "rest": 0.426
+ },
+ "total_cost_usd": 0.7485,
+ "first_request_ids_valid": {
+  "first": [
+   "mreq_01a16c06348f7593822d28ad41e216b1",
+   "mreq_01a16c06605a7c53a225c957b4e24802",
+   "mreq_01a16c06606878739011a68e35fabd1e"
+  ],
+  "recheck": [
+   "mreq_01a16c06d16a75a088f1c937b47e47cf",
+   "mreq_01a16c06d16d7b03a52a572552383ebe",
+   "mreq_01a16c06d16d7b03a52a571abbb08eec"
+  ],
+  "rest": [
+   "mreq_01a16c079b3d76728a2885ff97e6e687",
+   "mreq_01a16c079b3c7202a05646350e40252b",
+   "mreq_01a16c079b3e75d39a0739925d89d19b"
+  ]
+ },
+ "first_request_id_any": {
+  "first": "mreq_01a16c05e7b773a298d2872af6e05709",
+  "recheck": "mreq_01a16c06d16a75a088f1c937b47e47cf",
+  "rest": "mreq_01a16c079b3d76728a2885ff97e6e687"
+ },
+ "latency_p50_ms": {
+  "first": 1653.6,
+  "recheck": 1687.2,
+  "rest": 1630.9
+ }
+}

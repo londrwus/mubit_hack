@@ -1,0 +1,860 @@
+{
+  "set": "C:\\Users\\Lenovo\\Documents\\mubit_hack\\data\\noise_set\\noise_set_v1.jsonl",
+  "regraded_from": [
+    "data\\noise_set\\eval\\noiseeval-2026-10-24-012636.jsonl",
+    "data\\noise_set\\eval\\noiseeval-2026-10-24-014653.jsonl"
+  ],
+  "rule_text": "Rule: a gain counts as real only if it exceeds 2x the seed spread over >=3 seeds; single-seed gains without spread are unsure",
+  "prompt": {
+    "version": "v0",
+    "fingerprint": "623366123052"
+  },
+  "n_rows": 300,
+  "summary": {
+    "opus": {
+      "dev": {
+        "n_cases": 35,
+        "n_graded": 35,
+        "n_skipped_cap": 0,
+        "real": 3,
+        "real_confirmed": 0,
+        "real_confirmed_rate": 0.0,
+        "real_rejected": 0,
+        "noise": 16,
+        "noise_accepted": 0,
+        "noise_accepted_rate": 0.0,
+        "fake": 16,
+        "fake_let_through": 0,
+        "fake_let_through_rate": 0.0,
+        "fake_caught": 16,
+        "unsure": 19,
+        "unsure_rate": 0.5429,
+        "accuracy": 0.9143,
+        "balanced_accuracy": 0.6667,
+        "verdicts_by_truth": {
+          "real": {
+            "unsure": 3
+          },
+          "noise": {
+            "unsure": 16
+          },
+          "fake": {
+            "invalid": 16
+          }
+        },
+        "failed_replies": 0,
+        "calls": 35,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0.195579,
+        "cost_per_verdict_usd": 0.005588,
+        "p50_latency_ms": 2219.5,
+        "p90_latency_ms": 2993.9,
+        "tokens_match_race": "35/35",
+        "same_verdict_as_race": "35/35"
+      },
+      "test": {
+        "n_cases": 40,
+        "n_graded": 40,
+        "n_skipped_cap": 0,
+        "real": 4,
+        "real_confirmed": 1,
+        "real_confirmed_rate": 0.25,
+        "real_rejected": 0,
+        "noise": 20,
+        "noise_accepted": 0,
+        "noise_accepted_rate": 0.0,
+        "fake": 16,
+        "fake_let_through": 0,
+        "fake_let_through_rate": 0.0,
+        "fake_caught": 16,
+        "unsure": 23,
+        "unsure_rate": 0.575,
+        "accuracy": 0.925,
+        "balanced_accuracy": 0.75,
+        "verdicts_by_truth": {
+          "real": {
+            "unsure": 3,
+            "valid": 1
+          },
+          "noise": {
+            "unsure": 20
+          },
+          "fake": {
+            "invalid": 16
+          }
+        },
+        "failed_replies": 0,
+        "calls": 40,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0.166857,
+        "cost_per_verdict_usd": 0.004171,
+        "p50_latency_ms": 2133.6,
+        "p90_latency_ms": 2689.1,
+        "tokens_match_race": "40/40",
+        "same_verdict_as_race": "39/40"
+      },
+      "all": {
+        "n_cases": 75,
+        "n_graded": 75,
+        "n_skipped_cap": 0,
+        "real": 7,
+        "real_confirmed": 1,
+        "real_confirmed_rate": 0.1429,
+        "real_rejected": 0,
+        "noise": 36,
+        "noise_accepted": 0,
+        "noise_accepted_rate": 0.0,
+        "fake": 32,
+        "fake_let_through": 0,
+        "fake_let_through_rate": 0.0,
+        "fake_caught": 32,
+        "unsure": 42,
+        "unsure_rate": 0.56,
+        "accuracy": 0.92,
+        "balanced_accuracy": 0.7143,
+        "verdicts_by_truth": {
+          "real": {
+            "unsure": 6,
+            "valid": 1
+          },
+          "noise": {
+            "unsure": 36
+          },
+          "fake": {
+            "invalid": 32
+          }
+        },
+        "failed_replies": 0,
+        "calls": 75,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0.362436,
+        "cost_per_verdict_usd": 0.004832,
+        "p50_latency_ms": 2172.8,
+        "p90_latency_ms": 2907.8,
+        "tokens_match_race": "75/75",
+        "same_verdict_as_race": "74/75"
+      },
+      "by_target": {
+        "cifar": {
+          "n_cases": 28,
+          "n_graded": 28,
+          "n_skipped_cap": 0,
+          "real": 2,
+          "real_confirmed": 1,
+          "real_confirmed_rate": 0.5,
+          "real_rejected": 0,
+          "noise": 10,
+          "noise_accepted": 0,
+          "noise_accepted_rate": 0.0,
+          "fake": 16,
+          "fake_let_through": 0,
+          "fake_let_through_rate": 0.0,
+          "fake_caught": 16,
+          "unsure": 11,
+          "unsure_rate": 0.3929,
+          "accuracy": 0.9643,
+          "balanced_accuracy": 0.8333,
+          "verdicts_by_truth": {
+            "real": {
+              "unsure": 1,
+              "valid": 1
+            },
+            "noise": {
+              "unsure": 10
+            },
+            "fake": {
+              "invalid": 16
+            }
+          },
+          "failed_replies": 0,
+          "calls": 28,
+          "retries": 0,
+          "recorded_calls": 0,
+          "cost_usd": 0.126988,
+          "cost_per_verdict_usd": 0.004535,
+          "p50_latency_ms": 2255.4,
+          "p90_latency_ms": 2908.0,
+          "tokens_match_race": "28/28",
+          "same_verdict_as_race": "27/28"
+        },
+        "rl": {
+          "n_cases": 47,
+          "n_graded": 47,
+          "n_skipped_cap": 0,
+          "real": 5,
+          "real_confirmed": 0,
+          "real_confirmed_rate": 0.0,
+          "real_rejected": 0,
+          "noise": 26,
+          "noise_accepted": 0,
+          "noise_accepted_rate": 0.0,
+          "fake": 16,
+          "fake_let_through": 0,
+          "fake_let_through_rate": 0.0,
+          "fake_caught": 16,
+          "unsure": 31,
+          "unsure_rate": 0.6596,
+          "accuracy": 0.8936,
+          "balanced_accuracy": 0.6667,
+          "verdicts_by_truth": {
+            "real": {
+              "unsure": 5
+            },
+            "noise": {
+              "unsure": 26
+            },
+            "fake": {
+              "invalid": 16
+            }
+          },
+          "failed_replies": 0,
+          "calls": 47,
+          "retries": 0,
+          "recorded_calls": 0,
+          "cost_usd": 0.235448,
+          "cost_per_verdict_usd": 0.00501,
+          "p50_latency_ms": 2171.4,
+          "p90_latency_ms": 2876.1,
+          "tokens_match_race": "47/47",
+          "same_verdict_as_race": "47/47"
+        }
+      }
+    },
+    "opus_rule": {
+      "dev": {
+        "n_cases": 35,
+        "n_graded": 35,
+        "n_skipped_cap": 0,
+        "real": 3,
+        "real_confirmed": 0,
+        "real_confirmed_rate": 0.0,
+        "real_rejected": 0,
+        "noise": 16,
+        "noise_accepted": 0,
+        "noise_accepted_rate": 0.0,
+        "fake": 16,
+        "fake_let_through": 0,
+        "fake_let_through_rate": 0.0,
+        "fake_caught": 16,
+        "unsure": 19,
+        "unsure_rate": 0.5429,
+        "accuracy": 0.9143,
+        "balanced_accuracy": 0.6667,
+        "verdicts_by_truth": {
+          "real": {
+            "unsure": 3
+          },
+          "noise": {
+            "unsure": 16
+          },
+          "fake": {
+            "invalid": 16
+          }
+        },
+        "failed_replies": 0,
+        "calls": 35,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0.152655,
+        "cost_per_verdict_usd": 0.004362,
+        "p50_latency_ms": 2206.8,
+        "p90_latency_ms": 2717.7,
+        "tokens_match_race": null,
+        "same_verdict_as_race": "35/35"
+      },
+      "test": {
+        "n_cases": 40,
+        "n_graded": 40,
+        "n_skipped_cap": 0,
+        "real": 4,
+        "real_confirmed": 0,
+        "real_confirmed_rate": 0.0,
+        "real_rejected": 0,
+        "noise": 20,
+        "noise_accepted": 0,
+        "noise_accepted_rate": 0.0,
+        "fake": 16,
+        "fake_let_through": 0,
+        "fake_let_through_rate": 0.0,
+        "fake_caught": 16,
+        "unsure": 24,
+        "unsure_rate": 0.6,
+        "accuracy": 0.9,
+        "balanced_accuracy": 0.6667,
+        "verdicts_by_truth": {
+          "real": {
+            "unsure": 4
+          },
+          "noise": {
+            "unsure": 20
+          },
+          "fake": {
+            "invalid": 16
+          }
+        },
+        "failed_replies": 0,
+        "calls": 40,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0.173937,
+        "cost_per_verdict_usd": 0.004348,
+        "p50_latency_ms": 2191.9,
+        "p90_latency_ms": 2526.4,
+        "tokens_match_race": null,
+        "same_verdict_as_race": "40/40"
+      },
+      "all": {
+        "n_cases": 75,
+        "n_graded": 75,
+        "n_skipped_cap": 0,
+        "real": 7,
+        "real_confirmed": 0,
+        "real_confirmed_rate": 0.0,
+        "real_rejected": 0,
+        "noise": 36,
+        "noise_accepted": 0,
+        "noise_accepted_rate": 0.0,
+        "fake": 32,
+        "fake_let_through": 0,
+        "fake_let_through_rate": 0.0,
+        "fake_caught": 32,
+        "unsure": 43,
+        "unsure_rate": 0.5733,
+        "accuracy": 0.9067,
+        "balanced_accuracy": 0.6667,
+        "verdicts_by_truth": {
+          "real": {
+            "unsure": 7
+          },
+          "noise": {
+            "unsure": 36
+          },
+          "fake": {
+            "invalid": 32
+          }
+        },
+        "failed_replies": 0,
+        "calls": 75,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0.326592,
+        "cost_per_verdict_usd": 0.004355,
+        "p50_latency_ms": 2202.0,
+        "p90_latency_ms": 2593.1,
+        "tokens_match_race": null,
+        "same_verdict_as_race": "75/75"
+      },
+      "by_target": {
+        "cifar": {
+          "n_cases": 28,
+          "n_graded": 28,
+          "n_skipped_cap": 0,
+          "real": 2,
+          "real_confirmed": 0,
+          "real_confirmed_rate": 0.0,
+          "real_rejected": 0,
+          "noise": 10,
+          "noise_accepted": 0,
+          "noise_accepted_rate": 0.0,
+          "fake": 16,
+          "fake_let_through": 0,
+          "fake_let_through_rate": 0.0,
+          "fake_caught": 16,
+          "unsure": 12,
+          "unsure_rate": 0.4286,
+          "accuracy": 0.9286,
+          "balanced_accuracy": 0.6667,
+          "verdicts_by_truth": {
+            "real": {
+              "unsure": 2
+            },
+            "noise": {
+              "unsure": 10
+            },
+            "fake": {
+              "invalid": 16
+            }
+          },
+          "failed_replies": 0,
+          "calls": 28,
+          "retries": 0,
+          "recorded_calls": 0,
+          "cost_usd": 0.125164,
+          "cost_per_verdict_usd": 0.00447,
+          "p50_latency_ms": 2231.9,
+          "p90_latency_ms": 2547.5,
+          "tokens_match_race": null,
+          "same_verdict_as_race": "28/28"
+        },
+        "rl": {
+          "n_cases": 47,
+          "n_graded": 47,
+          "n_skipped_cap": 0,
+          "real": 5,
+          "real_confirmed": 0,
+          "real_confirmed_rate": 0.0,
+          "real_rejected": 0,
+          "noise": 26,
+          "noise_accepted": 0,
+          "noise_accepted_rate": 0.0,
+          "fake": 16,
+          "fake_let_through": 0,
+          "fake_let_through_rate": 0.0,
+          "fake_caught": 16,
+          "unsure": 31,
+          "unsure_rate": 0.6596,
+          "accuracy": 0.8936,
+          "balanced_accuracy": 0.6667,
+          "verdicts_by_truth": {
+            "real": {
+              "unsure": 5
+            },
+            "noise": {
+              "unsure": 26
+            },
+            "fake": {
+              "invalid": 16
+            }
+          },
+          "failed_replies": 0,
+          "calls": 47,
+          "retries": 0,
+          "recorded_calls": 0,
+          "cost_usd": 0.201428,
+          "cost_per_verdict_usd": 0.004286,
+          "p50_latency_ms": 2154.1,
+          "p90_latency_ms": 2684.8,
+          "tokens_match_race": null,
+          "same_verdict_as_race": "47/47"
+        }
+      }
+    },
+    "rule_msg": {
+      "dev": {
+        "n_cases": 35,
+        "n_graded": 35,
+        "n_skipped_cap": 0,
+        "real": 3,
+        "real_confirmed": 0,
+        "real_confirmed_rate": 0.0,
+        "real_rejected": 0,
+        "noise": 16,
+        "noise_accepted": 0,
+        "noise_accepted_rate": 0.0,
+        "fake": 16,
+        "fake_let_through": 0,
+        "fake_let_through_rate": 0.0,
+        "fake_caught": 0,
+        "unsure": 35,
+        "unsure_rate": 1.0,
+        "accuracy": 0.4571,
+        "balanced_accuracy": 0.3333,
+        "verdicts_by_truth": {
+          "real": {
+            "unsure": 3
+          },
+          "noise": {
+            "unsure": 16
+          },
+          "fake": {
+            "unsure": 16
+          }
+        },
+        "failed_replies": 0,
+        "calls": 0,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0,
+        "cost_per_verdict_usd": 0.0,
+        "p50_latency_ms": null,
+        "p90_latency_ms": null,
+        "tokens_match_race": null,
+        "same_verdict_as_race": "19/35"
+      },
+      "test": {
+        "n_cases": 40,
+        "n_graded": 40,
+        "n_skipped_cap": 0,
+        "real": 4,
+        "real_confirmed": 0,
+        "real_confirmed_rate": 0.0,
+        "real_rejected": 0,
+        "noise": 20,
+        "noise_accepted": 0,
+        "noise_accepted_rate": 0.0,
+        "fake": 16,
+        "fake_let_through": 0,
+        "fake_let_through_rate": 0.0,
+        "fake_caught": 0,
+        "unsure": 40,
+        "unsure_rate": 1.0,
+        "accuracy": 0.5,
+        "balanced_accuracy": 0.3333,
+        "verdicts_by_truth": {
+          "real": {
+            "unsure": 4
+          },
+          "noise": {
+            "unsure": 20
+          },
+          "fake": {
+            "unsure": 16
+          }
+        },
+        "failed_replies": 0,
+        "calls": 0,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0,
+        "cost_per_verdict_usd": 0.0,
+        "p50_latency_ms": null,
+        "p90_latency_ms": null,
+        "tokens_match_race": null,
+        "same_verdict_as_race": "24/40"
+      },
+      "all": {
+        "n_cases": 75,
+        "n_graded": 75,
+        "n_skipped_cap": 0,
+        "real": 7,
+        "real_confirmed": 0,
+        "real_confirmed_rate": 0.0,
+        "real_rejected": 0,
+        "noise": 36,
+        "noise_accepted": 0,
+        "noise_accepted_rate": 0.0,
+        "fake": 32,
+        "fake_let_through": 0,
+        "fake_let_through_rate": 0.0,
+        "fake_caught": 0,
+        "unsure": 75,
+        "unsure_rate": 1.0,
+        "accuracy": 0.48,
+        "balanced_accuracy": 0.3333,
+        "verdicts_by_truth": {
+          "real": {
+            "unsure": 7
+          },
+          "noise": {
+            "unsure": 36
+          },
+          "fake": {
+            "unsure": 32
+          }
+        },
+        "failed_replies": 0,
+        "calls": 0,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0,
+        "cost_per_verdict_usd": 0.0,
+        "p50_latency_ms": null,
+        "p90_latency_ms": null,
+        "tokens_match_race": null,
+        "same_verdict_as_race": "43/75"
+      },
+      "by_target": {
+        "cifar": {
+          "n_cases": 28,
+          "n_graded": 28,
+          "n_skipped_cap": 0,
+          "real": 2,
+          "real_confirmed": 0,
+          "real_confirmed_rate": 0.0,
+          "real_rejected": 0,
+          "noise": 10,
+          "noise_accepted": 0,
+          "noise_accepted_rate": 0.0,
+          "fake": 16,
+          "fake_let_through": 0,
+          "fake_let_through_rate": 0.0,
+          "fake_caught": 0,
+          "unsure": 28,
+          "unsure_rate": 1.0,
+          "accuracy": 0.3571,
+          "balanced_accuracy": 0.3333,
+          "verdicts_by_truth": {
+            "real": {
+              "unsure": 2
+            },
+            "noise": {
+              "unsure": 10
+            },
+            "fake": {
+              "unsure": 16
+            }
+          },
+          "failed_replies": 0,
+          "calls": 0,
+          "retries": 0,
+          "recorded_calls": 0,
+          "cost_usd": 0,
+          "cost_per_verdict_usd": 0.0,
+          "p50_latency_ms": null,
+          "p90_latency_ms": null,
+          "tokens_match_race": null,
+          "same_verdict_as_race": "12/28"
+        },
+        "rl": {
+          "n_cases": 47,
+          "n_graded": 47,
+          "n_skipped_cap": 0,
+          "real": 5,
+          "real_confirmed": 0,
+          "real_confirmed_rate": 0.0,
+          "real_rejected": 0,
+          "noise": 26,
+          "noise_accepted": 0,
+          "noise_accepted_rate": 0.0,
+          "fake": 16,
+          "fake_let_through": 0,
+          "fake_let_through_rate": 0.0,
+          "fake_caught": 0,
+          "unsure": 47,
+          "unsure_rate": 1.0,
+          "accuracy": 0.5532,
+          "balanced_accuracy": 0.3333,
+          "verdicts_by_truth": {
+            "real": {
+              "unsure": 5
+            },
+            "noise": {
+              "unsure": 26
+            },
+            "fake": {
+              "unsure": 16
+            }
+          },
+          "failed_replies": 0,
+          "calls": 0,
+          "retries": 0,
+          "recorded_calls": 0,
+          "cost_usd": 0,
+          "cost_per_verdict_usd": 0.0,
+          "p50_latency_ms": null,
+          "p90_latency_ms": null,
+          "tokens_match_race": null,
+          "same_verdict_as_race": "31/47"
+        }
+      }
+    },
+    "rule_calib": {
+      "dev": {
+        "n_cases": 35,
+        "n_graded": 35,
+        "n_skipped_cap": 0,
+        "real": 3,
+        "real_confirmed": 3,
+        "real_confirmed_rate": 1.0,
+        "real_rejected": 0,
+        "noise": 16,
+        "noise_accepted": 0,
+        "noise_accepted_rate": 0.0,
+        "fake": 16,
+        "fake_let_through": 16,
+        "fake_let_through_rate": 1.0,
+        "fake_caught": 0,
+        "unsure": 16,
+        "unsure_rate": 0.4571,
+        "accuracy": 0.5429,
+        "balanced_accuracy": 0.6667,
+        "verdicts_by_truth": {
+          "real": {
+            "valid": 3
+          },
+          "noise": {
+            "unsure": 16
+          },
+          "fake": {
+            "valid": 16
+          }
+        },
+        "failed_replies": 0,
+        "calls": 0,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0,
+        "cost_per_verdict_usd": 0.0,
+        "p50_latency_ms": null,
+        "p90_latency_ms": null,
+        "tokens_match_race": null,
+        "same_verdict_as_race": "16/35"
+      },
+      "test": {
+        "n_cases": 40,
+        "n_graded": 40,
+        "n_skipped_cap": 0,
+        "real": 4,
+        "real_confirmed": 4,
+        "real_confirmed_rate": 1.0,
+        "real_rejected": 0,
+        "noise": 20,
+        "noise_accepted": 1,
+        "noise_accepted_rate": 0.05,
+        "fake": 16,
+        "fake_let_through": 8,
+        "fake_let_through_rate": 0.5,
+        "fake_caught": 0,
+        "unsure": 27,
+        "unsure_rate": 0.675,
+        "accuracy": 0.575,
+        "balanced_accuracy": 0.65,
+        "verdicts_by_truth": {
+          "real": {
+            "valid": 4
+          },
+          "noise": {
+            "unsure": 19,
+            "valid": 1
+          },
+          "fake": {
+            "unsure": 8,
+            "valid": 8
+          }
+        },
+        "failed_replies": 0,
+        "calls": 0,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0,
+        "cost_per_verdict_usd": 0.0,
+        "p50_latency_ms": null,
+        "p90_latency_ms": null,
+        "tokens_match_race": null,
+        "same_verdict_as_race": "19/40"
+      },
+      "all": {
+        "n_cases": 75,
+        "n_graded": 75,
+        "n_skipped_cap": 0,
+        "real": 7,
+        "real_confirmed": 7,
+        "real_confirmed_rate": 1.0,
+        "real_rejected": 0,
+        "noise": 36,
+        "noise_accepted": 1,
+        "noise_accepted_rate": 0.0278,
+        "fake": 32,
+        "fake_let_through": 24,
+        "fake_let_through_rate": 0.75,
+        "fake_caught": 0,
+        "unsure": 43,
+        "unsure_rate": 0.5733,
+        "accuracy": 0.56,
+        "balanced_accuracy": 0.6574,
+        "verdicts_by_truth": {
+          "real": {
+            "valid": 7
+          },
+          "noise": {
+            "unsure": 35,
+            "valid": 1
+          },
+          "fake": {
+            "valid": 24,
+            "unsure": 8
+          }
+        },
+        "failed_replies": 0,
+        "calls": 0,
+        "retries": 0,
+        "recorded_calls": 0,
+        "cost_usd": 0,
+        "cost_per_verdict_usd": 0.0,
+        "p50_latency_ms": null,
+        "p90_latency_ms": null,
+        "tokens_match_race": null,
+        "same_verdict_as_race": "35/75"
+      },
+      "by_target": {
+        "cifar": {
+          "n_cases": 28,
+          "n_graded": 28,
+          "n_skipped_cap": 0,
+          "real": 2,
+          "real_confirmed": 2,
+          "real_confirmed_rate": 1.0,
+          "real_rejected": 0,
+          "noise": 10,
+          "noise_accepted": 0,
+          "noise_accepted_rate": 0.0,
+          "fake": 16,
+          "fake_let_through": 16,
+          "fake_let_through_rate": 1.0,
+          "fake_caught": 0,
+          "unsure": 10,
+          "unsure_rate": 0.3571,
+          "accuracy": 0.4286,
+          "balanced_accuracy": 0.6667,
+          "verdicts_by_truth": {
+            "real": {
+              "valid": 2
+            },
+            "noise": {
+              "unsure": 10
+            },
+            "fake": {
+              "valid": 16
+            }
+          },
+          "failed_replies": 0,
+          "calls": 0,
+          "retries": 0,
+          "recorded_calls": 0,
+          "cost_usd": 0,
+          "cost_per_verdict_usd": 0.0,
+          "p50_latency_ms": null,
+          "p90_latency_ms": null,
+          "tokens_match_race": null,
+          "same_verdict_as_race": "10/28"
+        },
+        "rl": {
+          "n_cases": 47,
+          "n_graded": 47,
+          "n_skipped_cap": 0,
+          "real": 5,
+          "real_confirmed": 5,
+          "real_confirmed_rate": 1.0,
+          "real_rejected": 0,
+          "noise": 26,
+          "noise_accepted": 1,
+          "noise_accepted_rate": 0.0385,
+          "fake": 16,
+          "fake_let_through": 8,
+          "fake_let_through_rate": 0.5,
+          "fake_caught": 0,
+          "unsure": 33,
+          "unsure_rate": 0.7021,
+          "accuracy": 0.6383,
+          "balanced_accuracy": 0.6538,
+          "verdicts_by_truth": {
+            "real": {
+              "valid": 5
+            },
+            "noise": {
+              "unsure": 25,
+              "valid": 1
+            },
+            "fake": {
+              "valid": 8,
+              "unsure": 8
+            }
+          },
+          "failed_replies": 0,
+          "calls": 0,
+          "retries": 0,
+          "recorded_calls": 0,
+          "cost_usd": 0,
+          "cost_per_verdict_usd": 0.0,
+          "p50_latency_ms": null,
+          "p90_latency_ms": null,
+          "tokens_match_race": null,
+          "same_verdict_as_race": "25/47"
+        }
+      }
+    }
+  }
+}

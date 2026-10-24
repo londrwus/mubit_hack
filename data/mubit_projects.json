@@ -1,0 +1,13 @@
+{
+  "default": "A",
+  "routes": {
+    "mubit": {
+      "judge_improvement": "B",
+      "early_stop": "B"
+    }
+  },
+  "keys": {
+    "A": "MUBIT_API_KEY",
+    "B": "MUBIT_API_KEY_B"
+  }
+}

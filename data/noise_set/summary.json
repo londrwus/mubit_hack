@@ -1,0 +1,83 @@
+{
+  "set_version": "noise_set_v1",
+  "n_cases": 75,
+  "truth": {
+    "noise": 36,
+    "real": 7,
+    "fake": 32
+  },
+  "by_split": {
+    "dev": {
+      "noise": 16,
+      "real": 3,
+      "fake": 16
+    },
+    "test": {
+      "noise": 20,
+      "real": 4,
+      "fake": 16
+    }
+  },
+  "by_group": {
+    "cifar/seed-0": {
+      "real": 1,
+      "noise": 4,
+      "fake": 8
+    },
+    "cifar/seed-1": {
+      "noise": 6,
+      "real": 1,
+      "fake": 8
+    },
+    "rl/seed-0": {
+      "noise": 12,
+      "real": 2,
+      "fake": 8
+    },
+    "rl/seed-1": {
+      "noise": 10,
+      "real": 2,
+      "fake": 8
+    },
+    "rl/seed-2": {
+      "real": 1,
+      "noise": 4
+    }
+  },
+  "reruns": {
+    "runs": 440,
+    "succeeded": 440,
+    "est_usd": 1.0347,
+    "by_hardware_usd": {
+      "CPU": 0.1275,
+      "L4": 0.9071
+    }
+  },
+  "rule": {
+    "k_sigma": 2.0,
+    "alpha": 0.05,
+    "min_seeds": 10
+  },
+  "prompt": {
+    "step": "judge_improvement",
+    "version": "v0",
+    "fingerprint": "623366123052"
+  },
+  "built_at": "2026-10-24T01:46:29.892495+00:00",
+  "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+  ],
+  "targets": [
+    "rl",
+    "cifar"
+  ]
+}

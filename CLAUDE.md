@@ -37,7 +37,7 @@ Use of Mubit (correction → model update) · Usefulness (real recurring task) �
 | DB | **SQLite** (move to PostgreSQL only if there's a real need) |
 | Frontend | **Vite + React**, **shadcn/ui**, **Tailwind CSS** |
 | Design | **Pen.dev**. `.pen` files are encrypted, so access them only through the pencil MCP tools, never Read/Grep |
-| Compute | **Compute-agnostic product.** A pluggable `Runner` interface (`local`, `modal`). **Modal is only our test/demo compute** (Starter: $30 credit, max 10 concurrent GPUs; use Functions, not Sandboxes). Never import `modal` outside `workers/runners/modal_runner.py` |
+| Compute | **Compute-agnostic product.** A pluggable `Runner` interface (`local`, `modal`). **Modal is only our test/demo compute** (Starter: $30 credit, max 10 concurrent GPUs; use Functions, not Sandboxes). Never import `modal` outside `workers/runners/modal_*.py` (`modal_runner.py` for training, `modal_sapling.py` for the verifier, D28) |
 | LLM routing | Mubit gateway (see the hard rules) |
 | Verifier | Banyan Sapling (`MubitLabs/banyan-sapling`, Apache 2.0) as the independent claim checker |
 

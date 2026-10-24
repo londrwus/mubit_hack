@@ -1,0 +1,60 @@
+[project]
+name = "busy-machines"
+version = "0.1.0"
+description = "Busy Machines: an ML research agent whose LLM calls go through Mubit (Night Shift London)."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic>=2",
+    "anthropic",
+    "httpx",
+    "python-dotenv",
+    "optuna",
+    "numpy",
+    "modal",
+    "websockets",
+]
+
+[project.optional-dependencies]
+ml = [
+    "jax==0.12.0.1",
+    "jaxlib==0.12.0.1",
+    "optax==0.2.8",
+    "pillow>=11",
+    "torch==2.14.1",
+]
+rlcheck = [
+    "gymnax==0.0.9",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend", "workers"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+# Local env is CPU-only (no local GPUs, CLAUDE.md). The Modal images pin their own CUDA torch.
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

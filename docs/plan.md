@@ -3,21 +3,43 @@
 Available time: Fri 19:30 → Sun 10:00 ≈ **39 hours** (clocks go back, +1 h). Realistically ~26–30 working hours per person after sleep and food.
 Estimates are **person-hours** for someone fluent in Python/React and new to Modal/Mubit. With Claude Code writing much of the boilerplate (API, schemas, UI components), expect the low end.
 
-## 0. Next session: start here (status at Fri 23 Oct ~23:15 BST)
-**Where we are:** planning done, docs consolidated, **no code yet**. Mubit works end to end on a toy task (R6–R9): calls → trained adapter in ~20–25 min, but toy v1 scored 70% vs an 85% target, has no route, returns malformed JSON on unfamiliar cases, and valid replies (~1.6 s) are no faster than Haiku.
+## 0. Next session: start here (morning brief, Sat 24 Oct ~06:50 BST)
+**Read first:** `docs/results_log.md` R30–R43 and `docs/decisions.md` D36–D43. Everything below is logged there.
 
-**Build order for the session** (backend, design and frontend can run in parallel):
-1. **Scaffold:** `backend/` (uv, FastAPI, Pydantic, Anthropic SDK, SQLite), `frontend/` (Vite + React + TS, Tailwind, shadcn/ui), `workers/` (targets, runners), `.env.example` with `MUBIT_API_KEY`.
-2. **`mubit_client.py`:** the only LLM client; session IDs, request-ID capture, the four usage meters, schema validation → retry → Opus fallback, `x-middleware-record: off` for dev. Plus the **mock LLM**.
-3. **Opus latency probe** (first real measurement of the session): the same short prompt to Opus 5.5 and Haiku 5.5 through Mubit, ~3 calls each, recording off. If Opus is ~2 s, rethink the speed story before building further.
-4. **Design:** the race screen in Pen.dev (`demo.md` layout and labels), then build it in React against mock WebSocket events.
-5. **First target + runner:** CIFAR speedrun on a Modal Function, `local` runner for tests, metrics back via `modal.Queue`.
-6. **Scheduler + race engine** with the mock LLM, end to end on one target. Then SQLite tables, REST/WS API and JSONL export (`architecture.md`).
-7. **The three prompts:** draft on Haiku, **freeze**, then start Opus example collection. Examples must cover the full mix (healthy runs, overfitting, contamination), not just failures. Aim for 75–100 per task.
+**What we can say today (measured, with the worse side):**
+- **LCBench, 3 seeds (R38):** the Opus 5.5 research agent's model has **28% fewer errors than Optuna's**; Optuna never reached Opus's quality; Optuna accepted 8/62 fake bests, Opus 0/33. Worse for Opus: 0.3× the experiments per $; in seed 2 Optuna reached the goal faster and cheaper.
+- **Opus keeps 30 workers waiting 70% of the time** (RL, 15 s runs, R41, 1 seed); Opus planning slows from 3.5 s to 16 s as it fills more workers (R36). Validated simulator (R43: 71.2% vs 70.0% measured) projects **8–15% waiting with a 1–2 s planner**: this is the Mubit adapter's value, still a projection.
+- **Busy Machines judge (R37, R40):** Opus for leakage + our seed-spread rule confirms **7/7 real gains (Opus alone 1/7) with 0/32 fakes let through**; judge v1 is ~22% faster than v0.
+- **Without a checker, search ships fake wins:** Optuna's best RL model was a contaminated one (R36, held-out −201 vs Opus −164).
+- **We improved Mubit's own model (R33, R42):** sapling-research v2 answers **64% of AI-research claims (stock: 0%) approving 0/157 fakes**, raw accuracy 22% → 66%, no regression on ContractNLI (77% → 84%). Still far below Opus as a judge (36/50 vs 50/50 on the trap set).
 
-**Take to office hours:** Q1 (how to create a route, what shadow needs), Q2 (corrections overriding labels), Q14 (85% target, retraining), Q15 (is the JSON format enforced, is Try-it latency representative).
+**What didn't work (logged):** our engine add-ons (judge policy in the planner's history + median stop) made Opus **9% worse** on LCBench, n=3 (R44); they are now verification-only (D44). LM target has no real gain (R23); early stopping fails on every target (R41, R43, now off: D43); early_stop as an LLM step fails the D39 gate (R31); Mubit adapters below target: propose 14.3%, judge v0 42.9% vs 95% (R28, R30).
 
-**Timing:** the critical path below assumes Opus example collection runs **overnight Fri → Sat**. Starting the build on Saturday morning loses that night, so in that case make step 7 the first thing done.
+**Mubit state:** project A = propose v1 / judge v0 / diagnose; project B = judge v1 (closed output), 177 examples recorded (R39). No routes anywhere. Daily review limit ~200/task (R29). Mubit arm can route its judge calls to B (built, tested).
+
+**Running at 06:50:** D44 fixes (planner sees the same as the Opus arm; σ-key bug; early stop off), then **RL wide n=3 Opus vs Optuna**, **one CIFAR Opus vs Optuna**, and a **planner-speed ablation** (same loop with Haiku 5.5 as a smaller, faster model — tests the R43 projection with real data; not a Mubit adapter). Fairness fixes are in (R45: cancel lag measured and fixed; headline gates).
+
+**Decisions for you when you wake:**
+1. Check the Mubit console for **judge v1 in project B** (exam result once ≥25 kept) and whether propose v2 trained; paste the adapter pages.
+2. Ask Mubit: how to create a route; can the 95% target be lowered; review limit; what "Prompt only" means (`docs/mubit_office_hours.md`).
+3. Frontend is unstarted (by your instruction). Plan: start ~12:00 with design A+ and the C race screen; a replay API exists for the fallback (`backend/replay.py`).
+4. HF publishing of sapling-research v2 (draft in `data/sapling/sapling_v2/release/`, not published): your call.
+
+### Scope lock (D35): nothing new gets built after this list
+| # | Track | Owner | Go/no-go | Cut if late |
+|---|---|---|---|---|
+| 1 | **Wide RL race**, Opus vs Optuna (then + Mubit arms) | agent (wave 5) | first race by Sat 06:00 | never cut |
+| 2 | **Judge adapter v1 → v2 with corrections**; real-gain-vs-noise set (Opus, Opus+rule, rule) | agents + console | v1 quality known by Sat 04:00; v2 trained by Sat 16:00 | never cut (judging criterion #1) |
+| 3 | **early_stop step** (D34): prompt frozen + ~250 examples tonight, scheduler integration Sat morning | agent | examples recorded by 04:00; integrated by Sat 12:00 | drop scheduler integration, keep the offline Opus-vs-rule-vs-adapter table |
+| 4 | **Sapling stages 1–2** + parity vs Mubit's endpoint (D33) | agent | stage 2 numbers by Sat 14:00 | hard stop Sat 18:00 (D20) |
+| 5 | **LCBench race** | agent (wave 5) | one Opus-vs-Optuna race by Sat 08:00 | cut first if it slips |
+| 6 | **Benchmark proper:** 3 seeds × (Opus, Mubit stock, Mubit + ours, Optuna) on RL; CIFAR confirmation | lead | runs Sat 14:00–22:00 | CIFAR → 1 seed |
+| 7 | **Frontend** (design A+ chosen direction; race screen = design C) | agents | start Sat 12:00, done Sat 22:00 | landing page → static; keep race screen + results |
+| 8 | **Demo:** fallback recording Sat 23:00, rehearsals Sun 06:00–09:30 | humans | — | never cut |
+
+**Not building (decided):** LM as a headline target (D32), LoRA/full Sapling fine-tune (D23), open-model arm (no Groq/Together key), any change to the three frozen prompts.
+
+**Waiting on Mubit:** daily review limit for propose (`ln_42bac9601f877d03fc0999bc`), how to create a route, 95% target, "Prompt only" meaning (`docs/mubit_office_hours.md`).
 
 ## 1. Component by component
 | # | Component | How | Hours | Difficulty | Main risk |

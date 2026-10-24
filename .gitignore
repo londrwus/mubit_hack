@@ -16,3 +16,5 @@ dist/
 # local data / results
 *.sqlite
 *.db
+*.db-wal
+*.db-shm

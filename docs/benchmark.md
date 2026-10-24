@@ -84,6 +84,36 @@ Fake improvements caught            Opus X%   v1 Y%   v2 (after corrections) Z%
 ```
 Placeholders: only measured values from `results_log.md` go on stage.
 
+## 6b. Headline numbers: how we phrase them (fixed before the races)
+Big numbers are fine; cherry-picked ones aren't. Each metric has ONE framing, chosen now, used for every target and every arm, always as a mean over ≥3 seeds, quoted only from `results_log.md`, with the Optuna and Opus numbers beside it.
+
+| Metric | Framing on the slide | Formula |
+|---|---|---|
+| Model quality (cost-like metric, e.g. RL penalty, bits per byte) | "N× better" / "X% lower" | start ÷ end, or 1 − end/start |
+| Model quality (accuracy) | "X% fewer errors" | (err_start − err_end) ÷ err_start |
+| Progress toward the best known result | "X% of the gap closed" | (end − start) ÷ (best_known − start) |
+| Cost to reach the goal | "X% cheaper" | 1 − Mubit$ ÷ Opus$ |
+| Time to reach the goal | "X% faster" | 1 − Mubit_t ÷ Opus_t |
+| Throughput | "N× more experiments per dollar" | ratio of experiments per $ |
+| Fake improvements | "X% fewer let through" | judge v2 vs Opus (and v1) on the 50-case trap set, test split |
+
+Rules: name the baseline in the same sentence ("vs an Opus 5.5 agent on the same GPUs"); no single-seed or best-of-N numbers; if one target shows no gain, the slide says so; Opus-only improvements (R22) are "the research agent improves the model", never "Mubit beats Opus".
+
+## 6c. Three-column comparison (D31)
+```
+                                   Opus 5.5        Mubit baseline            Mubit + Busy Machines
+                                   (every call)    (stock adapter v1,        (adapter v2 after corrections,
+                                                    stock Sapling)            sapling-research, task shaping)
+Cost to reach the goal             $X              $Y                        $Z
+Model quality @ same budget        X               Y                         Z          (3 runs each)
+Real gains confirmed / fakes let   X% / X%         Y% / Y%                   Z% / Z%    (live race format, held-out truth)
+through
+Verifier answers (not "unsure")    n/a             stock Sapling Y%          sapling-research Z%
+```
+- "Mubit baseline" is measured, not assumed: v1 is the adapter Mubit trains from Opus's answers alone; stock Sapling is run unchanged.
+- Each improvement in the last column is listed separately in the export, so judges can see which idea moved which number.
+- If a column can't be measured in time (e.g. no v2 before the freeze), it's shown as "not measured", never estimated.
+
 ## 7. Risks
 - **Adapters serving live traffic (Q1)** is the biggest external risk. If routing can't be observed or doesn't kick in, the fallback is an open-model arm through Mubit's `/compat/{groq,together}` routes, which changes the story slightly (`plan.md`).
 - **Adapters must pass the exam before they serve.** The toy adapter scored 70% vs an 85% target (R7), and routing goes through shadow before live. If our step adapters stay below target, Arm B runs on Opus fallback and there's no race. Collect plenty of examples, keep each step's output simple, and ask Mubit how to create a route (Q1, Q14).
