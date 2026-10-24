@@ -34,7 +34,7 @@ import os
 import re
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, TypeVar
 
@@ -62,6 +62,7 @@ MUBIT_BASE_PREFIX = "https://api.mubit.ai/"
 
 PROJECTS_CONFIG_PATH = REPO_ROOT / "data" / "mubit_projects.json"
 _ENV_VAR_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
+_HEADER_NAME = re.compile(r"^x-[a-z0-9-]+$")  # lower-case x- header; never a record/auth header
 
 RecordMode = Literal["full", "metadata", "off"]
 RECORD_MODES: frozenset[str] = frozenset({"full", "metadata", "off"})
@@ -143,10 +144,22 @@ class ProjectRouting:
     routes: Mapping[str, Mapping[str, str]]   # arm value -> step value -> project
     keys: Mapping[str, str]                   # project -> env var name
     source: str = "built-in"
+    # arm value -> step value -> extra request headers. For Mubit's announced "adapter id in a
+    # header" (Discord, 24 Oct: not shipped yet); only Mubit arms may pin an adapter.
+    adapter_headers: Mapping[str, Mapping[str, Mapping[str, str]]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.default not in self.keys:
             raise ValueError(f"default project {self.default!r} has no key entry")
+        for arm, steps in self.adapter_headers.items():
+            if ArmKind(arm) is not ArmKind.mubit:
+                raise ValueError(f"adapter headers on arm {arm!r}: only the mubit arm may pin an adapter")
+            for step, hdrs in steps.items():
+                StepType(step)
+                for h, v in hdrs.items():
+                    if (not _HEADER_NAME.match(h) or h in (RECORD_HEADER, "x-middleware-store", "x-api-key")
+                            or not v or any(c.isspace() for c in v)):
+                        raise ValueError(f"adapter header {arm}/{step}: bad header {h!r}")
         for name, var in self.keys.items():
             if not _ENV_VAR_NAME.match(var):
                 # Guards against a real key pasted into the (committed) JSON file.
@@ -160,7 +173,7 @@ class ProjectRouting:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any], source: str = "dict") -> ProjectRouting:
-        extra = set(data) - {"default", "routes", "keys"}
+        extra = set(data) - {"default", "routes", "keys", "adapter_headers"}
         if extra:
             raise ValueError(f"unknown keys in project routing: {sorted(extra)}")
         return cls(
@@ -169,7 +182,13 @@ class ProjectRouting:
                     for a, steps in (data.get("routes") or {}).items()},
             keys={str(p): str(v) for p, v in data["keys"].items()},
             source=source,
+            adapter_headers={str(a): {str(s): {str(h): str(v) for h, v in hdrs.items()}
+                                      for s, hdrs in steps.items()}
+                             for a, steps in (data.get("adapter_headers") or {}).items()},
         )
+
+    def headers_for(self, arm: ArmKind | str, step: StepType | str) -> dict[str, str]:
+        return dict(self.adapter_headers.get(ArmKind(arm).value, {}).get(StepType(step).value, {}))
 
     def project_for(self, arm: ArmKind | str, step: StepType | str) -> str:
         return self.routes.get(ArmKind(arm).value, {}).get(StepType(step).value, self.default)
@@ -179,9 +198,13 @@ class ProjectRouting:
         return {s.value: self.project_for(arm, s) for s in StepType}
 
     def to_dict(self) -> dict[str, Any]:
-        return {"default": self.default,
-                "routes": {a: dict(steps) for a, steps in self.routes.items()},
-                "keys": dict(self.keys), "source": self.source}
+        out = {"default": self.default,
+               "routes": {a: dict(steps) for a, steps in self.routes.items()},
+               "keys": dict(self.keys), "source": self.source}
+        if self.adapter_headers:
+            out["adapter_headers"] = {a: {s: dict(h) for s, h in steps.items()}
+                                      for a, steps in self.adapter_headers.items()}
+        return out
 
 
 # The D38 rule, used only if data/mubit_projects.json is missing (the file is the source of truth).
@@ -432,6 +455,7 @@ class MubitClient:
             headers = record_headers(record)
         except ValueError:
             headers = {RECORD_HEADER: "off"}  # unknown mode: fail safe (never record by accident)
+        headers.update(self.projects.headers_for(arm, step))
         rec = LLMCallRecord(
             arm=arm,
             arm_id=arm_id,

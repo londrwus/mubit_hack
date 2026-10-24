@@ -1,0 +1,37 @@
+{
+ "n": 40,
+ "candidates": 359,
+ "sources": {
+  "bench.db": {
+   "skipped_prev_best_mismatch": 17,
+   "rebuilt": 304,
+   "skipped_in_177": 40,
+   "skipped_unfinished_race": 26,
+   "candidates": 238
+  },
+  "ablation.db": {
+   "rebuilt": 121,
+   "skipped_prev_best_mismatch": 9,
+   "candidates": 121
+  }
+ },
+ "by_target": {
+  "cifar": 6,
+  "lcbench": 19,
+  "rl": 15
+ },
+ "ground_truth": {
+  "not_fake": 29,
+  "fake": 11
+ },
+ "race_verdict": {
+  "unsure": 18,
+  "invalid": 14,
+  "valid": 8
+ },
+ "by_db": {
+  "bench.db": 29,
+  "ablation.db": 11
+ },
+ "note": "Opus answers come only when recorded (push --sources v2 --record full --yes); 25 kept examples trigger the next version (R58). Not yet recorded."
+}

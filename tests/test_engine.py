@@ -239,8 +239,11 @@ async def run_race(cfg: RaceConfig, deps_fn: Any, *, db: Database | None = None)
 
 # =========================================================================== fixtures
 
+# The mubit arm here stands for "the same loop with a faster planner": backfill (the BM arms'
+# default, tests/test_backfill.py) is switched off so these tests pin the plain engine.
+NO_BACKFILL = {ArmKind.mubit: ["judge_policy"]}
 FAST_SLOW_CFG = RaceConfig(target="fake-quad", arms=[ArmKind.opus, ArmKind.mubit], budget_s=3.0,
-                           gpus_per_arm=3, seed=0, llm="mock")
+                           gpus_per_arm=3, seed=0, llm="mock", engine_features=NO_BACKFILL)
 
 
 @pytest.fixture(scope="module")
@@ -405,7 +408,8 @@ def test_export_recomputes_engine_summaries(fast_slow: dict[str, Any]) -> None:
 
 
 async def test_identical_arms_get_identical_results() -> None:
-    cfg = RaceConfig(target="fake-quad", arms=[ArmKind.opus, ArmKind.mubit], budget_s=1.5, gpus_per_arm=2, llm="mock")
+    cfg = RaceConfig(target="fake-quad", arms=[ArmKind.opus, ArmKind.mubit], budget_s=1.5, gpus_per_arm=2, llm="mock",
+                     engine_features=NO_BACKFILL)
 
     def deps(race_id: str) -> list[ArmDeps]:
         return [llm_arm(k, FakeLLM(0.1, seed=7), race_id, FakeRunner(2, run_s=0.2))
@@ -424,7 +428,8 @@ async def test_identical_arms_get_identical_results() -> None:
 
 
 async def test_judged_invalid_trap_is_not_best() -> None:
-    cfg = RaceConfig(target="fake-quad", arms=[ArmKind.mubit], budget_s=1.5, gpus_per_arm=1, llm="mock")
+    cfg = RaceConfig(target="fake-quad", arms=[ArmKind.mubit], budget_s=1.5, gpus_per_arm=1, llm="mock",
+                     engine_features=NO_BACKFILL)
     llm = FakeLLM(0.01, seed=3, trap_rate=1.0, diverge_rate=0.0)
     out = await run_race(cfg, lambda rid: [llm_arm(ArmKind.mubit, llm, rid, FakeRunner(1, run_s=0.1))])
     db, arm = out["db"], out["engine"].arms[ArmKind.mubit]
@@ -899,8 +904,9 @@ async def test_benchmark_refuses_llm_arms_with_different_policies(monkeypatch: p
                           fallback_llm=fallback)
         return ArmDeps(kind=kind, researcher=r, runner=FakeRunner(1), model="m", llm_mode="mubit")
 
-    eng = RaceEngine(cfg, [arm(ArmKind.opus, None), arm(ArmKind.mubit, FakeLLM(0))], spec=SPEC)
-    with pytest.raises(AsymmetricRaceError):
+    # D46: the LLM-policy check runs before t0 (RaceEngine.__init__), so the race never starts
+    with pytest.raises(AsymmetricRaceError, match="beyond the declared planner"):
+        eng = RaceEngine(cfg, [arm(ArmKind.opus, None), arm(ArmKind.mubit, FakeLLM(0))], spec=SPEC)
         await eng.run()
 
 

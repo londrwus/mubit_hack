@@ -27,13 +27,14 @@ from typing import Any
 
 from backend.core.types import LLMCallRecord, new_id, now
 
-SCHEMA_VERSION = 3  # 2: llm_calls.mubit_project; 3: llm_calls.cost_source (added in place by _migrate)
+SCHEMA_VERSION = 4  # 2: llm_calls.mubit_project; 3: llm_calls.cost_source; 4: experiments.source (added in place by _migrate)
 
 # Columns added after a table was first shipped: (table, column, type). ``CREATE TABLE IF NOT
 # EXISTS`` leaves an older file's table as it was, so ``_migrate`` adds any that are missing.
 _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("llm_calls", "mubit_project", "TEXT"),
     ("llm_calls", "cost_source", "TEXT"),
+    ("experiments", "source", "TEXT"),
 )
 
 
@@ -110,7 +111,8 @@ CREATE TABLE IF NOT EXISTS experiments (
     logs_tail_json TEXT,
     llm_call_id TEXT,                          -- the propose call that produced it
     mubit_request_id TEXT,
-    gpu_cost_usd REAL
+    gpu_cost_usd REAL,
+    source TEXT                                -- who proposed it: baseline | llm | optuna | sampler (backfill)
 );
 CREATE INDEX IF NOT EXISTS ix_experiments_arm ON experiments(arm_id);
 CREATE INDEX IF NOT EXISTS ix_experiments_race ON experiments(race_id);

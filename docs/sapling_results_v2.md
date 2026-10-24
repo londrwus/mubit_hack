@@ -1,6 +1,6 @@
 # sapling-research v2: results (one timeboxed iteration, DRAFT)
 
-Status: **measured 2026-10-24, 03:45–05:56 BST.** This follows v1 (`sapling_results.md`, R33). Not yet copied into `results_log.md`: the lead logs it from here, including the rows where v2 loses. **Nothing is published.** Wording rules from D23 still apply: *we fine-tuned Banyan Sapling's verification head, backbone frozen*. v2 also uses a seed ensemble of five heads (§5).
+Status: **measured 2026-10-24, 03:45–05:56 BST.** This follows v1 (`sapling_results.md`, R33). Logged in `results_log.md` as R42 (Hugging Face package check: R69), including the rows where v2 loses. **Nothing is published.** Wording rules from D23 still apply: *we fine-tuned Banyan Sapling's verification head, backbone frozen*. v2 also uses a seed ensemble of five heads (§5).
 
 **Goal of this iteration:** more answers (fewer `unsure`) and more genuine gains accepted, with **fakes approved kept at about 0** and **no ContractNLI regression**.
 

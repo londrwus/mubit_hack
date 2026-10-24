@@ -1,0 +1,331 @@
+diff --git a/backend/benchmark/analysis.py b/backend/benchmark/analysis.py
+index 2814b4e..ceb1f16 100644
+--- a/backend/benchmark/analysis.py
++++ b/backend/benchmark/analysis.py
+@@ -64,6 +64,7 @@ def summaries_from_rows(
+             experiments=[e for e in rows.get("experiments", []) if e["arm_id"] == aid],
+             intervals=[i for i in rows.get("gpu_intervals", []) if i["arm_id"] == aid],
+             llm_calls=[c for c in rows.get("llm_calls", []) if c["arm_id"] == aid],
++            target=race.get("target"),
+         )
+     return out
+ 
+diff --git a/backend/benchmark/metrics.py b/backend/benchmark/metrics.py
+index 90a11f5..402685b 100644
+--- a/backend/benchmark/metrics.py
++++ b/backend/benchmark/metrics.py
+@@ -21,6 +21,12 @@ Definitions (benchmark.md "Metrics"):
+   experiment whose quality reaches ``target_value``.
+ - **$-to-target** = GPU $ accrued in [race start, that moment] + LLM $ of calls completed
+   by then.
++- **Shipped model quality** = quality of the arm's last accepted best, EXCEPT when that run is a
++  ground-truth trap on a target whose trap selects on the held-out split itself
++  (``TRAP_CONTAMINATES_HELDOUT``, e.g. lcbench ``checkpoint_selection="best_test"``): then its
++  held-out score is contaminated (too good) and is withheld (None, ``shipped_is_fake``), so
++  accepting a fake can never look like a better shipped model. On the other targets a trap
++  run's held-out score is honest and is kept: it shows the cost of shipping a fake.
+ """
+ 
+ from __future__ import annotations
+@@ -49,6 +55,27 @@ def quality(exp: Mapping[str, Any]) -> float | None:
+     return float(s) if s is not None and math.isfinite(float(s)) else None
+ 
+ 
++# Targets whose contamination trap selects on (or tunes on) the split ``heldout_score`` is measured
++# on, so a trap run's held-out score is itself contaminated:
++# - lcbench: ``checkpoint_selection="best_test"`` keeps the epoch with the best TEST score, and
++#   ``heldout_score`` is that test score (workers/targets/lcbench.py).
++# Not listed (their held-out split is never used by the trap, so a trap run's held-out score is
++# honest): lm (trap adds the val shard; held-out = test shard 9), rl (trap evaluates on training
++# levels; held-out = unseen levels), cifar (``tune_on_test`` tunes on the reported test half;
++# held-out = the other half).
++TRAP_CONTAMINATES_HELDOUT: frozenset[str] = frozenset({"lcbench"})
++
++
++def shipped_quality(shipped: Mapping[str, Any] | None, target: str | None = None) -> float | None:
++    """Held-out quality of the shipped run; None for a trap run whose held-out score the trap
++    contaminates (``TRAP_CONTAMINATES_HELDOUT``). ``target`` None keeps the plain ``quality``."""
++    if shipped is None:
++        return None
++    if bool(_get(shipped, "is_trap", False)) and target in TRAP_CONTAMINATES_HELDOUT:
++        return None
++    return quality(shipped)
++
++
+ def is_counted(exp: Mapping[str, Any]) -> bool:
+     """A ground-truth trap run never counts, even with an honest held-out score: its pipeline
+     trained or tuned on evaluation data (lm adds the val shard, cifar fine-tunes on test), so
+@@ -114,9 +141,12 @@ def summarize_arm(
+     experiments: list[Mapping[str, Any]],
+     intervals: list[Mapping[str, Any]],
+     llm_calls: list[Mapping[str, Any]],
++    target: str | None = None,
+ ) -> tuple[ArmSummary, dict[str, Any]]:
+     """Return (ArmSummary, extras). ``extras`` holds the supporting numbers (busy/idle
+-    seconds, idle $, trap counts, retries, ...) shown on hover / in the export."""
++    seconds, idle $, trap counts, retries, ...) shown on hover / in the export. ``target``
++    (the target name) decides whether a shipped trap run's held-out score is withheld
++    (``shipped_quality``)."""
+     tot = interval_totals(intervals)
+ 
+     by_end = sorted(experiments, key=lambda r: float(_get(r, "ended_at", 0.0)))
+@@ -184,7 +214,12 @@ def summarize_arm(
+         "best_reported_score": float(best["score"]) if best is not None else None,
+         "shipped_experiment_id": shipped["id"] if shipped is not None else None,
+         "shipped_reported_score": float(shipped["score"]) if shipped is not None and shipped.get("score") is not None else None,
+-        "shipped_quality": quality(shipped) if shipped is not None else None,
++        "shipped_quality": shipped_quality(shipped, target),
++        # The shipped run is a ground-truth trap (a fake improvement the arm accepted). Its raw
++        # held-out score is kept for audit only: on a TRAP_CONTAMINATES_HELDOUT target it is
++        # contaminated and must never be quoted as the shipped model's quality.
++        "shipped_is_fake": shipped is not None and bool(_get(shipped, "is_trap", False)),
++        "shipped_heldout_raw": quality(shipped) if shipped is not None else None,
+         "experiments_cancelled": cancelled,
+         "experiments_total": len(experiments),
+         "experiments_per_gpu_hour": (finished / paid_h) if paid_h > 0 else 0.0,
+diff --git a/backend/scheduler.py b/backend/scheduler.py
+index 6897564..2a52689 100644
+--- a/backend/scheduler.py
++++ b/backend/scheduler.py
+@@ -933,7 +933,7 @@ class ArmRunner:
+         summary, extras = summarize_arm(
+             self.kind, direction=self.spec.direction, target_value=self.spec.target_value,
+             race_start=self.t0, experiments=[self.exps[i].row(self.race_id, self.runner.name) for i in self.order],
+-            intervals=intervals, llm_calls=self.llm_calls,
++            intervals=intervals, llm_calls=self.llm_calls, target=self.spec.name,
+         )
+         extras.update({
+             "stop_reason": self.stop_reason, "error": self.error, "configs_rejected": self.configs_rejected,
+diff --git a/scripts/analyze_races.py b/scripts/analyze_races.py
+index c8f5f28..7ad4592 100644
+--- a/scripts/analyze_races.py
++++ b/scripts/analyze_races.py
+@@ -54,7 +54,7 @@ if str(REPO_ROOT) not in sys.path:
+     sys.path.insert(0, str(REPO_ROOT))
+ 
+ from backend.benchmark.export import read_export  # noqa: E402
+-from backend.benchmark.metrics import is_counted, quality, summarize_arm  # noqa: E402
++from backend.benchmark.metrics import TRAP_CONTAMINATES_HELDOUT, is_counted, quality, summarize_arm  # noqa: E402
+ 
+ Rows = dict[str, list[dict[str, Any]]]
+ 
+@@ -284,7 +284,7 @@ class ArmRun:
+     experiments_failed: int
+     best_quality: float | None
+     best_reported_score: float | None
+-    shipped_quality: float | None
++    shipped_quality: float | None      # None also when a contaminated fake was shipped (shipped_is_fake)
+     start_quality: float | None        # held-out score of this arm's starting-config run(s)
+     gpu_cost_usd: float
+     idle_cost_usd: float
+@@ -307,6 +307,8 @@ class ArmRun:
+     # sampler is "sampler") and which source produced the shipped model.
+     runs_by_source: dict[str, int] = field(default_factory=dict)
+     shipped_source: str | None = None
++    # The shipped model is a ground-truth trap run (a fake improvement the arm accepted).
++    shipped_is_fake: bool = False
+     # Engine features + planner/judge prompt versions from the fairness manifest (``arm_setup``).
+     setup: dict[str, str] | None = None
+ 
+@@ -335,6 +337,7 @@ def arm_runs_for_race(rows: Rows, *, direction: str, target_value: float, is_dev
+         summary, extras = summarize_arm(
+             arm["kind"], direction=direction, target_value=float(target_value),
+             race_start=float(race["started_at"]), experiments=exps, intervals=ivs, llm_calls=calls,
++            target=race.get("target"),
+         )
+         n = len(calls)
+         by_step: dict[str, list[float]] = {}
+@@ -368,6 +371,7 @@ def arm_runs_for_race(rows: Rows, *, direction: str, target_value: float, is_dev
+             n_corrections=sum(1 for c in rows.get("corrections", []) if c.get("arm_id") == aid),
+             runs_by_source=dict(extras.get("runs_by_source") or {}),
+             shipped_source=extras.get("shipped_source"),
++            shipped_is_fake=bool(extras.get("shipped_is_fake")),
+             setup=arm_setup(fp, canon_kind(arm["kind"])),
+         ))
+     return out
+@@ -811,6 +815,16 @@ def _setup_lines(rep: TargetReport) -> list[str]:
+             "| Arm | Engine features | Planner prompt (effort) | Judge prompt |", "|---|---|---|---|", *rows, ""]
+ 
+ 
++def _fake_shipped_note(rep: TargetReport, kind: str) -> str:
++    """Shipped-model cell suffix: races whose shipped model is an in-race trap (a fake). On a
++    target whose trap contaminates the held-out split its score is not in the mean before it."""
++    n = sum(1 for r in rep.runs if r.arm == kind and r.shipped_is_fake)
++    if not n:
++        return ""
++    withheld = rep.target in TRAP_CONTAMINATES_HELDOUT
++    return f" ({n} fake shipped" + (", held-out not counted)" if withheld else ")")
++
++
+ def render_markdown(reports: list[TargetReport], ex: Exclusions) -> str:
+     out: list[str] = []
+     if not reports:
+@@ -845,7 +859,7 @@ def render_markdown(reports: list[TargetReport], ex: Exclusions) -> str:
+                 _fmt(s["experiments_finished"], digits=1),
+                 _fmt(s["normalised_quality"], digits=0),
+                 _fmt(s["best_quality"], digits=4, spec="g"),
+-                _fmt(s["shipped_quality"], digits=4, spec="g"),
++                _fmt(s["shipped_quality"], digits=4, spec="g") + _fake_shipped_note(rep, kind),
+                 _fmt(s["llm_cost_usd"], prefix="$", digits=3),
+                 f"{_fmt(s['gpu_cost_usd'], prefix='$')} ({_fmt(s['idle_cost_usd'], prefix='$')})",
+                 _fmt(s["llm_p50_latency_ms"], scale=1 / 1000, digits=2, unit=" s") if is_llm else "no LLM",
+diff --git a/scripts/headline.py b/scripts/headline.py
+index d446ce2..3ee5dea 100644
+--- a/scripts/headline.py
++++ b/scripts/headline.py
+@@ -81,7 +81,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
+ if str(REPO_ROOT) not in sys.path:
+     sys.path.insert(0, str(REPO_ROOT))
+ 
+-from backend.benchmark.metrics import gpu_cost_until, is_counted, quality, source_extras, summarize_arm  # noqa: E402
++from backend.benchmark.metrics import (  # noqa: E402
++    TRAP_CONTAMINATES_HELDOUT,
++    gpu_cost_until,
++    is_counted,
++    quality,
++    source_extras,
++    summarize_arm,
++)
+ from backend.core.types import ArmKind  # noqa: E402
+ 
+ 
+@@ -286,6 +293,7 @@ class RaceArm:
+     experiments_per_usd: float | None
+     trap_runs: int
+     fake_best_accepted: int
++    shipped_is_fake: bool = False   # the shipped model is an in-race trap run (metrics.summarize_arm)
+     # same quality / same money (relative to this race's Opus arm)
+     cost_to_opus_quality_usd: float | None = None
+     time_to_opus_quality_s: float | None = None
+@@ -324,6 +332,7 @@ def race_arms(rows: Rows, *, direction: str, goal: float, is_dev: bool,
+             total_cost_usd=run.total_cost_usd, gpu_cost_usd=run.gpu_cost_usd, llm_cost_usd=run.llm_cost_usd,
+             experiments_per_usd=(run.experiments_finished / run.total_cost_usd) if run.total_cost_usd > 0 else None,
+             trap_runs=len(traps), fake_best_accepted=sum(1 for e in traps if ar._truthy(e.get("is_best"))),
++            shipped_is_fake=bool(getattr(run, "shipped_is_fake", False)),
+         )
+         for m in ("gpu_idle_pct", "best_quality", "shipped_quality", "experiments_finished",
+                   "experiments_per_usd", "total_cost_usd", "fake_best_accepted"):
+@@ -1565,6 +1574,11 @@ def render_markdown(groups: list[Group], ex: Any, notes: Sequence[str] = ()) ->
+                 c = _cell(s, kind)
+                 if fld == "fake_best_accepted" and s.n:
+                     c = f"{int(sum(r.fake_best_accepted for r in g.runs if r.arm == k))} of {g.arms[k].trap_runs} trap runs"
++                if fld == "shipped_quality":
++                    nf = sum(1 for r in g.runs if r.arm == k and r.shipped_is_fake)
++                    if nf:
++                        c += (f"; {nf} fake shipped" + (" (held-out not counted)"
++                                                         if g.target in TRAP_CONTAMINATES_HELDOUT else ""))
+                 cells.append(c)
+             out.append(f"| {row_label} | " + " | ".join(cells) + " |")
+         out.append("")
+diff --git a/tests/test_review_shipped_trap_quality.py b/tests/test_review_shipped_trap_quality.py
+new file mode 100644
+index 0000000..410eace
+--- /dev/null
++++ b/tests/test_review_shipped_trap_quality.py
+@@ -0,0 +1,106 @@
++"""Review fix: 'Shipped model' quality never uses a contaminated held-out score.
++
++On lcbench the trap (``checkpoint_selection="best_test"``) keeps the epoch with the best TEST
++score and ``heldout_score`` IS that test score, so a shipped trap run's held-out score is too
++good. Before the fix ``shipped_quality = quality(shipped)`` reported it, and an arm that shipped
++a fake (Optuna, D47 seed 2: 0.8645 vs its best counted 0.8428) looked like it shipped a better
++model. Pure functions over plain rows; no network.
++"""
++
++from __future__ import annotations
++
++import importlib.util
++import sys
++from pathlib import Path
++from typing import Any
++
++import pytest
++
++from backend.benchmark.analysis import summaries_from_rows
++from backend.benchmark.metrics import TRAP_CONTAMINATES_HELDOUT, shipped_quality, summarize_arm
++
++REPO = Path(__file__).resolve().parents[1]
++
++
++def _load(name: str) -> Any:
++    if name in sys.modules:
++        return sys.modules[name]
++    spec = importlib.util.spec_from_file_location(name, REPO / "scripts" / f"{name}.py")
++    assert spec and spec.loader
++    mod = importlib.util.module_from_spec(spec)
++    sys.modules[name] = mod
++    spec.loader.exec_module(mod)
++    return mod
++
++
++def _exps(arm: str = "a") -> list[dict[str, Any]]:
++    """An honest best (0.8428 held-out), then a trap the arm accepted as its best (0.8645)."""
++    return [
++        {"id": "base", "arm_id": arm, "status": "succeeded", "score": 0.80, "metrics": {"heldout_score": 0.80},
++         "is_trap": False, "is_best": True, "is_baseline": True, "started_at": 0.0, "ended_at": 10.0},
++        {"id": "honest", "arm_id": arm, "status": "succeeded", "score": 0.85, "metrics": {"heldout_score": 0.8428},
++         "is_trap": False, "is_best": True, "started_at": 5.0, "ended_at": 20.0},
++        {"id": "fake", "arm_id": arm, "status": "succeeded", "score": 0.90, "metrics": {"heldout_score": 0.8645},
++         "is_trap": True, "is_best": True, "started_at": 10.0, "ended_at": 30.0},
++    ]
++
++
++def _summ(target: str | None) -> tuple[Any, dict[str, Any]]:
++    ivs = [{"state": "busy", "start": 0.0, "end": 40.0, "price_per_s": 0.001}]
++    return summarize_arm("optuna", direction="max", target_value=0.78, race_start=0.0, experiments=_exps(),
++                         intervals=ivs, llm_calls=[], target=target)
++
++
++def test_lcbench_shipped_fake_has_no_quality() -> None:
++    assert "lcbench" in TRAP_CONTAMINATES_HELDOUT
++    s, x = _summ("lcbench")
++    assert x["shipped_experiment_id"] == "fake" and x["shipped_is_fake"] is True
++    assert x["shipped_quality"] is None                        # withheld: contaminated
++    assert x["shipped_heldout_raw"] == pytest.approx(0.8645)   # audit only
++    assert s.best_score == pytest.approx(0.8428)               # the counted best is unchanged
++
++
++@pytest.mark.parametrize("target", ["rl", "cifar", "lm", None])
++def test_targets_with_an_honest_heldout_split_keep_the_shipped_fakes_score(target: str | None) -> None:
++    _, x = _summ(target)
++    assert x["shipped_is_fake"] is True
++    assert x["shipped_quality"] == pytest.approx(0.8645)       # honest held-out: shows the cost of a fake
++
++
++def test_an_honest_shipped_model_is_unchanged() -> None:
++    honest = {"status": "succeeded", "score": 0.85, "metrics": {"heldout_score": 0.8428}, "is_trap": False}
++    assert shipped_quality(honest, "lcbench") == pytest.approx(0.8428)
++    assert shipped_quality(None, "lcbench") is None
++    exps = _exps()[:2]
++    _, x = summarize_arm("opus", direction="max", target_value=0.78, race_start=0.0, experiments=exps,
++                         intervals=[], llm_calls=[], target="lcbench")
++    assert x["shipped_quality"] == pytest.approx(0.8428) and x["shipped_is_fake"] is False
++
++
++def _rows(target: str = "lcbench") -> dict[str, Any]:
++    return {"races": [{"id": "race1", "target": target, "started_at": 0.0, "seed": 2, "status": "finished",
++                       "config": {"target_value": 0.78}, "budget_s": 40, "gpus_per_arm": 1}],
++            "arms": [{"id": "a", "kind": "optuna", "model": None, "llm_mode": "none"}],
++            "experiments": _exps(), "llm_calls": [],
++            "gpu_intervals": [{"arm_id": "a", "state": "busy", "start": 0.0, "end": 40.0, "price_per_s": 0.001}]}
++
++
++def test_export_analysis_passes_the_target() -> None:
++    out = summaries_from_rows(_rows(), direction="max", target_value=0.78, allow_dev=True)
++    _, x = out["optuna"]
++    assert x["shipped_quality"] is None and x["shipped_is_fake"] is True
++
++
++def test_analyze_races_and_headline_flag_the_fake_shipped_model() -> None:
++    ar = _load("analyze_races")
++    (run,) = ar.arm_runs_for_race(_rows(), direction="max", target_value=0.78, is_dev=False)
++    assert run.shipped_quality is None and run.shipped_is_fake is True
++    rep = ar.TargetReport(target="lcbench", direction="max", target_value=0.78, target_value_source="t",
++                          start_score=None, start_source="", best_known=None, best_source="", is_dev=False,
++                          race_ids=["race1"], arms={}, runs=[run], warnings=[])
++    assert ar._fake_shipped_note(rep, "optuna") == " (1 fake shipped, held-out not counted)"
++    (rl_run,) = ar.arm_runs_for_race(_rows("rl"), direction="max", target_value=0.78, is_dev=False)
++    assert rl_run.shipped_quality == pytest.approx(0.8645) and rl_run.shipped_is_fake
++    hl = _load("headline")
++    (ra,) = hl.race_arms(_rows(), direction="max", goal=0.78, is_dev=False)
++    assert ra.shipped_quality is None and ra.shipped_is_fake is True

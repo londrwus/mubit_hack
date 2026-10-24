@@ -14,7 +14,7 @@ import httpx2
 import pytest
 
 from backend.agent.llm_base import OPUS_MODEL, RECORD_HEADER, REQUEST_ID_HEADER
-from backend.agent.loop import DefaultPrompts, LLMResearcher
+from backend.agent.loop import DefaultPrompts, LLMResearcher, apply_propose_setup, load_prompts
 from backend.agent.mock_llm import MockLLM
 from backend.agent.mubit_client import MubitClient
 from backend.benchmark.configs import BENCH_RECORD_MODES, PRESETS, RaceConfig
@@ -136,8 +136,12 @@ def toy_factory(made: dict[ArmKind, Any]) -> Any:
         record: bool | str = {"off": False, "full": True}.get(mode, mode)
         llm = SafeMock(spec=spec, seed=cfg.seed)
         made[kind] = llm
+        # the repo prompts + the arm's declared planner (D46 lean_planner on the mubit arm), as
+        # default_arm_deps; the mock answers both reply forms
         r = LLMResearcher(kind=kind, llm=llm, spec=spec, session_id=f"race-{race_id}/{kind.value}/seed-0",
-                          prompts=DefaultPrompts(), fallback_model=OPUS_MODEL, record=record)
+                          prompts=load_prompts(), fallback_model=OPUS_MODEL, record=record)
+        if (variant := cfg.propose_variant_for(kind)) is not None:
+            apply_propose_setup(r, *variant)
         return ArmDeps(kind=kind, researcher=r, runner=ToyRunner(cfg.gpus_per_arm), model=OPUS_MODEL,
                        llm_mode="mubit", record_mode=mode)
 
@@ -366,7 +370,9 @@ def test_benchmark_race_records_modes_goal_and_recomputes_metrics(tmp_path: Path
     race_id, path, status, manifest, engine_sums = asyncio.run(
         bench.run_race(cfg, db, tmp_path, progress_every_s=0.5, tick_s=0.02))
     assert status == "finished"
-    assert manifest["identical"] and manifest["llm_policy_identical"]
+    assert manifest["identical"] and manifest["llm_policy_ok"]
+    planners = {k: v["actual"]["prompt_version"] for k, v in manifest["propose"]["per_arm"].items()}
+    assert planners == {"opus": "v1", "mubit": "v2"}
     assert {k: v["record_mode"] for k, v in manifest["differs_only_in"].items()} == {"opus": "off", "mubit": "metadata"}
     assert manifest["goal"] == {"target_value": goal, "provisional": True, "from_config": True}
     assert set(made[ArmKind.opus].record_seen) == {False}

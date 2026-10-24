@@ -2,7 +2,8 @@
 
 - propose_experiments: seeded random valid configs from the target's config space (K parsed
   from the user message, or ``k=`` kwarg), no duplicates within a batch; the trap param is
-  left at its default except with probability ``trap_rate``.
+  left at its default except with probability ``trap_rate``. For a diff-form reply schema
+  (lean planner, ``ProposeDiffOutput``) each full config is sent as its "changes".
 - diagnose_run: keyword heuristics on the run block (nan -> divergence, OOM -> oom, ...).
 - judge_improvement: ``invalid`` when the evidence shows overlap / test-split selection or the
   trap param changed to its trap value; otherwise ``valid``.
@@ -26,7 +27,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from backend.agent.mubit_client import parse_and_validate
-from backend.agent.prompts.build import FREE_SLOTS_LABEL, split_user
+from backend.agent.prompts.build import FREE_SLOTS_LABEL, ProposeDiffOutput, split_user
 from backend.core.types import ArmKind, FailureClass, LLMCallRecord, StepType, Verdict
 from workers.targets.base import TargetSpec
 
@@ -107,7 +108,14 @@ class MockLLM:
             text: str | None = '{"oops": "simulated malformed reply"}'
         else:
             try:
-                text = json.dumps(self._answer(step, user, rng, k))
+                answer = self._answer(step, user, rng, k)
+                diff_form = isinstance(schema, type) and issubclass(schema, ProposeDiffOutput)
+                if step is StepType.propose_experiments and diff_form:
+                    # Lean planner (diff-form prompts v2/v3): a full config is a valid set of
+                    # "changes" (expanded against the current best, every setting overridden).
+                    answer = {"experiments": [{"changes": e["config"], "hypothesis": e["hypothesis"]}
+                                              for e in answer["experiments"]]}
+                text = json.dumps(answer)
             except ValueError as e:
                 rec.latency_ms = (time.perf_counter() - t0) * 1000
                 rec.error = f"mock: {e}"

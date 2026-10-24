@@ -252,8 +252,10 @@ def _collapse(seq: list[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
 
 
 async def _live_race(db: Database) -> tuple[str, list[Any]]:
+    # The mubit arm stands for "the same loop with a faster planner" here: backfill (the BM arms'
+    # default) off, so the replay heuristics are checked on the plain engine.
     cfg = RaceConfig(target="fake-quad", arms=[ArmKind.opus, ArmKind.mubit], budget_s=2.0, gpus_per_arm=2,
-                     seed=0, llm="mock")
+                     seed=0, llm="mock", engine_features={ArmKind.mubit: ["judge_policy"]})
     rid = new_id()
     bus = EventBus()
     live: list[Any] = []

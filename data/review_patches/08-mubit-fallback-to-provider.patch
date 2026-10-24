@@ -1,0 +1,288 @@
+diff --git a/backend/agent/loop.py b/backend/agent/loop.py
+index 01b6559..9190823 100644
+--- a/backend/agent/loop.py
++++ b/backend/agent/loop.py
+@@ -377,8 +377,9 @@ class LLMResearcher:
+         self.spec = spec
+         self.session_id = session_id
+         self.prompts = prompts or DefaultPrompts()
+-        # x-middleware-record for every call of this arm, fallbacks included: False ("off"),
+-        # True ("full") or a header value ("metadata"). Per arm, see RaceConfig.record_mode.
++        # x-middleware-record for every call of this arm: False ("off"), True ("full") or a header
++        # value ("metadata"). Per arm, see RaceConfig.record_mode. A fallback attempt is the
++        # exception: MubitClient always sends it with record off (never routable to an adapter).
+         self.record = record
+         self.propose_schema = propose_schema
+         self.max_retries = max_retries
+diff --git a/backend/agent/mubit_client.py b/backend/agent/mubit_client.py
+index f7bb42d..4db8cc6 100644
+--- a/backend/agent/mubit_client.py
++++ b/backend/agent/mubit_client.py
+@@ -15,6 +15,10 @@ Request layout (budget.md, levers 2-6):
+ - header ``x-middleware-record: off`` unless ``record=True`` (``record`` also accepts the
+   header values ``"full"`` / ``"metadata"`` / ``"off"``; ``"metadata"`` keeps the task
+   fingerprint but drops the content, see docs/mubit_office_hours.md item 2);
++- a FALLBACK attempt (``is_fallback=True``) is always sent with ``x-middleware-record: off`` and
++  without adapter headers, whatever the arm's record mode: without the task fingerprint Mubit
++  cannot route it to an adapter, so "fall back to Opus" is a provider answer and not the same
++  request a second time (``FALLBACK_RECORD``);
+ - ``x-middleware-request-id`` captured; latency and the four usage meters recorded;
+ - ``stop_reason`` max_tokens / refusal count as failed calls;
+ - per-step **Mubit project routing** (D38): ``data/mubit_projects.json`` maps (arm, step) to a
+@@ -327,6 +331,9 @@ class MubitClient:
+     """LLMClient over the Mubit Anthropic gateway. See module docstring."""
+ 
+     benchmark_safe = True  # real calls; MockLLM sets False
++    # Record mode of every fallback attempt (manifest: llm_policy.fallback_record). "off" drops the
++    # task fingerprint, so Mubit cannot route the fallback to an adapter (bench.py, configs.py).
++    fallback_record: RecordMode = "off"
+ 
+     def __init__(
+         self,
+@@ -451,11 +458,17 @@ class MubitClient:
+         step = StepType(step)
+         arm = ArmKind(arm)
+         cfg = self.step_configs[step]
+-        try:
+-            headers = record_headers(record)
+-        except ValueError:
+-            headers = {RECORD_HEADER: "off"}  # unknown mode: fail safe (never record by accident)
+-        headers.update(self.projects.headers_for(arm, step))
++        if is_fallback:
++            # The fallback must reach the provider model: the first try and the retry were this
++            # same request, and an adapter that answered them badly must not answer it again.
++            # Record off (no task fingerprint: not routable) and no adapter-pinning header.
++            headers = record_headers(self.fallback_record)
++        else:
++            try:
++                headers = record_headers(record)
++            except ValueError:
++                headers = {RECORD_HEADER: "off"}  # unknown mode: fail safe (never record by accident)
++            headers.update(self.projects.headers_for(arm, step))
+         rec = LLMCallRecord(
+             arm=arm,
+             arm_id=arm_id,
+@@ -540,7 +553,8 @@ async def call_with_fallback(
+     **kwargs: Any,
+ ) -> tuple[T | None, list[LLMCallRecord]]:
+     """Agent-loop policy (architecture.md section 1): try; on an invalid reply retry once with
+-    the same model; if still invalid, fall back to ``fallback_model`` (Opus) through Mubit.
++    the same model; if still invalid, fall back to ``fallback_model`` (Opus) through Mubit, sent
++    with record off and no adapter headers (``MubitClient.call`` with ``is_fallback``).
+     Every attempt is its own record and counts toward the arm's time and $. Same policy on
+     every arm (fairness)."""
+     records: list[LLMCallRecord] = []
+diff --git a/backend/app.py b/backend/app.py
+index 8f95efa..7607273 100644
+--- a/backend/app.py
++++ b/backend/app.py
+@@ -116,7 +116,8 @@ def default_arm_deps(race_id: str, cfg: RaceConfig, spec: TargetSpec, kind: ArmK
+     """One arm's researcher + runner. Every arm gets its own runner with the same slots, and
+     every LLM arm the same researcher class, prompts and retry -> Opus-fallback policy.
+     The recording mode is per arm (``cfg.record_mode_for(kind)``): ``off`` | ``metadata`` |
+-    ``full``, sent as ``x-middleware-record`` on every call of that arm (fallbacks included)."""
++    ``full``, sent as ``x-middleware-record`` on every call of that arm except a fallback, which
++    MubitClient always sends with ``off`` so it is a provider answer, not an adapter's."""
+     runner = _make_runner(cfg, spec)
+     if kind == ArmKind.optuna:
+         from backend.agent.optuna_arm import OptunaResearcher
+diff --git a/backend/scheduler.py b/backend/scheduler.py
+index 6897564..18edaf4 100644
+--- a/backend/scheduler.py
++++ b/backend/scheduler.py
+@@ -402,6 +402,10 @@ def llm_policy_of(researcher: Any) -> dict[str, Any] | None:
+         "max_retries": getattr(r, "max_retries", None),
+         "has_fallback": getattr(r, "fallback_llm", None) is not None or getattr(r, "fallback_model", None) is not None,
+         "fallback_model": getattr(r, "fallback_model", None),
++        # Record mode a fallback attempt is sent with (MubitClient: always "off", so it cannot be
++        # routed to an adapter); None for a client without the rule (mock LLM, test fakes).
++        "fallback_record": getattr(getattr(r, "fallback_llm", None) or getattr(r, "llm", None),
++                                   "fallback_record", None),
+         "propose_prompt": setup.get("prompt_version"),
+         "propose_effort": setup.get("effort"),
+     }
+diff --git a/scripts/analyze_races.py b/scripts/analyze_races.py
+index c8f5f28..395ab99 100644
+--- a/scripts/analyze_races.py
++++ b/scripts/analyze_races.py
+@@ -554,6 +554,12 @@ def fairness_fingerprint(rows: Rows) -> dict[str, Any] | None:
+             eff = p.get("propose_effort")
+             if eff is not None and eff != STANDARD_PROPOSE_EFFORT and "propose_experiments" in steps_used:
+                 entry["llm_policy"]["propose_effort"] = eff
++            # A fallback sent with record off (never routable to an adapter) differs from one sent
++            # with the arm's own record mode only when that mode is not "off" (the mubit arm with
++            # metadata / full). Absent on races from before the rule; an "off" arm keeps pooling.
++            fb_rec = p.get("fallback_record")
++            if fb_rec is not None and entry["record_mode"] not in (None, "off"):
++                entry["llm_policy"]["fallback_record"] = fb_rec
+             gone = [f"{s}={v}" for s, v in sorted(prompts.items()) if s not in steps_used]
+             if gone:
+                 unused[k] = gone
+diff --git a/tests/test_bench.py b/tests/test_bench.py
+index 20f89b8..6d7699c 100644
+--- a/tests/test_bench.py
++++ b/tests/test_bench.py
+@@ -230,7 +230,8 @@ def _reply(payload: Any | None, raw: str | None = None) -> httpx2.Response:
+ 
+ @pytest.mark.parametrize(("record", "header"), [(False, "off"), ("metadata", "metadata"), (True, None)])
+ async def test_researcher_record_mode_reaches_the_wire_on_every_attempt(record: Any, header: str | None) -> None:
+-    """Attempt, retry and Opus fallback all send the arm's x-middleware-record value."""
++    """Attempt and retry send the arm's x-middleware-record value; the Opus fallback always goes
++    out with "off" (never routable to an adapter: review fix, tests/test_review_mubit_fallback.py)."""
+     good = {"failure_class": "divergence", "cause": "lr too high.", "fix": "lower lr."}
+     client, seen = _gateway([_reply(None, raw="not json"), _reply(None, raw="{}"), _reply(good)])
+     r = LLMResearcher(kind=ArmKind.mubit, llm=client, spec=TOY, session_id="s", prompts=DefaultPrompts(),
+@@ -239,7 +240,7 @@ async def test_researcher_record_mode_reaches_the_wire_on_every_attempt(record:
+                               error="loss is NaN")
+     out = await r.diagnose(snap)
+     assert out is not None and len(seen) == 3
+-    assert [q.headers.get(RECORD_HEADER) for q in seen] == [header] * 3
++    assert [q.headers.get(RECORD_HEADER) for q in seen] == [header, header, "off"]
+     await client.aclose()
+ 
+ 
+diff --git a/tests/test_review_mubit_fallback.py b/tests/test_review_mubit_fallback.py
+new file mode 100644
+index 0000000..2642e71
+--- /dev/null
++++ b/tests/test_review_mubit_fallback.py
+@@ -0,0 +1,139 @@
++"""Review fix: the mubit arm's "fallback to Opus" is a provider call, not the same request again.
++
++Before the fix the first try, the retry and the fallback were the same request (same model,
++same record mode, same project, same prompt, same adapter header), so a routed adapter that
++answered badly could answer all three; the records still said ``is_fallback`` and cost Opus.
++Now a fallback goes out with ``x-middleware-record: off`` (no task fingerprint: not routable)
++and without adapter-pinning headers. Fake httpx2 transport; the keys are test strings.
++"""
++
++from __future__ import annotations
++
++import json
++from typing import Any
++
++import httpx2
++
++from backend.agent.llm_base import OPUS_MODEL, RECORD_HEADER, REQUEST_ID_HEADER
++from backend.agent.loop import LLMResearcher
++from backend.agent.mock_llm import MockLLM
++from backend.agent.mubit_client import MubitClient, ProjectRouting, call_with_fallback
++from backend.core.types import ArmKind, JudgeOutput, StepType
++from backend.scheduler import llm_policy_of
++from test_busy_machines import SPEC
++
++KEY_A, KEY_B = "test-key-project-a", "test-key-project-b"
++ADAPTER = {"x-adapter-id": "ad_lane_1"}
++ROUTING = ProjectRouting.from_dict({
++    "default": "A", "keys": {"A": "MUBIT_API_KEY", "B": "MUBIT_API_KEY_B"},
++    "routes": {"mubit": {"judge_improvement": "B"}},
++    "adapter_headers": {"mubit": {"judge_improvement": ADAPTER}},
++})
++GOOD = {"verdict": "valid", "reason": "Splits are distinct."}
++
++
++def _reply(payload: Any = None, raw: str | None = None) -> httpx2.Response:
++    body = {"id": "msg", "type": "message", "role": "assistant", "model": OPUS_MODEL,
++            "content": [{"type": "text", "text": raw if raw is not None else json.dumps(payload)}],
++            "stop_reason": "end_turn", "stop_sequence": None, "usage": {"input_tokens": 10, "output_tokens": 5}}
++    return httpx2.Response(200, json=body, headers={REQUEST_ID_HEADER: "mreq_t"})
++
++
++class Gateway:
++    def __init__(self, responses: list[httpx2.Response]) -> None:
++        self.responses = list(responses)
++        self.requests: list[httpx2.Request] = []
++
++    def handler(self, request: httpx2.Request) -> httpx2.Response:
++        self.requests.append(request)
++        return self.responses.pop(0)
++
++    def client(self) -> MubitClient:
++        http = httpx2.AsyncClient(transport=httpx2.MockTransport(self.handler))
++        return MubitClient(api_key=KEY_A, project_keys={"B": KEY_B}, projects=ROUTING, http_client=http)
++
++    def sent(self) -> list[tuple[str | None, str | None]]:
++        return [(q.headers.get(RECORD_HEADER), q.headers.get("x-adapter-id")) for q in self.requests]
++
++    def keys(self) -> list[str | None]:
++        out: list[str | None] = []
++        for q in self.requests:
++            auth = q.headers.get("authorization", "")
++            out.append(q.headers.get("x-api-key") or (auth.removeprefix("Bearer ") if auth else None))
++        return out
++
++
++async def test_a_fallback_call_is_sent_record_off_without_adapter_headers() -> None:
++    gw = Gateway([_reply(GOOD), _reply(GOOD)])
++    c = gw.client()
++    _, first = await c.call(StepType.judge_improvement, "S", "u", JudgeOutput, ArmKind.mubit, "s", "metadata")
++    _, fb = await c.call(StepType.judge_improvement, "S", "u", JudgeOutput, ArmKind.mubit, "s", "metadata",
++                         is_fallback=True, model=OPUS_MODEL)
++    assert gw.sent() == [("metadata", "ad_lane_1"), ("off", None)]
++    assert gw.keys() == [KEY_B, KEY_B]                  # the routed project's key, never another project's
++    assert fb.is_fallback and not fb.recorded and fb.mubit_project == "B" and fb.valid
++    await c.aclose()
++
++
++async def test_a_full_recording_arm_also_falls_back_with_record_off() -> None:
++    gw = Gateway([_reply(GOOD)])
++    c = gw.client()
++    await c.call(StepType.judge_improvement, "S", "u", JudgeOutput, ArmKind.mubit, "s", True, is_fallback=True)
++    assert gw.sent() == [("off", None)]
++    await c.aclose()
++
++
++async def test_call_with_fallback_sends_the_third_attempt_to_the_provider() -> None:
++    gw = Gateway([_reply(raw="not json"), _reply(raw="{}"), _reply(GOOD)])
++    c = gw.client()
++    out, recs = await call_with_fallback(c, StepType.judge_improvement, "S", "u", JudgeOutput, ArmKind.mubit, "s",
++                                         "metadata")
++    assert out is not None and [r.is_fallback for r in recs] == [False, False, True]
++    assert gw.sent() == [("metadata", "ad_lane_1"), ("metadata", "ad_lane_1"), ("off", None)]
++    await c.aclose()
++
++
++async def test_the_researcher_policy_falls_back_record_off_and_says_so_in_the_manifest() -> None:
++    gw = Gateway([_reply(raw="not json"), _reply(raw="not json"), _reply(GOOD)])
++    c = gw.client()
++    r = LLMResearcher(kind=ArmKind.mubit, llm=c, spec=SPEC, session_id="s", fallback_model=OPUS_MODEL,
++                      record="metadata")
++    parsed, recs = await r._call(StepType.judge_improvement, "u", JudgeOutput)
++    assert parsed is not None and len(recs) == 3 and recs[-1].is_fallback
++    assert gw.sent() == [("metadata", "ad_lane_1"), ("metadata", "ad_lane_1"), ("off", None)]
++    assert llm_policy_of(r)["fallback_record"] == "off"
++    mock = LLMResearcher(kind=ArmKind.opus, llm=MockLLM(spec=SPEC), spec=SPEC, session_id="s",
++                         fallback_model=OPUS_MODEL)
++    assert llm_policy_of(mock)["fallback_record"] is None
++    await c.aclose()
++
++
++def test_the_fingerprint_marks_the_rule_only_on_arms_that_record() -> None:
++    import importlib.util
++    import sys
++    from pathlib import Path
++
++    if "analyze_races" not in sys.modules:
++        p = Path(__file__).resolve().parents[1] / "scripts" / "analyze_races.py"
++        spec = importlib.util.spec_from_file_location("analyze_races", p)
++        assert spec and spec.loader
++        mod = importlib.util.module_from_spec(spec)
++        sys.modules["analyze_races"] = mod
++        spec.loader.exec_module(mod)
++    ar = sys.modules["analyze_races"]
++    pol = {"researcher": "LLMResearcher", "max_retries": 1, "has_fallback": True, "fallback_model": OPUS_MODEL,
++           "prompts": "judge_improvement=v1:5c1d3cfd2941"}
++
++    def rows(fallback_record: str | None) -> dict[str, Any]:
++        p = {**pol, **({"fallback_record": fallback_record} if fallback_record else {})}
++        per = {"record_modes": {"opus": "off", "mubit": "metadata"}}
++        return {"races": [{"id": "r", "fairness": {"per_arm": {"opus": per, "mubit": per},
++                                                   "llm_policy": {"opus": p, "mubit": p}}}],
++                "arms": [{"id": k, "kind": k, "model": OPUS_MODEL, "llm_mode": "mubit"} for k in ("opus", "mubit")],
++                "llm_calls": [{"step_type": "judge_improvement"}], "experiments": []}
++
++    old, new = ar.fairness_fingerprint(rows(None)), ar.fairness_fingerprint(rows("off"))
++    assert "fallback_record" not in new["arms"]["opus"]["llm_policy"]          # record off arm: unchanged
++    assert new["arms"]["mubit"]["llm_policy"]["fallback_record"] == "off"      # metadata arm: a new setup
++    assert old["arms"]["opus"] == new["arms"]["opus"]
++    assert ar.fingerprint_id(old) != ar.fingerprint_id(new)

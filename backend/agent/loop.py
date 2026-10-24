@@ -197,14 +197,22 @@ class RepoPrompts:
     """The versioned prompts in ``backend/agent/prompts`` (system text from the ``.md``
     files, user messages from ``build.py``, which inserts the CACHE_BREAK marker)."""
 
-    def __init__(self) -> None:
+    def __init__(self, propose_version: str | None = None) -> None:
+        """``propose_version``: the propose_experiments prompt version (default: CURRENT_VERSION,
+        i.e. the frozen v1). A diff version (v2/v3, lean drafts) changes the system prompt, the
+        wire schema and the reply schema; replies are expanded to full configs in ``expand_proposals``."""
         self._P = importlib.import_module("backend.agent.prompts")
         self._B = importlib.import_module("backend.agent.prompts.build")
-        self.version = ",".join(f"{s.value}={self._P.CURRENT_VERSION[s]}:{self._P.prompt_fingerprint(s)}"
+        self.propose_version: str = propose_version or self._P.CURRENT_VERSION[StepType.propose_experiments]
+        self._P.prompt_path(StepType.propose_experiments, self.propose_version).stat()  # fail fast on a typo
+        self.version = ",".join(f"{s.value}={self._ver(s)}:{self._P.prompt_fingerprint(s, self._ver(s))}"
                                 for s in StepType)
 
+    def _ver(self, step: StepType) -> str:
+        return self.propose_version if step is StepType.propose_experiments else self._P.CURRENT_VERSION[step]
+
     def system(self, step: StepType) -> str:
-        return self._P.load_system_prompt(step)
+        return self._P.load_system_prompt(step, self._ver(step))
 
     def _row(self, e: ExperimentSnapshot) -> Any:
         note: str | None = None
@@ -238,16 +246,70 @@ class RepoPrompts:
         return self._B.build_judge_user(spec, c)
 
     def wire_schema(self, step: StepType, spec: TargetSpec) -> dict[str, Any]:
-        return self._B.wire_schema_for(step, spec)
+        return self._B.wire_schema_for(step, spec, self.propose_version)
+
+    def propose_schema(self) -> type[BaseModel] | None:
+        """Reply schema for propose (None: the researcher's default ``ProposeOutput``)."""
+        return self._B.ProposeDiffOutput if self._B.is_diff_version(self.propose_version) else None
+
+    def expand_proposals(self, spec: TargetSpec, digest: ResearchDigest, parsed: Any) -> Any:
+        """A diff reply -> full configs, relative to the 'current best config' the user message showed."""
+        if not isinstance(parsed, self._B.ProposeDiffOutput):
+            return parsed
+        base = self._B.propose_base_config(spec, [self._row(e) for e in digest.history])
+        return self._B.expand_diff(parsed, base)
 
 
-def load_prompts() -> PromptSet:
-    """``RepoPrompts`` (backend/agent/prompts) if importable, else ``DefaultPrompts``."""
+def load_prompts(propose_version: str | None = None) -> PromptSet:
+    """``RepoPrompts`` (backend/agent/prompts) if importable, else ``DefaultPrompts``.
+    ``propose_version`` selects a propose prompt version (default: the current, frozen v1)."""
     try:
-        return RepoPrompts()
+        return RepoPrompts(propose_version)
     except (ImportError, AttributeError, OSError) as e:
         log.warning("backend.agent.prompts unavailable (%s); using DefaultPrompts", e)
         return DefaultPrompts()
+
+
+def apply_propose_setup(researcher: Any, version: str, effort: str) -> None:
+    """Switch one arm's planner (propose_experiments) to prompt ``version`` at ``effort``: the
+    lean planner engine feature (D46) and the prompt-ablation arms (``configs.ARM_PROPOSE_VARIANTS``).
+    Only the propose prompt and its effort change; every other step keeps its prompt and
+    effort, and the user message builder is the same (what the planner sees does not change).
+    The effort is set on every client of the arm that has per-step configs (the primary client
+    and a separate fallback client), so retries and fallbacks send the same effort. A client
+    without step configs (the mock LLM) ignores effort. Idempotent."""
+    researcher.prompts = load_prompts(version)
+    seen: set[int] = set()
+    for attr in ("llm", "fallback_llm"):
+        client = getattr(researcher, attr, None)
+        sc = getattr(client, "step_configs", None)
+        if client is None or not isinstance(sc, dict) or id(client) in seen:
+            continue
+        seen.add(id(client))
+        cur = sc.get(StepType.propose_experiments)
+        if cur is None:
+            continue
+        sc[StepType.propose_experiments] = type(cur)(effort=effort, max_tokens=cur.max_tokens)
+
+
+def propose_setup_of(researcher: Any) -> dict[str, Any]:
+    """What this arm's planner actually sends: ``{"prompt_version", "prompt_fingerprint",
+    "effort"}``. ``prompt_version`` is None for a prompt set without versions (the built-in
+    ``DefaultPrompts``, tests only); ``effort`` is None when the client has no per-step configs
+    (the mock LLM and test fakes: they ignore effort)."""
+    prompts = getattr(researcher, "prompts", None)
+    version = getattr(prompts, "propose_version", None)
+    fp = None
+    if version is not None:
+        try:
+            from backend.agent.prompts import prompt_fingerprint
+
+            fp = prompt_fingerprint(StepType.propose_experiments, version)
+        except Exception:  # noqa: BLE001 - informational only
+            fp = None
+    sc = getattr(getattr(researcher, "llm", None), "step_configs", None)
+    cur = sc.get(StepType.propose_experiments) if isinstance(sc, dict) else None
+    return {"prompt_version": version, "prompt_fingerprint": fp, "effort": getattr(cur, "effort", None)}
 
 
 def _wire_schema(prompts: Any, step: StepType, spec: TargetSpec) -> dict[str, Any] | None:
@@ -370,9 +432,14 @@ class LLMResearcher:
     async def propose(self, digest: ResearchDigest, k: int) -> list[Proposal]:
         user = self.prompts.propose_user(self.spec, digest, k)
         out: list[Proposal] = []
+        schema_fn = getattr(self.prompts, "propose_schema", None)
+        schema = (schema_fn() if callable(schema_fn) else None) or self.propose_schema
+        expand = getattr(self.prompts, "expand_proposals", None)
 
         def check(parsed: Any) -> tuple[str | None, list[str]]:
             out.clear()
+            if expand is not None:
+                parsed = expand(self.spec, digest, parsed)  # diff reply -> full configs (v1: unchanged)
             exps = getattr(parsed, "experiments", None) or []
             for item in exps[:k]:
                 cfg = item.config.model_dump() if isinstance(item.config, BaseModel) else dict(item.config)
@@ -385,7 +452,7 @@ class LLMResearcher:
                 return "no valid config in reply", []
             return None, [p.experiment_id for p in out]
 
-        parsed, records = await self._call(StepType.propose_experiments, user, self.propose_schema, check,
+        parsed, records = await self._call(StepType.propose_experiments, user, schema, check,
                                            extra={"k": k})
         if parsed is None:
             return []

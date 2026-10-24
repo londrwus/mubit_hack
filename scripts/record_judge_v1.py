@@ -68,7 +68,10 @@ OUT = REPO / "data" / "gates" / "judge_v1" / "record"
 INPUTS = OUT / "inputs.jsonl"
 CALLS = {"first": OUT / "calls.first.B.record-full.jsonl",
          "recheck": OUT / "calls.recheck.A.record-off.jsonl",
-         "rest": OUT / "calls.rest.B.record-full.jsonl"}
+         "rest": OUT / "calls.rest.B.record-full.jsonl",
+         # R55 hedge: the same inputs again into a fresh workspace C, if B's training stalls
+         "hedge": OUT / "calls.hedge.C.record-full.jsonl"}
+PROJECT_KEYS = {"A": "MUBIT_API_KEY", "B": "MUBIT_API_KEY_B", "C": "MUBIT_API_KEY_C"}
 TRAP_SET = REPO / "data" / "trap_set" / "trap_set_v1.jsonl"
 NOISE_SET = REPO / "data" / "noise_set" / "noise_set_v1.jsonl"
 BENCH_DB = REPO / "data" / "bench" / "bench.db"
@@ -304,16 +307,17 @@ def preflight() -> tuple[str, dict[str, Any]]:
 
 
 def set_project_key(project: str) -> None:
-    """Point MUBIT_API_KEY (this process only) at project A or B. The key is never printed."""
+    """Point MUBIT_API_KEY (this process only) at project A, B or C. The key is never printed."""
     from dotenv import dotenv_values
 
     env = dotenv_values(REPO / ".env")
-    name = "MUBIT_API_KEY_B" if project == "B" else "MUBIT_API_KEY"
+    name = PROJECT_KEYS[project]
     key = env.get(name)
     if not key:
         raise SystemExit(f"{name} missing from .env")
-    if project == "B" and key == env.get("MUBIT_API_KEY"):
-        raise SystemExit("MUBIT_API_KEY_B equals MUBIT_API_KEY; refusing")
+    others = {k: env.get(v) for k, v in PROJECT_KEYS.items() if k != project}
+    if project != "A" and key in others.values():
+        raise SystemExit(f"{name} equals another project's key; refusing")
     os.environ["MUBIT_API_KEY"] = key
 
 
@@ -331,9 +335,9 @@ async def run(phase: str, concurrency: int, yes: bool, limit: int | None = None)
         rc = recheck_result()
         if not rc["pass"]:
             raise SystemExit(f"recheck has not passed ({rc['full_agree']}/{rc['n']}); refusing to record the rest")
-        todo = [r for r in inputs if r["id"] not in first]
+        todo = inputs if phase == "hedge" else [r for r in inputs if r["id"] not in first]
     record = "off" if phase == "recheck" else "full"
-    project = "A" if phase == "recheck" else "B"
+    project = {"recheck": "A", "hedge": "C"}.get(phase, "B")
     if record == "full" and not yes:
         raise SystemExit("recording needs --yes")
     set_project_key(project)
@@ -342,7 +346,8 @@ async def run(phase: str, concurrency: int, yes: bool, limit: int | None = None)
     todo = [r for r in todo if r["id"] not in done]
     if limit:
         todo = todo[:limit]
-    spent = total_spend()
+    # the hedge has its own cap: it repeats the B recording, so B's spend doesn't count against it
+    spent = sum(r.get("cost_usd") or 0.0 for r in _jsonl(path)) if phase == "hedge" else total_spend()
     print(f"phase {phase}: project {project}, record {record}, {len(todo)} to run, prompt {VERSION}:"
           f"{prompt_fingerprint(STEP)}, spent so far ${spent:.4f} (cap ${LLM_CAP_USD})", flush=True)
     client = MubitClient(arm_models={ArmKind.opus: OPUS})

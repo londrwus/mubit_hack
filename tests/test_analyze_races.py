@@ -290,12 +290,15 @@ def test_fairness_fingerprint(tmp_path: Path) -> None:
     assert fps["f0"]["arms"]["opus"]["record_mode"] == "off" and fps["f0"]["arms"]["optuna"]["engine_features"] == []
     diff = ar.fingerprint_diff(fps["f0"], fps["f2"])
     assert "arms.mubit.llm_policy.prompts.judge_improvement: v0:623366123052 vs v1:5c1d3cfd2941" in diff
-    # no manifest -> None; analyse warns when one target pools unlike setups
+    # no manifest -> None; analyse never pools unlike setups: f0 + f1 (same fingerprint) are one
+    # report, f2 (a different judge prompt) is its own, and both say the target has two setups
     assert ar.fairness_fingerprint({"races": [{"id": "x"}], "arms": []}) is None
     kept, _ = ar.screen(list(races.values()))
-    (rep,) = ar.analyse(kept, target_values=TV)
-    assert any("fairness fingerprint" in w and "f2" in w for w in rep.warnings)
-    assert not any("fairness fingerprint" in w and "f1" in w for w in rep.warnings)
+    reps = ar.analyse(kept, target_values=TV)
+    assert sorted(sorted(r.race_ids) for r in reps) == [["f0", "f1"], ["f2"]]
+    assert all(r.n_setups == 2 and r.setup_id == ids[r.race_ids[0]] for r in reps)
+    assert all(any("2 different setups" in w for w in r.warnings) for r in reps)
+    assert not any("fairness fingerprint" in w and "differs" in w for r in reps for w in r.warnings)
 
 
 def test_runtime_multiplier_inferred_from_run_refs() -> None:

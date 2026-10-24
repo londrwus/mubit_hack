@@ -38,12 +38,20 @@ answered). t0 is taken only after that, so pre-warm time is never busy/idle/race
 pin is removed in a ``finally`` (also on Ctrl-C or an error). If the pool cannot be warmed
 the race is refused (exit 2).
 
-Engine features (D36, D40, D43, D44; ``RaceConfig.features_for``): the Opus arm is the standard
-agent; ``opus_bm`` ("Busy Machines with Opus") and ``mubit`` ("Mubit + Busy Machines") add the
-judge policy only (LLM for leakage + calibrated seed-spread rule for noise; it decides the
-shipped model, never what the planner sees); median early stopping is off for every arm and
-target (D43), Optuna included. The flags are printed in the plan, gated by a pre-flight check
-(the arms that should match do) and stored in the fairness manifest.
+Engine features (D36, D40, D43, D44, D46; ``RaceConfig.features_for``): the Opus arm is the
+standard agent (plain v1 loop, effort medium); ``opus_bm`` ("Busy Machines with Opus") and
+``mubit`` ("Mubit + Busy Machines") add the lean planner (propose prompt v2 "changes only" at
+effort low, R62/R63), backfill (a no-AI sampler fills idle slots while the AI thinks) and the
+judge policy (LLM for leakage + calibrated seed-spread rule for noise; it decides the shipped
+model, never what the planner sees); median early stopping is off for every arm and target
+(D43), Optuna included. The flags and each arm's planner prompt version + effort are printed in
+the plan, gated by pre-flight checks (the arms that should match do; the only prompt difference
+is the declared lean planner) and stored in the fairness manifest. A preset may also switch on a
+preset-declared feature per arm with its parameters (``RaceConfig.feature_params``): the planner
+cadence (D47, ``lcbench-wide-bm-15m``: Busy Machines calls the AI planner at most every 90 s, the
+no-AI sampler keeps GPUs busy in between); off by default everywhere, printed in the plan and
+recorded in the manifest. ``RaceConfig.surrogate_runtime_mult`` sets BUSY_SURROGATE_RUNTIME_MULT
+for the whole process before any runner is built (refused if the environment says otherwise).
 
 Ablation presets (``mode="ablation"``, e.g. ``rl-planner-ablation``: Opus vs ``fast`` =
 claude-haiku-5-5 in the same loop, a smaller faster model, NOT a Mubit adapter) get the same
@@ -78,10 +86,14 @@ sys.path.insert(0, str(ROOT))
 from backend.agent.prompts import is_frozen  # noqa: E402
 from backend.benchmark.configs import (  # noqa: E402
     ABLATION_ONLY_ARMS,
+    ARM_PROPOSE_VARIANTS,
     BENCH_SEEDS,
     FAST_ARM_LABEL,
+    LEAN_ARM_LABEL,
+    PROMPT_ABLATION_ARMS,
     PRESETS,
     RaceConfig,
+    apply_surrogate_runtime_mult,
     estimate_gpu_cost_usd,
 )
 from backend.core.types import ArmKind, StepType  # noqa: E402
@@ -104,7 +116,7 @@ MODAL_MAX_CONTAINERS = 100
 DRY_RUN_MAX_SLOTS = 2
 DRY_RUN_MAX_MINUTES = 2.0
 # Checks that only inform (a provisional goal; an ablation label); every other check gates ``run``.
-INFO_ONLY_CHECKS = frozenset({"target_value frozen", "ablation (never a headline race)"})
+INFO_ONLY_CHECKS = frozenset({"target_value frozen", "ablation (never a headline race)", "planner prompt per arm"})
 
 
 class Refused(RuntimeError):
@@ -195,6 +207,7 @@ def checks(cfg: RaceConfig, goals: Mapping[str, float] | None = None, *,
     if goal is not None:
         out.append(("goal set", True, f"{goal.value:g} ({goal.source}{', PROVISIONAL' if goal.provisional else ''})"))
     out.append(engine_check(cfg))
+    out.append(("planner prompt per arm", True, planner_note(cfg)))
     guard = cfg.max_estimated_gpu_usd
     out.append(("GPU $ estimate within guard", guard is None or est <= guard,
                 f"${est:.2f} per seed (guard {guard})"))
@@ -213,17 +226,69 @@ def checks(cfg: RaceConfig, goals: Mapping[str, float] | None = None, *,
         out.append(("fits Modal Starter caps", m <= MODAL_MAX_GPUS,
                     f"{m} {spec.hardware} at once ({n} slots + {m - n} spare; cap {MODAL_MAX_GPUS}, "
                     f"shared with anything else running)"))
+    if cfg.surrogate_runtime_mult is not None:
+        from workers.runners.surrogate import ENV_MULTIPLIER
+
+        raw = os.environ.get(ENV_MULTIPLIER)
+        ok = not raw or math.isclose(float(raw), float(cfg.surrogate_runtime_mult), rel_tol=0, abs_tol=1e-12)
+        out.append(("surrogate pacing (process-wide)", ok,
+                    f"{ENV_MULTIPLIER}={cfg.surrogate_runtime_mult:g} for every arm (run_ref ':x"
+                    f"{cfg.surrogate_runtime_mult:g}')" + ("" if ok else f"; the environment says {raw}")))
+    cad = {a.value: cfg.min_propose_interval_for(a) for a in cfg.llm_arms if cfg.min_propose_interval_for(a)}
+    if cad:
+        out.append(("planner cadence", True, "; ".join(
+            f"{a}: at most one propose call per {v:g} s (between call starts), K = min("
+            f"{cfg.max_proposals_per_call}, LLM demand), judge not throttled" for a, v in sorted(cad.items()))))
     if cfg.strict:
         out.append(("record modes", all(m != "full" for m in cfg.record_modes().values()),
                     ", ".join(f"{a}={m}" for a, m in cfg.record_modes().items())))
-    if cfg.is_ablation or any(a in ABLATION_ONLY_ARMS for a in cfg.arms):
+    if cfg.is_ablation or is_prompt_ablation(cfg) or any(a in ABLATION_ONLY_ARMS for a in cfg.arms):
         out.append(("ablation (never a headline race)", True, ablation_note(cfg)))
     return out
+
+
+def apply_propose_variants(cfg: RaceConfig, deps: list[Any]) -> None:
+    """Every arm that declares a planner variant (``RaceConfig.propose_variant_for``: the
+    ``lean_planner`` engine feature, D46, or a prompt-ablation arm such as lean, both = propose
+    v2 + effort low): swap its propose prompt version and effort. ``app.default_arm_deps``
+    already does this; re-applying is idempotent (kept for deps built elsewhere). The mock LLM
+    answers diff-form prompts too, so dry runs take the same path (it ignores effort)."""
+    from backend.agent.loop import apply_propose_setup
+
+    for d in deps:
+        variant = cfg.propose_variant_for(d.kind)
+        if variant is not None:
+            apply_propose_setup(d.researcher, *variant)
+
+
+def planner_note(cfg: RaceConfig) -> str:
+    """Per LLM arm: the planner prompt version + effort it runs and why (plan, checks)."""
+    from backend.agent.prompts import prompt_fingerprint
+
+    parts = []
+    for a, st in cfg.propose_setups().items():
+        fp = prompt_fingerprint(StepType.propose_experiments, st["prompt_version"])
+        why = {"standard": "standard", "lean_planner": "lean planner",
+               "ablation arm": f"{LEAN_ARM_LABEL}, ablation"}.get(st["source"], st["source"])
+        parts.append(f"{a}: propose {st['prompt_version']} ({fp}), effort {st['effort']} [{why}]")
+    return "; ".join(parts) or "no LLM arm"
+
+
+def prompt_version_note(step: StepType) -> str:
+    from backend.agent.prompts import CURRENT_VERSION, prompt_fingerprint
+
+    return f"{CURRENT_VERSION[step]} ({prompt_fingerprint(step)})"
+
+
+def is_prompt_ablation(cfg: RaceConfig) -> bool:
+    return any(a in PROMPT_ABLATION_ARMS for a in cfg.arms)
 
 
 def ablation_note(cfg: RaceConfig) -> str:
     """How an ablation race is labelled everywhere (plan, checks)."""
     arms = [f"{a.value} = {cfg.model_for(a)} ({FAST_ARM_LABEL})" for a in cfg.arms if a in ABLATION_ONLY_ARMS]
+    arms += [f"{a.value} = {cfg.model_for(a)} ({LEAN_ARM_LABEL}: propose {ARM_PROPOSE_VARIANTS[a][0]}, "
+             f"effort {ARM_PROPOSE_VARIANTS[a][1]})" for a in cfg.arms if a in PROMPT_ABLATION_ARMS]
     return (f"mode={cfg.mode}; " + ("; ".join(arms) if arms else "no ablation-only arm")
             + f"; stored in {ABLATION_DB.relative_to(ROOT)}, refused by scripts/headline.py")
 
@@ -273,6 +338,7 @@ def build_races(preset: str, *, seeds: list[int] | None = None, minutes: float |
         upd["arms"] = list(arms)
         upd["record_mode"] = {k: v for k, v in base.record_mode.items() if k in arms}
         upd["engine_features"] = {k: v for k, v in base.engine_features.items() if k in arms}
+        upd["feature_params"] = {k: v for k, v in base.feature_params.items() if k in arms}
     if dry_run:
         # The surrogate runner is in-process and $0, so a surrogate preset keeps it (its pacing
         # is what the median rule reads); every other preset swaps in the local CPU runner.
@@ -307,18 +373,51 @@ def build_races(preset: str, *, seeds: list[int] | None = None, minutes: float |
 # --------------------------------------------------------------------------- live pre-flight (paid runs)
 
 
+def mubit_key_checks(cfg: RaceConfig, *, routing: Any = None, load_key: Any = None) -> list[tuple[str, bool, str]]:
+    """Every Mubit project the race's LLM arms route a step to (``data/mubit_projects.json``,
+    D38) has a key, and no two projects share one: the same rule ``MubitClient._client_for``
+    enforces lazily, on the first call. Without this a missing (or duplicated) MUBIT_API_KEY_B
+    only shows up mid-race: every mubit-arm judge call fails at $0, the judge policy turns the
+    missing verdict into 'unsure', and under accept_unsure the seed-spread rule alone decides
+    what ships. Keys are only loaded, never printed (the notes name env vars)."""
+    from backend.agent.mubit_client import load_mubit_api_key, load_project_routing
+
+    load_key = load_key or load_mubit_api_key
+    try:
+        routing = routing or load_project_routing()
+    except Exception as e:  # noqa: BLE001
+        return [("Mubit project routing", False, f"{type(e).__name__}: {str(e)[:200]}")]
+    projects = {routing.default} | {routing.project_for(a, s) for a in cfg.llm_arms for s in StepType}
+    out: list[tuple[str, bool, str]] = []
+    keys: dict[str, str] = {}
+    for p in sorted(projects):
+        var = routing.keys.get(p)
+        if var is None:
+            out.append((f"Mubit project {p} key", False, f"project {p} has no key entry in the routing"))
+            continue
+        users = sorted({f"{a.value}/{s.value}" for a in cfg.llm_arms for s in StepType
+                        if routing.project_for(a, s) == p})
+        used = f"project {p}: {', '.join(users)}" if users else f"project {p} (default)"
+        try:
+            keys[p] = load_key(env_var=var)
+            out.append((f"{var} available", True, f"env or .env; {used}"))
+        except Exception as e:  # noqa: BLE001
+            out.append((f"{var} available", False, f"{e}; {used}"))
+    shared = [(a, b) for i, a in enumerate(sorted(keys)) for b in sorted(keys)[i + 1:] if keys[a] == keys[b]]
+    if len(keys) > 1:
+        out.append(("Mubit project keys distinct", not shared,
+                    "; ".join(f"{routing.keys[a]} equals {routing.keys[b]} (projects {a} and {b})" for a, b in shared)
+                    or f"{len(keys)} projects, {len(keys)} different keys"))
+    return out
+
+
 def live_checks(cfg: RaceConfig) -> list[tuple[str, bool, str]]:
-    """Free checks that touch the outside world: the Mubit key exists and the deployed Modal
-    app has the function this target runs on. Nothing is deployed or launched."""
+    """Free checks that touch the outside world: every routed Mubit project key exists (and no
+    two are equal) and the deployed Modal app has the function this target runs on. Nothing is
+    deployed or launched."""
     out: list[tuple[str, bool, str]] = []
     if cfg.llm == "mubit":
-        try:
-            from backend.agent.mubit_client import load_mubit_api_key
-
-            load_mubit_api_key()
-            out.append(("MUBIT_API_KEY available", True, "env or .env"))
-        except Exception as e:  # noqa: BLE001
-            out.append(("MUBIT_API_KEY available", False, str(e)))
+        out.extend(mubit_key_checks(cfg))
     if cfg.runner == "modal":
         spec = get_target(cfg.target).spec
         try:
@@ -397,6 +496,7 @@ async def run_race(cfg: RaceConfig, db: Any, out_dir: Path, *, verbose: bool = F
     race_id = new_id()
     spec = race_spec(cfg)  # the race's goal applied; researchers and metrics see the same spec
     deps = [default_arm_deps(race_id, cfg, spec, kind) for kind in cfg.arms]
+    apply_propose_variants(cfg, deps)
     bus = EventBus()
     if verbose:
         t_start = time.time()
@@ -537,6 +637,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 2
     cfg = cfgs[0]
     res = checks(cfg, goals, goal=goal)
+    if gating_ok(res):
+        try:
+            apply_surrogate_runtime_mult(cfg)   # process-wide, before any runner is built
+        except ValueError as e:
+            print(f"refused: {e}", file=sys.stderr)
+            return 2
     for name, ok, note in res:
         print(f"[{'ok' if ok else 'NO'}] {name}: {note}")
     if not gating_ok(res):
@@ -557,8 +663,25 @@ def cmd_run(args: argparse.Namespace) -> int:
           + (f"median rule ({', '.join(stops)}) at {[f'{f:.0%}' for f in cfg.median_stop_fractions]} of the "
              f"run budget, >= {cfg.median_stop_min_completed} completed runs" if stops
              else "early stopping off for every arm (D43)"))
+    if cfg.feature_params:
+        print(f"      feature parameters {cfg.feature_params_map()}")
+    if cfg.surrogate_runtime_mult is not None:
+        print(f"      surrogate pacing x{cfg.surrogate_runtime_mult:g} for the whole process (every arm, every run_ref)")
     print(f"      models {{{', '.join(f'{a.value}: {cfg.model_for(a)}' for a in cfg.llm_arms)}}}")
-    if cfg.is_ablation or any(a in ABLATION_ONLY_ARMS for a in cfg.arms):
+    print(f"      planner prompts {planner_note(cfg)}; judge {prompt_version_note(StepType.judge_improvement)} "
+          "on every LLM arm")
+    if args.dry_run:
+        base = PRESETS[args.preset]
+        if base.runner != "surrogate":
+            b_spec = get_target(base.target).spec
+            b_n = len(base.arms) * base.gpus_per_arm
+            b_m = b_n + (base.prewarm_spare if base.prewarm else 0)
+            b_est = estimate_gpu_cost_usd(base, 0.0 if base.runner == "local" else price_per_s(b_spec.hardware))
+            print(f"      the paid preset ({args.preset}): {len(base.arms)} arms x {base.gpus_per_arm} slots/arm, "
+                  f"{b_m} {b_spec.hardware} containers at once incl. pre-warm spare ({b_n} slots + {b_m - b_n}; "
+                  f"cap {MODAL_MAX_CONTAINERS if b_spec.hardware == 'CPU' else MODAL_MAX_GPUS}), "
+                  f"GPU $ <= {b_est:.2f} per seed (guard {base.max_estimated_gpu_usd})")
+    if cfg.is_ablation or is_prompt_ablation(cfg) or any(a in ABLATION_ONLY_ARMS for a in cfg.arms):
         print(f"      ABLATION, NEVER A HEADLINE RACE: {ablation_note(cfg)}")
     print(f"      goal {spec.metric} {'<=' if spec.direction == 'min' else '>='} {goal.value:g} "
           f"({goal.source}{', PROVISIONAL' if goal.provisional else ''})")
@@ -593,7 +716,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     from backend.scheduler import AsymmetricRaceError
 
     default_db, default_dir = (DRYRUN_DB, DRYRUN_DIR) if mock else (
-        (ABLATION_DB, ABLATION_DIR) if cfg.is_ablation else (BENCH_DB, None))
+        (ABLATION_DB, ABLATION_DIR) if cfg.is_ablation or is_prompt_ablation(cfg) else (BENCH_DB, None))
     db_path = Path(args.db) if args.db else default_db
     out_dir = Path(args.out_dir) if args.out_dir else (default_dir or db_path.parent)
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -607,14 +730,20 @@ def cmd_run(args: argparse.Namespace) -> int:
             race_id, path, status, manifest, engine_sums = run_bounded(
                 run_race(c, db, out_dir, verbose=args.verbose, progress_every_s=args.progress_s))
             print(f"race {race_id} {status}; fairness identical={manifest['identical']} "
-                  f"llm_policy_identical={manifest['llm_policy_identical']}; "
+                  f"llm_policy_identical={manifest['llm_policy_identical']} "
+                  f"llm_policy_ok (identical except the declared lean planner)={manifest.get('llm_policy_ok')}; "
                   f"record modes {{{', '.join(f'{k}: {v['record_mode']}' for k, v in manifest['differs_only_in'].items())}}}")
             print(f"db: {db_path}  export: {path}")
             eng = manifest.get("engine") or {}
             print(f"engine features {eng.get('features')}; checks: {'; '.join(eng.get('checks') or []) or '-'}")
+            prop = manifest.get("propose") or {}
+            print("planner sent per arm: " + "; ".join(
+                f"{k}: {v['actual'].get('prompt_version')} ({v['actual'].get('prompt_fingerprint')}), effort "
+                f"{v['actual'].get('effort') or 'n/a (mock LLM)'}" for k, v in (prop.get("per_arm") or {}).items())
+                + f"; checks: {'; '.join(prop.get('checks') or []) or '-'}")
             if mock:
                 print("MOCK NUMBERS (mock LLM, laptop CPU, $0) - not a benchmark result")
-            elif c.is_ablation:
+            elif c.is_ablation or is_prompt_ablation(c):
                 print(f"ABLATION (never a headline result): {ablation_note(c)}")
             elif c.provisional:
                 print("PROVISIONAL goal (not frozen): time/$ to goal are not headline numbers")

@@ -21,6 +21,12 @@ Definitions (benchmark.md "Metrics"):
   experiment whose quality reaches ``target_value``.
 - **$-to-target** = GPU $ accrued in [race start, that moment] + LLM $ of calls completed
   by then.
+- **Shipped model quality** = quality of the arm's last accepted best, EXCEPT when that run is a
+  ground-truth trap on a target whose trap selects on the held-out split itself
+  (``TRAP_CONTAMINATES_HELDOUT``, e.g. lcbench ``checkpoint_selection="best_test"``): then its
+  held-out score is contaminated (too good) and is withheld (None, ``shipped_is_fake``), so
+  accepting a fake can never look like a better shipped model. On the other targets a trap
+  run's held-out score is honest and is kept: it shows the cost of shipping a fake.
 """
 
 from __future__ import annotations
@@ -47,6 +53,27 @@ def quality(exp: Mapping[str, Any]) -> float | None:
         return None
     s = exp.get("score")
     return float(s) if s is not None and math.isfinite(float(s)) else None
+
+
+# Targets whose contamination trap selects on (or tunes on) the split ``heldout_score`` is measured
+# on, so a trap run's held-out score is itself contaminated:
+# - lcbench: ``checkpoint_selection="best_test"`` keeps the epoch with the best TEST score, and
+#   ``heldout_score`` is that test score (workers/targets/lcbench.py).
+# Not listed (their held-out split is never used by the trap, so a trap run's held-out score is
+# honest): lm (trap adds the val shard; held-out = test shard 9), rl (trap evaluates on training
+# levels; held-out = unseen levels), cifar (``tune_on_test`` tunes on the reported test half;
+# held-out = the other half).
+TRAP_CONTAMINATES_HELDOUT: frozenset[str] = frozenset({"lcbench"})
+
+
+def shipped_quality(shipped: Mapping[str, Any] | None, target: str | None = None) -> float | None:
+    """Held-out quality of the shipped run; None for a trap run whose held-out score the trap
+    contaminates (``TRAP_CONTAMINATES_HELDOUT``). ``target`` None keeps the plain ``quality``."""
+    if shipped is None:
+        return None
+    if bool(_get(shipped, "is_trap", False)) and target in TRAP_CONTAMINATES_HELDOUT:
+        return None
+    return quality(shipped)
 
 
 def is_counted(exp: Mapping[str, Any]) -> bool:
@@ -114,9 +141,12 @@ def summarize_arm(
     experiments: list[Mapping[str, Any]],
     intervals: list[Mapping[str, Any]],
     llm_calls: list[Mapping[str, Any]],
+    target: str | None = None,
 ) -> tuple[ArmSummary, dict[str, Any]]:
     """Return (ArmSummary, extras). ``extras`` holds the supporting numbers (busy/idle
-    seconds, idle $, trap counts, retries, ...) shown on hover / in the export."""
+    seconds, idle $, trap counts, retries, ...) shown on hover / in the export. ``target``
+    (the target name) decides whether a shipped trap run's held-out score is withheld
+    (``shipped_quality``)."""
     tot = interval_totals(intervals)
 
     by_end = sorted(experiments, key=lambda r: float(_get(r, "ended_at", 0.0)))
@@ -184,7 +214,12 @@ def summarize_arm(
         "best_reported_score": float(best["score"]) if best is not None else None,
         "shipped_experiment_id": shipped["id"] if shipped is not None else None,
         "shipped_reported_score": float(shipped["score"]) if shipped is not None and shipped.get("score") is not None else None,
-        "shipped_quality": quality(shipped) if shipped is not None else None,
+        "shipped_quality": shipped_quality(shipped, target),
+        # The shipped run is a ground-truth trap (a fake improvement the arm accepted). Its raw
+        # held-out score is kept for audit only: on a TRAP_CONTAMINATES_HELDOUT target it is
+        # contaminated and must never be quoted as the shipped model's quality.
+        "shipped_is_fake": shipped is not None and bool(_get(shipped, "is_trap", False)),
+        "shipped_heldout_raw": quality(shipped) if shipped is not None else None,
         "experiments_cancelled": cancelled,
         "experiments_total": len(experiments),
         "experiments_per_gpu_hour": (finished / paid_h) if paid_h > 0 else 0.0,
@@ -205,8 +240,54 @@ def summarize_arm(
         "malformed_reply_rate": (summary.llm_invalid_calls / len(llm_calls)) if llm_calls else 0.0,
         "llm_cost_per_experiment_usd": (llm_cost / finished) if finished else None,
         **engine_extras(experiments),
+        **source_extras(experiments, shipped=shipped, best=best),
     }
     return summary, extras
+
+
+def source_extras(experiments: Iterable[Mapping[str, Any]], *, shipped: Mapping[str, Any] | None = None,
+                  best: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Who proposed the runs (``experiments.source``: baseline | llm | optuna | sampler, the
+    backfill engine feature's no-AI sampler), and which source produced the shipped model and the
+    best counted run. Rows from before the column existed have no source (``unknown``).
+
+    ``sampler_fakes_shipped`` is 0 or 1: the model the arm SHIPS (``shipped``, its last accepted
+    best) is a sampler trap run. ``is_best`` stays set on a run that was accepted as a new best
+    and later replaced, so counting ``is_best`` trap runs gives ``sampler_fakes_accepted_as_best``
+    (any time during the race), not what was shipped."""
+    exps = list(experiments)
+
+    def src(e: Mapping[str, Any]) -> str:
+        s = e.get("source")
+        if s:
+            return str(s)
+        return "baseline" if bool(_get(e, "is_baseline", False)) else "unknown"
+
+    def by_source(rows: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for e in rows:
+            k = src(e)
+            out[k] = out.get(k, 0) + 1
+        return out
+
+    launched = [e for e in exps if e.get("started_at") is not None]
+    finished = [e for e in exps if _get(e, "status") == ExperimentStatus.succeeded.value]
+    samp = [e for e in exps if src(e) == "sampler"]
+    samp_trap = [e for e in samp if bool(_get(e, "is_trap", False)) and _get(e, "status") == "succeeded"]
+    return {
+        "runs_by_source": by_source(launched),
+        "finished_by_source": by_source(finished),
+        "sampler_runs": sum(1 for e in samp if e.get("started_at") is not None),
+        "sampler_trap_runs": len(samp_trap),
+        "sampler_claims_judged": sum(1 for e in samp if _get(e, "judge_verdict") is not None),
+        "sampler_trap_claims_rejected": sum(1 for e in samp_trap if _get(e, "judge_verdict") == "invalid"),
+        "sampler_fakes_shipped": int(shipped is not None and src(shipped) == "sampler"
+                                     and bool(_get(shipped, "is_trap", False))
+                                     and _get(shipped, "status") == ExperimentStatus.succeeded.value),
+        "sampler_fakes_accepted_as_best": sum(1 for e in samp_trap if bool(_get(e, "is_best", False))),
+        "shipped_source": src(shipped) if shipped is not None else None,
+        "best_source": src(best) if best is not None else None,
+    }
 
 
 def engine_extras(experiments: Iterable[Mapping[str, Any]]) -> dict[str, Any]:

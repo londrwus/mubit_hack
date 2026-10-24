@@ -183,10 +183,20 @@ class ScriptedLLM:
                                       "reason": "test split used" if bad else "scripted"}), rec
 
 
+class PlannerLabelledPrompts(DefaultPrompts):
+    """The built-in DefaultPrompts (whose text ScriptedLLM parses), labelled with the planner
+    version the arm declares (tests only): the BM arms' default lean_planner feature declares
+    propose v2 (D46), which a strict race checks; the prompt text itself is unchanged."""
+
+    def __init__(self, propose_version: str = "v1") -> None:
+        self.propose_version = propose_version
+
+
 def llm_deps(kind: ArmKind, race_id: str, runner: Any, llm: ScriptedLLM | None = None,
              llm_mode: str = "mock") -> ArmDeps:
+    planner = "v2" if "lean_planner" in DEFAULT_ENGINE_FEATURES.get(kind, ()) else "v1"
     r = LLMResearcher(kind=kind, llm=llm or ScriptedLLM(seed=1), spec=SPEC, session_id=f"{race_id}/{kind.value}",
-                      prompts=DefaultPrompts())
+                      prompts=PlannerLabelledPrompts(planner))
     return ArmDeps(kind=kind, researcher=r, runner=runner, model="claude-opus-5-5", llm_mode=llm_mode)
 
 
@@ -302,15 +312,17 @@ def test_curve_metric_mirrors_the_early_stop_step() -> None:
 
 
 def test_default_features_per_arm() -> None:
-    """D43: early stopping is off for every arm and target; the BM arms keep the judge policy only."""
+    """D43: early stopping is off for every arm and target; the BM arms get the judge policy and
+    (backfill gate) backfill."""
     assert DEFAULT_ENGINE_FEATURES[ArmKind.opus] == ()
-    assert DEFAULT_ENGINE_FEATURES[ArmKind.opus_bm] == DEFAULT_ENGINE_FEATURES[ArmKind.mubit] == ("judge_policy",)
+    assert (DEFAULT_ENGINE_FEATURES[ArmKind.opus_bm] == DEFAULT_ENGINE_FEATURES[ArmKind.mubit]
+            == ("backfill", "judge_policy", "lean_planner"))
     assert DEFAULT_ENGINE_FEATURES[ArmKind.optuna] == ()
     assert DEFAULT_ENGINE_FEATURES[ArmKind.fast] == ()
     assert not any("median_stop" in f for f in DEFAULT_ENGINE_FEATURES.values())
     cfg = RaceConfig(target="bm-curve", arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna], budget_s=5,
                      gpus_per_arm=1)
-    assert cfg.engine_features_map() == {"opus": [], "opus_bm": ["judge_policy"], "optuna": []}
+    assert cfg.engine_features_map() == {"opus": [], "opus_bm": ["backfill", "judge_policy", "lean_planner"], "optuna": []}
     # the median rule is still there behind the flag (dev races)
     on = RaceConfig(target="bm-curve", arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna], budget_s=5,
                     gpus_per_arm=1, engine_features={ArmKind.opus_bm: ["judge_policy", "median_stop"], ArmKind.optuna: ["median_stop"]})
@@ -321,6 +333,9 @@ def test_default_features_per_arm() -> None:
                    engine_features={ArmKind.optuna: ["judge_policy"]})
     with pytest.raises(ValueError):
         RaceConfig(target="bm-curve", arms=[ArmKind.opus], budget_s=5, gpus_per_arm=1, median_stop_fractions=[0.5, 0.25])
+    with pytest.raises(ValueError, match="backfill does not apply"):
+        RaceConfig(target="bm-curve", arms=[ArmKind.optuna], budget_s=5, gpus_per_arm=1,
+                   engine_features={ArmKind.optuna: ["backfill"]})
 
 
 # =========================================================================== median stopping in a race
@@ -441,15 +456,21 @@ async def test_judge_policy_llm_for_leakage_rule_for_noise(llm_verdict: str, sig
 
 
 async def test_manifest_records_default_features(sigma_tables: Any) -> None:
-    """D43 defaults: no early stopping anywhere; opus_bm has the judge policy only."""
+    """D43 defaults: no early stopping anywhere; opus_bm has the judge policy and backfill."""
     cfg = RaceConfig(target="bm-curve", arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna], budget_s=1.0,
                      gpus_per_arm=2, llm="mock")
     eng = await race(cfg, [llm_deps(ArmKind.opus, "r", CurveRunner(2)), llm_deps(ArmKind.opus_bm, "r", CurveRunner(2)),
                            optuna_deps(CurveRunner(2))])
     m = eng.fairness_manifest()
-    assert m["identical"] and m["llm_policy_identical"]
-    assert m["engine"]["features"] == {"opus": [], "opus_bm": ["judge_policy"], "optuna": []}
+    # D46: the planner differs (opus v1, opus_bm v2 via lean_planner), declared, so the policy is ok
+    assert m["identical"] and m["llm_policy_ok"] and not m["llm_policy_identical"]
+    assert m["propose"]["per_arm"]["opus_bm"]["declared"]["prompt_version"] == "v2"
+    assert m["propose"]["per_arm"]["opus"]["declared"] == {"prompt_version": "v1", "effort": "medium",
+                                                           "source": "standard"}
+    assert m["engine"]["features"] == {"opus": [], "opus_bm": ["backfill", "judge_policy", "lean_planner"], "optuna": []}
     assert all("median_stop" not in row for row in m["engine"]["per_arm"].values())
+    assert m["engine"]["per_arm"]["opus_bm"]["backfill"]["feedback"] == "worst_on_rejected"
+    assert "backfill" not in m["engine"]["per_arm"]["opus"]
     assert any("optuna median rule matches the BM arms (False)" in c for c in m["engine"]["checks"])
     assert all(eng.reports[k]["early_stopped"] == 0 and eng.reports[k]["median_stop_checks"] == 0
                for k in ("opus", "opus_bm", "optuna"))
@@ -458,8 +479,9 @@ async def test_manifest_records_default_features(sigma_tables: Any) -> None:
 async def test_manifest_records_features_and_stays_identical(sigma_tables: Any) -> None:
     cfg = RaceConfig(target="bm-curve", arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna], budget_s=1.0,
                      gpus_per_arm=2, llm="mock", engine_features={ArmKind.opus_bm: ["judge_policy", "median_stop"], ArmKind.optuna: ["median_stop"]})
-    eng = await race(cfg, [llm_deps(ArmKind.opus, "r", CurveRunner(2)), llm_deps(ArmKind.opus_bm, "r", CurveRunner(2)),
-                           optuna_deps(CurveRunner(2))])
+    bm = llm_deps(ArmKind.opus_bm, "r", CurveRunner(2))
+    bm.researcher.prompts = PlannerLabelledPrompts("v1")   # no lean_planner in this override: standard planner
+    eng = await race(cfg, [llm_deps(ArmKind.opus, "r", CurveRunner(2)), bm, optuna_deps(CurveRunner(2))])
     m = eng.fairness_manifest()
     assert m["identical"] and m["llm_policy_identical"]
     assert m["engine"]["features"] == {"opus": [], "opus_bm": ["judge_policy", "median_stop"],
@@ -529,7 +551,7 @@ def test_presets_rl_wide_and_lcbench() -> None:
     assert rl.engine_features_map() == {"opus": [], "optuna": []}
     assert lc.arms == [ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna]
     assert lc.record_modes() == {"opus": "off", "opus_bm": "off"}
-    assert lc.engine_features_map() == {"opus": [], "opus_bm": ["judge_policy"], "optuna": []}
+    assert lc.engine_features_map() == {"opus": [], "opus_bm": ["backfill", "judge_policy", "lean_planner"], "optuna": []}
     assert rl.gpus_per_arm == 30 and len(rl.arms) * rl.gpus_per_arm + rl.prewarm_spare + 1 <= 100
     assert lc.gpus_per_arm == 16
 
@@ -546,7 +568,7 @@ def test_bench_checks_show_and_gate_engine_features() -> None:
         ok, note = res["engine features"]
         assert ok and "opus=none" in note and "median_stop" not in note, (name, note)
         if ArmKind.opus_bm in PRESETS[name].arms:
-            assert "opus_bm=judge_policy" in note, note
+            assert "opus_bm=backfill+judge_policy+lean_planner" in note, note
         assert res["fits Modal Starter caps"][0], (name, res["fits Modal Starter caps"])
         assert bench.gating_ok(list((n, o, t) for n, (o, t) in res.items()))
     res = {n: (ok, note) for n, ok, note in bench.checks(PRESETS["rl-wide-15m"], goals)}
@@ -638,7 +660,9 @@ async def test_median_stop_reads_the_surrogate_curve() -> None:
     from workers.targets.base import get_target
 
     lspec = get_target("lcbench").spec
-    cfg = RaceConfig(target="lcbench", arms=[ArmKind.optuna], budget_s=10.0, gpus_per_arm=6, llm="mock", seed=0)
+    # D43: median stopping is off by default everywhere; this dev race opts in.
+    cfg = RaceConfig(target="lcbench", arms=[ArmKind.optuna], budget_s=10.0, gpus_per_arm=6, llm="mock", seed=0,
+                     engine_features={ArmKind.optuna: ["median_stop"]})
     runner = SurrogateRunner(6, runtime_multiplier=0.01, preload=["lcbench"])
     eng = RaceEngine(cfg, [ArmDeps(kind=ArmKind.optuna, researcher=OptunaResearcher(lspec, 0), runner=runner)],
                      spec=lspec, db=Database(":memory:"), tick_s=0.02)

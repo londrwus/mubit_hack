@@ -64,6 +64,7 @@ def summaries_from_rows(
             experiments=[e for e in rows.get("experiments", []) if e["arm_id"] == aid],
             intervals=[i for i in rows.get("gpu_intervals", []) if i["arm_id"] == aid],
             llm_calls=[c for c in rows.get("llm_calls", []) if c["arm_id"] == aid],
+            target=race.get("target"),
         )
     return out
 

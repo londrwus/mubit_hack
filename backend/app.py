@@ -27,7 +27,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from backend.agent.llm_base import OPUS_MODEL, session_id_for
-from backend.benchmark.configs import RaceConfig
+from backend.benchmark.configs import RaceConfig, apply_surrogate_runtime_mult
 from backend.core.events import RaceFinishedEvent
 from backend.core.types import ArmKind, ArmSummary, CorrectionLabel, CorrectionSource, StepType, new_id
 from backend.db import BenchmarkIntegrityError, Database
@@ -105,6 +105,9 @@ def _make_runner(cfg: RaceConfig, spec: TargetSpec) -> Any:
     if cfg.runner == "local":
         return _construct(_load(LOCAL_RUNNER_PATH), max_slots=n, hardware="CPU", price_per_second_usd=0.0)
     if cfg.runner == "surrogate":  # in-process, paced by predicted runtime; virtual GPU $ at the spec's price
+        # A declared pacing (RaceConfig.surrogate_runtime_mult) is set process-wide first, so every
+        # arm's runner reads the same BUSY_SURROGATE_RUNTIME_MULT (refused if the env disagrees).
+        apply_surrogate_runtime_mult(cfg)
         return _construct(_load(SURROGATE_RUNNER_PATH), max_slots=n, hardware=spec.hardware, preload=[spec.name])
     return _construct(_load(MODAL_RUNNER_PATH), slots={spec.hardware: n})
 
@@ -150,6 +153,14 @@ def default_arm_deps(race_id: str, cfg: RaceConfig, spec: TargetSpec, kind: ArmK
         llm_mode = "mubit"
     researcher = LLMResearcher(kind=kind, llm=llm, spec=spec, session_id=session_id_for(race_id, kind, cfg.seed),
                                prompts=load_prompts(), fallback_model=OPUS_MODEL, record=record)
+    # The arm's declared planner setup (D46 lean_planner feature, or a prompt-ablation arm):
+    # propose prompt version + effort. Standard arms keep the frozen v1 at effort medium. The
+    # mock LLM answers diff-form (v2) prompts too, so dry runs exercise the same path.
+    variant = cfg.propose_variant_for(kind)
+    if variant is not None:
+        from backend.agent.loop import apply_propose_setup
+
+        apply_propose_setup(researcher, *variant)
     return ArmDeps(kind=kind, researcher=researcher, runner=runner, model=model, llm_mode=llm_mode,
                    record_mode=mode)
 

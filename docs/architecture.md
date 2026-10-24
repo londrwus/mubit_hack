@@ -49,8 +49,8 @@ Prompts live in `backend/agent/prompts/`, one file per version. A frozen file is
 | Arm (`ArmKind`) | On screen | LLM | Engine features | Record mode (bench presets) |
 |---|---|---|---|---|
 | `opus` | Standard AI assistant | Opus 5.5 on every step, through Mubit | none (the standard agent) | `off` |
-| `opus_bm` | Busy Machines with Opus | Opus 5.5 on every step, through Mubit | `judge_policy` + `median_stop` | `off` |
-| `mubit` | Mubit + Busy Machines | same model ID as the Opus arm; Mubit's small model answers where an adapter passed its exam and has a route, the provider answers the rest | `judge_policy` + `median_stop` | `metadata` |
+| `opus_bm` | Busy Machines with Opus | Opus 5.5 on every step, through Mubit | `judge_policy` + `backfill` (median stop off, D43) | `off` |
+| `mubit` | Mubit + Busy Machines | same model ID as the Opus arm; Mubit's small model answers where an adapter passed its exam and has a route, the provider answers the rest | `judge_policy` + `backfill` (median stop off, D43) | `metadata` |
 | `optuna` | Automatic search (no AI) | none | `median_stop` (Optuna's own MedianPruner practice) | n/a |
 
 - `opus_bm` splits the gain into "our engine" (`opus_bm` vs `opus`) and "Mubit's models" (`mubit` vs `opus_bm`).
@@ -69,6 +69,13 @@ Deterministic code, no LLM call, no prompt change, so no Mubit task changes.
 - D36 also named verification re-runs of claimed bests. Not built: the calibrated spread replaces per-claim re-runs.
 
 **Median stopping** (`median_stop`): at 25% and 50% of a run's budget, a running run whose curve value is worse than the median of the arm's completed runs at the same point (once ≥5 have reached it) is cancelled and its slot freed. Curve metric: rl `train_return`, cifar `val_acc`, lm `val_bpb`, lcbench `val_balanced_accuracy`. Stored as `summary_json.early_stop` (checkpoint, value, median, estimated time saved). Effect on cost or quality: not measured yet.
+
+**Backfill** (`backfill`, "keeps GPUs busy with a no-AI sampler while the AI thinks"; offline gate in `data/backfill/`, projections only until a race measures it): the arm holds an Optuna TPE sampler (`backend/agent/optuna_arm.py` `BackfillSampler`, seeded with the race seed).
+- The LLM's demand K counts only its own runs and buffered proposals. Its proposals launch first; every slot still free gets a sampler config at once, also while the planner call is in flight. TPE asks run in a worker thread (dedicated backfill task in the scheduler).
+- Sampler runs go through the same processing as LLM runs: a claimed new best is judged by the same LLM judge + judge policy, and the run renders in the planner digest exactly like an LLM run.
+- Feedback is checker-gated: after the verdict, the sampler is told every processed run of the arm (LLM, baseline, its own). A claim the LLM judge rejected is told the worst score seen so far, never its inflated score. The sampler is never told which option is the trap.
+- Each experiment stores `source` (`baseline` | `llm` | `optuna` | `sampler`); reports and exports carry `runs_by_source`, sampler trap runs / claims rejected / fakes shipped, and `shipped_source`. The fairness manifest (`engine.per_arm.<arm>.backfill`) records the sampler settings.
+- Presets: `rl-wide-bm-15m` (92 containers incl. 2 spare), `cifar-bm-15m` (9 L4), `lcbench-bm-15m`, each `opus` vs `opus_bm` vs `optuna` with the headline preset's settings. The byte-identical planner test (D44) runs with backfill off; with it on, the judge policy's labels still never reach the planner (`tests/test_backfill.py`).
 
 ## 4. Mubit integration
 ### Rules

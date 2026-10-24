@@ -1,0 +1,405 @@
+diff --git a/scripts/headline.py b/scripts/headline.py
+index d446ce2..7a91892 100644
+--- a/scripts/headline.py
++++ b/scripts/headline.py
+@@ -634,6 +634,102 @@ class PreRegistration:
+     bm_best_vs_opus_margin: float = 0.0
+     # the success-line checks, in the pre-registration's order (ids: see prereg_report)
+     checks: tuple[str, ...] = ("opus_waiting", "bm_waiting", "bm_llm_usd", "bm_best_vs_opus", "bm_best_vs_optuna")
++    # The frozen setup, as (dotted path into analyze_races.fairness_fingerprint, value) pairs;
++    # "arm_set" is the sorted arm kinds. A setup that differs on any of them is NOT the
++    # pre-registered one, whatever its race names say (bench.py names races after the preset,
++    # also when --slots / --minutes / --usd-cap override it). The pacing has its own check.
++    frozen: tuple[tuple[str, Any], ...] = ()
++
++    def expected_fingerprint(self) -> dict[str, Any]:
++        """A minimal fingerprint that satisfies ``frozen`` (tests, and to read the frozen setup)."""
++        out: dict[str, Any] = {"arms": {}}
++        for path, want in self.frozen:
++            if path == "arm_set":
++                for k in want:
++                    out["arms"].setdefault(k, {})
++                continue
++            if want is FP_ABSENT:
++                continue
++            cur = out
++            parts = path.split(".")
++            for p in parts[:-1]:
++                cur = cur.setdefault(p, {})
++            cur[parts[-1]] = list(want) if isinstance(want, tuple) else want
++        if self.runtime_multiplier is not None:
++            out.setdefault("race", {})["runtime_multiplier"] = self.runtime_multiplier
++        return out
++
++
++FP_ABSENT: Any = type("FPAbsent", (), {"__repr__": lambda self: "absent"})()
++
++
++def _fp_get(fp: Mapping[str, Any], path: str) -> Any:
++    cur: Any = fp
++    for part in path.split("."):
++        if not isinstance(cur, Mapping) or part not in cur:
++            return FP_ABSENT
++        cur = cur[part]
++    return cur
++
++
++def _same(got: Any, want: Any) -> bool:
++    if want is FP_ABSENT or got is FP_ABSENT:
++        return got is want
++    if isinstance(want, (list, tuple)):
++        return isinstance(got, (list, tuple)) and list(got) == list(want)
++    if isinstance(want, bool) or isinstance(got, bool):
++        return type(got) is type(want) and got == want
++    if isinstance(want, (int, float)) and isinstance(got, (int, float)):
++        return math.isclose(float(got), float(want), rel_tol=1e-9, abs_tol=1e-12)
++    return bool(got == want)
++
++
++def prereg_mismatches(pr: PreRegistration, fp: Mapping[str, Any] | None) -> list[str]:
++    """How a setup's fairness fingerprint differs from the frozen settings ([] = it matches)."""
++    if not pr.frozen:
++        return []
++    if not isinstance(fp, Mapping):
++        return ["no fairness manifest"]
++    out: list[str] = []
++    for path, want in pr.frozen:
++        got = tuple(sorted((fp.get("arms") or {}))) if path == "arm_set" else _fp_get(fp, path)
++        if not _same(got, want):
++            out.append(f"{path} = {got!r} (frozen: {want!r})")
++    return out
++
++
++# The standard Opus arm runs at the standard planner effort, which the fingerprint leaves out.
++_LCBENCH_WIDE_FROZEN: tuple[tuple[str, Any], ...] = (
++    ("arm_set", ("optuna", "opus", "opus_bm")),
++    ("race.target", "lcbench"), ("race.target_value", 0.78), ("race.budget_s", 900.0),
++    ("race.run_budget_s", 300), ("race.n_slots", 16), ("race.runner", "surrogate"),
++    ("race.cost_cap_usd", 9.2), ("race.accept_unsure", True), ("race.pipelining", False),
++    ("race.max_proposals_per_call", 8), ("race.run_baseline_first", True), ("race.launch_cutoff_s", None),
++    ("arms.opus.model", "claude-opus-5-5"), ("arms.opus_bm.model", "claude-opus-5-5"),
++    ("arms.opus.llm_mode", "mubit"), ("arms.opus_bm.llm_mode", "mubit"),
++    ("arms.opus.record_mode", "off"), ("arms.opus_bm.record_mode", "off"),
++    ("arms.opus.engine_features", ()), ("arms.optuna.engine_features", ()),
++    ("arms.opus_bm.engine_features", ("backfill", "judge_policy", "lean_planner", "planner_cadence")),
++    ("arms.opus_bm.planner_cadence.min_propose_interval_s", 90.0),
++    ("arms.opus_bm.backfill.n_startup_trials", 10), ("arms.opus_bm.backfill.constant_liar", True),
++    ("arms.opus_bm.backfill.feedback", "worst_on_rejected"),
++    ("arms.opus.llm_policy.prompts.propose_experiments", "v1:fdda8c5b0919"),
++    ("arms.opus.llm_policy.prompts.judge_improvement", "v1:5c1d3cfd2941"),
++    ("arms.opus.llm_policy.propose_effort", FP_ABSENT),
++    ("arms.opus_bm.llm_policy.prompts.propose_experiments", "v2:cfd2e3dd9710"),
++    ("arms.opus_bm.llm_policy.prompts.judge_improvement", "v1:5c1d3cfd2941"),
++    ("arms.opus_bm.llm_policy.propose_effort", "low"),
++    ("mubit_projects.per_arm.opus.propose_experiments", "A"),
++    ("mubit_projects.per_arm.opus.judge_improvement", "A"),
++    ("mubit_projects.per_arm.opus_bm.propose_experiments", "A"),
++    ("mubit_projects.per_arm.opus_bm.judge_improvement", "A"),
++)
++
++
++def _lcbench_wide_frozen(cadence_s: float) -> tuple[tuple[str, Any], ...]:
++    """Both LCBench-wide pre-registrations freeze the same setup except the BM planner cadence."""
++    key = "arms.opus_bm.planner_cadence.min_propose_interval_s"
++    return tuple((p, cadence_s if p == key else v) for p, v in _LCBENCH_WIDE_FROZEN)
+ 
+ 
+ # docs/preregistration_lcbench_wide.md (frozen 2026-10-24 ~14:00 BST) + its addendum (~14:10 BST).
+@@ -642,12 +738,13 @@ class PreRegistration:
+ PREREGISTRATIONS: dict[str, PreRegistration] = {
+     "lcbench-wide-bm-15m": PreRegistration(
+         preset="lcbench-wide-bm-15m", doc="docs/preregistration_lcbench_wide.md", seeds=(0, 1, 2),
+-        quality_line=0.86, stretch_line=0.87, runtime_multiplier=0.1),
++        quality_line=0.86, stretch_line=0.87, runtime_multiplier=0.1, frozen=_lcbench_wide_frozen(90.0)),
+     "lcbench-wide-bm-c30-15m": PreRegistration(
+         preset="lcbench-wide-bm-c30-15m", doc="docs/preregistration_lcbench_wide_c30.md", seeds=(0, 1, 2),
+         quality_line=0.86, stretch_line=0.87, runtime_multiplier=0.1,
+         bm_llm_usd_max_ratio=0.4, bm_best_vs_opus_margin=0.003,
+-        checks=("bm_best_vs_opus", "bm_llm_usd", "bm_best_vs_optuna", "bm_fakes_shipped")),
++        checks=("bm_best_vs_opus", "bm_llm_usd", "bm_best_vs_optuna", "bm_fakes_shipped"),
++        frozen=_lcbench_wide_frozen(30.0)),
+ }
+ 
+ 
+@@ -683,9 +780,31 @@ PREREG_ENDPOINTS: tuple[tuple[str, str, str], ...] = (
+ 
+ 
+ def _seed_values(g: Group, arm: str, fld: str) -> dict[int, float | None]:
++    """seed -> value. With a repeated seed only one race's value could be kept, so callers check
++    ``_repeated_seeds`` first (a repeated seed makes the pre-registered report not evaluable)."""
+     return {r.seed: getattr(r, fld) for r in g.runs if r.arm == arm}
+ 
+ 
++def _seed_lists(g: Group, arm: str, fld: str) -> dict[int, list[float | None]]:
++    out: dict[int, list[float | None]] = {}
++    for r in sorted((r for r in g.runs if r.arm == arm), key=lambda r: (r.seed, r.race_id)):
++        out.setdefault(r.seed, []).append(getattr(r, fld))
++    return out
++
++
++def _repeated_seeds(g: Group) -> list[str]:
++    """One line per (arm, seed) that more than one race of this setup ran (a re-run)."""
++    out: list[str] = []
++    for arm in sorted({r.arm for r in g.runs}):
++        by_seed: dict[int, list[str]] = {}
++        for r in g.runs:
++            if r.arm == arm:
++                by_seed.setdefault(r.seed, []).append(str(r.race_id)[:8])
++        out.extend(f"{noun(arm)} seed {sd} ran in {len(ids)} races ({', '.join(sorted(ids))})"
++                   for sd, ids in sorted(by_seed.items()) if len(ids) > 1)
++    return out
++
++
+ def prereg_report(g: Group, pr: PreRegistration) -> dict[str, Any]:
+     """The pre-registered report for one setup (fixed formulas, see PreRegistration)."""
+     arms = [k for k in (pr.standard, pr.bm, pr.baseline) if k in g.arms]
+@@ -697,7 +816,8 @@ def prereg_report(g: Group, pr: PreRegistration) -> dict[str, Any]:
+             vals = [getattr(r, fld) for r in g.runs if r.arm == k]
+             st = _stat(vals)
+             cells[k] = {"stat": _stat_json(st), "cell": _cell(st, kind),
+-                        "per_seed": {str(sd): v for sd, v in sorted(_seed_values(g, k, fld).items())}}
++                        "per_seed": {str(sd): (v[0] if len(v) == 1 else v)
++                                     for sd, v in sorted(_seed_lists(g, k, fld).items())}}
+         endpoints.append({"field": fld, "label": label.format(line=line), "kind": kind, "arms": cells})
+ 
+     want = set(pr.seeds)
+@@ -708,6 +828,14 @@ def prereg_report(g: Group, pr: PreRegistration) -> dict[str, Any]:
+     if pr.runtime_multiplier is not None and (mult is None or not isinstance(mult, (int, float))
+                                               or not math.isclose(float(mult), pr.runtime_multiplier)):
+         why_not.append(f"surrogate pacing x{mult} is not the pre-registered x{pr.runtime_multiplier:g}")
++    mismatches = prereg_mismatches(pr, g.fingerprint)
++    if mismatches:
++        why_not.append("NOT the pre-registered setup: its settings differ from the ones frozen in "
++                       f"{pr.doc}: " + "; ".join(mismatches))
++    repeated = _repeated_seeds(g)
++    if repeated:
++        why_not.append("repeated seeds (a re-run; the pre-registration allows no re-runs and no seed swaps): "
++                       + "; ".join(repeated))
+ 
+     def mean_of(arm: str, fld: str) -> tuple[float | None, str | None]:
+         if arm not in g.arms:
+@@ -793,7 +921,9 @@ def prereg_report(g: Group, pr: PreRegistration) -> dict[str, Any]:
+     }
+     checks = [builders[cid]() for cid in pr.checks]
+     statuses = [c["status"] for c in checks]
+-    if all(st == "PASS" for st in statuses):
++    if mismatches:
++        verdict = "NOT THE PRE-REGISTERED SETUP: no success-line verdict (settings differ from the frozen ones)"
++    elif all(st == "PASS" for st in statuses):
+         verdict = f"SUCCESS LINE MET (all {len(checks)} checks pass)"
+     elif any(st == "FAIL" for st in statuses):
+         verdict = "SUCCESS LINE FAILED (log it as a fail; no re-runs, no seed swaps)"
+@@ -804,7 +934,9 @@ def prereg_report(g: Group, pr: PreRegistration) -> dict[str, Any]:
+         vals = _seed_values(g, k, "best_quality")
+         hit = sorted(sd for sd, v in vals.items() if v is not None and float(v) >= pr.stretch_line)
+         stretch[k] = {"seeds_reaching": hit, "n_reaching": len(hit), "n_seeds": len(vals)}
+-    return {"preset": pr.preset, "doc": pr.doc, "seeds": list(pr.seeds), "quality_line": pr.quality_line,
++    return {"preset": pr.preset, "doc": pr.doc, "matches_preregistration": not mismatches,
++            "mismatches": mismatches, "repeated_seeds": repeated,
++            "seeds": list(pr.seeds), "quality_line": pr.quality_line,
+             "stretch_line": pr.stretch_line, "runtime_multiplier": mult, "arms": arms, "endpoints": endpoints,
+             "success_line": checks, "not_evaluable_because": why_not, "verdict": verdict, "stretch": stretch,
+             "llm_usd_ratio_bm_over_opus": (bm_llm / op_llm) if bm_llm is not None and op_llm else None}
+@@ -815,8 +947,13 @@ def render_prereg(g: Group) -> list[str]:
+     if not rep_:
+         return []
+     arms = rep_["arms"]
+-    out = [f"**Pre-registered report** (`{rep_['preset']}`, frozen in `{rep_['doc']}` before any race; fixed "
+-           "formulas; primary endpoints first, then the success line check by check):\n"]
++    if rep_.get("matches_preregistration", True):
++        out = [f"**Pre-registered report** (`{rep_['preset']}`, frozen in `{rep_['doc']}` before any race; fixed "
++               "formulas; primary endpoints first, then the success line check by check):\n"]
++    else:
++        out = [f"**NOT the pre-registered setup**: these races are named like `{rep_['preset']}`, but their "
++               f"settings differ from the ones frozen in `{rep_['doc']}` (" + "; ".join(rep_["mismatches"])
++               + "). The pre-registered formulas are shown for reference only; no check below is evaluable.\n"]
+     if not g.headline_ok:
+         out.append("- **NOT A HEADLINE RESULT**: " + "; ".join(g.blockers) + ".")
+         out.append("")
+@@ -1035,6 +1172,8 @@ def build_groups(kept: list[tuple[Rows, bool]], *, best_known: Mapping[str, floa
+         warnings = ar.fairness_warnings([g for g, _ in members])
+         # Unequal slots / hardware / price between arms breaks the fairness rule: no framing.
+         blockers.extend(w for w in warnings if "(unfair)" in w)
++        # A re-run seed is not an independent seed: pooling it would count one seed twice.
++        blockers.extend(w for w in warnings if w.startswith("repeated seeds"))
+         cfgs = [_race_config(r) for r, _ in members]
+         goal_src = "race config" if all(c.get("target_value") is not None for c in cfgs) else "target spec placeholder"
+         if any(c.get("provisional") for c in cfgs):
+diff --git a/tests/test_planner_cadence.py b/tests/test_planner_cadence.py
+index a4e38bd..e3989f8 100644
+--- a/tests/test_planner_cadence.py
++++ b/tests/test_planner_cadence.py
+@@ -309,7 +309,8 @@ def test_apply_surrogate_runtime_mult(monkeypatch: pytest.MonkeyPatch) -> None:
+ # =========================================================================== headline: the pre-registered report
+ 
+ 
+-def _group(values: dict[str, dict[int, dict[str, float]]], *, mult: float = 0.1, blockers: list[str] | None = None):
++def _group(values: dict[str, dict[int, dict[str, float]]], *, mult: float = 0.1, blockers: list[str] | None = None,
++           preset: str = PRESET):
+     hl = _load("headline")
+     runs = []
+     for arm, per_seed in values.items():
+@@ -323,10 +324,17 @@ def _group(values: dict[str, dict[int, dict[str, float]]], *, mult: float = 0.1,
+     g = hl.Group(target="lcbench", direction="max", goal=0.78, goal_source="race config (frozen)", budget_s=900,
+                  gpus_per_arm=16, run_budget_s=None, runner="surrogate", names=[], race_ids=[], seeds=[0, 1, 2],
+                  arms={k: None for k in values}, start_quality=0.4, best_known=None, blockers=blockers or [],
+-                 warnings=[], framings=[], runs=runs, fingerprint={"race": {"runtime_multiplier": mult}})
++                 warnings=[], framings=[], runs=runs, fingerprint=_frozen_fp(hl, mult, preset))
+     return hl, g
+ 
+ 
++def _frozen_fp(hl: Any, mult: float, preset: str = PRESET) -> dict[str, Any]:
++    """The pre-registered setup's fingerprint (the report checks it), at pacing ``mult``."""
++    fp = hl.PREREGISTRATIONS[preset].expected_fingerprint()
++    fp["race"]["runtime_multiplier"] = mult
++    return fp
++
++
+ def _vals(idle: float, llm: float, best: float, seeds: tuple[int, ...] = (0, 1, 2)) -> dict[int, dict[str, float]]:
+     return {s: {"idle": idle, "llm": llm, "best": best + 0.001 * s, "c086": 1.0 + s, "t086": 60.0 * (s + 1)} for s in seeds}
+ 
+@@ -398,14 +406,14 @@ def test_c30_prereg_success_line() -> None:
+     # docs/preregistration_lcbench_wide_c30.md: BM best >= Opus - 0.003; BM LLM $ <= 0.4x; BM >= Optuna;
+     # 0 BM fakes shipped. GPUs waiting is reported, not part of the line.
+     vals = {"opus": _vals(29.0, 3.0, 0.889), "opus_bm": _vals(2.5, 0.9, 0.887), "optuna": _vals(1.0, 0.0, 0.85)}
+-    hl, g = _group(vals)
++    hl, g = _group(vals, preset=C30_PRESET)
+     pr = hl.PREREGISTRATIONS[C30_PRESET]
+     rep = hl.prereg_report(g, pr)
+     assert [c["id"] for c in rep["success_line"]] == ["bm_best_vs_opus", "bm_llm_usd", "bm_best_vs_optuna",
+                                                       "bm_fakes_shipped"]
+     assert [c["status"] for c in rep["success_line"]] == ["PASS"] * 4 and rep["verdict"].startswith("SUCCESS LINE MET")
+     vals["opus_bm"] = _vals(2.5, 1.35, 0.885)
+-    hl, g = _group(vals)
++    hl, g = _group(vals, preset=C30_PRESET)
+     next(r for r in g.runs if r.arm == "opus_bm" and r.seed == 1).fake_best_accepted = 1
+     st = {c["id"]: c["status"] for c in hl.prereg_report(g, pr)["success_line"]}
+     assert st == {"bm_best_vs_opus": "FAIL", "bm_llm_usd": "FAIL", "bm_best_vs_optuna": "PASS",
+diff --git a/tests/test_review_prereg_pinning.py b/tests/test_review_prereg_pinning.py
+new file mode 100644
+index 0000000..4d68a2b
+--- /dev/null
++++ b/tests/test_review_prereg_pinning.py
+@@ -0,0 +1,122 @@
++"""Review fix: the pre-registered report checks the frozen settings and refuses repeated seeds.
++
++Before the fix a setup got the "Pre-registered report (frozen ... before any race)" banner when
++its race NAMES matched the preset; only the pacing and the seed set were checked, so an edited
++re-run (cadence 60 s, 24 slots, ...) under the same name could print SUCCESS LINE MET. And
++``_seed_values`` kept one race per seed silently, so a re-run seed could decide the verdict
++while the table pooled every race. Synthetic groups and DBs only; no network.
++"""
++
++from __future__ import annotations
++
++import copy
++from pathlib import Path
++from typing import Any
++
++import pytest
++
++from backend.db import Database
++from test_headline import _race, hl
++from test_planner_cadence import PRESET, _frozen_fp, _vals
++
++PR = hl.PREREGISTRATIONS[PRESET]
++
++
++def _group(values: dict[str, dict[int, dict[str, float]]], fp: dict[str, Any], *,
++           extra: list[tuple[str, int, dict[str, float]]] = ()) -> Any:
++    runs = []
++    rows = [(arm, seed, v, f"r{seed}") for arm, per in values.items() for seed, v in per.items()]
++    rows += [(arm, seed, v, f"rerun{seed}") for arm, seed, v in extra]
++    for arm, seed, v, rid in rows:
++        runs.append(hl.RaceArm(
++            race_id=rid, seed=seed, arm=arm, raw_kind=arm, cost_to_goal_usd=None, time_to_goal_s=None,
++            gpu_idle_pct=v["idle"], best_quality=v["best"], shipped_quality=v["best"], start_quality=0.4,
++            experiments_finished=10, total_cost_usd=v["llm"] + 3.2, gpu_cost_usd=3.2, llm_cost_usd=v["llm"],
++            experiments_per_usd=None, trap_runs=0, fake_best_accepted=0, quality_line=0.86))
++    return hl.Group(target="lcbench", direction="max", goal=0.78, goal_source="race config (frozen)", budget_s=900,
++                    gpus_per_arm=16, run_budget_s=None, runner="surrogate", names=[], race_ids=[], seeds=[0, 1, 2],
++                    arms={k: None for k in values}, start_quality=0.4, best_known=None, blockers=[], warnings=[],
++                    framings=[], runs=runs, fingerprint=fp)
++
++
++PASSING = {"opus": _vals(45.0, 3.0, 0.862), "opus_bm": _vals(1.0, 0.4, 0.868), "optuna": _vals(1.5, 0.0, 0.857)}
++
++
++def test_the_frozen_settings_match_the_preset_and_the_doc() -> None:
++    fp = _frozen_fp(hl, 0.1)
++    assert hl.prereg_mismatches(PR, fp) == []
++    rep = hl.prereg_report(_group(PASSING, fp), PR)
++    assert rep["matches_preregistration"] and rep["verdict"].startswith("SUCCESS LINE MET")
++    pinned = dict(PR.frozen)
++    assert pinned["race.budget_s"] == 900.0 and pinned["race.n_slots"] == 16 and pinned["race.cost_cap_usd"] == 9.2
++    assert pinned["arms.opus_bm.planner_cadence.min_propose_interval_s"] == 90.0
++    assert pinned["arms.opus_bm.llm_policy.propose_effort"] == "low"
++    assert pinned["arm_set"] == ("optuna", "opus", "opus_bm")
++
++
++@pytest.mark.parametrize(("path", "value"), [
++    ("arms.opus_bm.planner_cadence.min_propose_interval_s", 60.0),   # cadence changed after the results
++    ("race.n_slots", 24),                                          # --slots 24 under the same name
++    ("race.budget_s", 600.0),                                      # --minutes 10
++    ("race.cost_cap_usd", 12.0),                                   # --usd-cap
++    ("arms.opus_bm.llm_policy.propose_effort", "medium"),
++    ("arms.opus.record_mode", "metadata"),
++])
++def test_an_edited_setup_under_the_same_name_is_never_the_preregistered_result(path: str, value: Any) -> None:
++    fp = copy.deepcopy(_frozen_fp(hl, 0.1))
++    cur = fp
++    *head, last = path.split(".")
++    for p in head:
++        cur = cur.setdefault(p, {})
++    cur[last] = value
++    g = _group(PASSING, fp)                     # every success-line value would pass
++    rep = hl.prereg_report(g, PR)
++    assert not rep["matches_preregistration"] and any(path in m for m in rep["mismatches"])
++    assert rep["verdict"].startswith("NOT THE PRE-REGISTERED SETUP")
++    assert not any(c["status"] in ("PASS", "FAIL") for c in rep["success_line"])
++    g.prereg, g.prereg_report = PR, rep
++    md = "\n".join(hl.render_prereg(g))
++    assert "NOT the pre-registered setup" in md and "SUCCESS LINE MET" not in md
++    assert "**Pre-registered report**" not in md
++
++
++def test_a_missing_arm_or_manifest_is_a_mismatch() -> None:
++    fp = copy.deepcopy(_frozen_fp(hl, 0.1))
++    del fp["arms"]["optuna"]
++    assert any(m.startswith("arm_set") for m in hl.prereg_mismatches(PR, fp))
++    assert hl.prereg_mismatches(PR, None) == ["no fairness manifest"]
++
++
++def test_a_repeated_seed_makes_the_report_not_evaluable() -> None:
++    # seed 0 re-run for every arm, with a worse value: the success line could flip on it
++    extra = [(arm, 0, {**PASSING[arm][0], "best": PASSING[arm][0]["best"] - 0.02}) for arm in PASSING]
++    g = _group(PASSING, _frozen_fp(hl, 0.1), extra=extra)
++    rep = hl.prereg_report(g, PR)
++    assert rep["repeated_seeds"] and "rerun0" in " ".join(rep["repeated_seeds"])
++    assert any("repeated seeds" in w for w in rep["not_evaluable_because"])
++    assert all(c["status"].endswith("(not evaluable)") for c in rep["success_line"])
++    assert rep["verdict"].startswith("SUCCESS LINE NOT EVALUABLE")
++    best = next(e for e in rep["endpoints"] if e["field"] == "best_quality")
++    assert isinstance(best["arms"]["opus_bm"]["per_seed"]["0"], list)          # both races shown, none hidden
++    assert len(best["arms"]["opus_bm"]["per_seed"]["0"]) == 2
++
++
++def test_repeated_seeds_block_the_setup_in_headline_grouping(tmp_path: Path) -> None:
++    path = tmp_path / "bench.db"
++    db = Database(path)
++    for rid, seed in (("a0", 0), ("a0b", 0), ("a1", 1), ("a2", 2)):
++        _race(db, rid, seed)
++    db.close()
++    groups, _, _ = hl.run(db=path)
++    (g,) = groups
++    assert not g.headline_ok and any(b.startswith("repeated seeds") for b in g.blockers)
++
++
++def test_the_two_lcbench_wide_preregistrations_differ_only_in_the_cadence() -> None:
++    c30 = hl.PREREGISTRATIONS["lcbench-wide-bm-c30-15m"]
++    a, b = dict(PR.frozen), dict(c30.frozen)
++    assert {k for k in a if a[k] != b[k]} == {"arms.opus_bm.planner_cadence.min_propose_interval_s"}
++    assert b["arms.opus_bm.planner_cadence.min_propose_interval_s"] == 30.0
++    fp90, fp30 = _frozen_fp(hl, 0.1), _frozen_fp(hl, 0.1, "lcbench-wide-bm-c30-15m")
++    assert hl.prereg_mismatches(c30, fp30) == [] and hl.prereg_mismatches(PR, fp90) == []
++    assert hl.prereg_mismatches(c30, fp90) and hl.prereg_mismatches(PR, fp30)   # never mistaken for each other

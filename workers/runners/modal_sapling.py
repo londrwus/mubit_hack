@@ -28,7 +28,7 @@ CLI (deploy once: ``modal deploy workers/runners/modal_sapling.py``)
     python -m workers.runners.modal_sapling wait <call_id> [timeout_s]
     python -m workers.runners.modal_sapling status                 # is the verified package in the Volume?
     python -m workers.runners.modal_sapling h100-smoke [deadline_s]  # reference + 5 rows + parity + head dump
-    python -m workers.runners.modal_sapling extract <rows.jsonl> [more.jsonl ...] <run_name> [--chunk N] [--max-usd X] [--out DIR]
+    python -m workers.runners.modal_sapling extract <rows.jsonl> [more.jsonl ...] <run_name> [--chunk N] [--max-usd X] [--out DIR] [--deadline S] [--ephemeral]
     python -m workers.runners.modal_sapling fetch <volume_path> <local_path>
 
 Rows are JSONL objects with ``id``, ``policy``, ``evidence``, ``claim``; any other keys
@@ -341,6 +341,109 @@ def h100_batch(rows: list[dict[str, Any]], run_name: str, chunk: int = 0, *, ref
     return out
 
 
+# --------------------------------------------------------------------------- v3 session (one H100 call)
+# (a) the v2 Hugging Face package's own example.py, run end to end with the real backbone in a
+#     subprocess (its own load via handler.load_model_for_endpoint), plus the same loaded
+#     SaplingResearch instance on a handful of held-out rows -> compared with logged v2 outputs;
+# (b) then, in this process, the stock model: reference example, stock features + logits for every
+#     row (new v3 training rows, eval rows and the held-out check rows, to compare the features with
+#     the cached v1 pass). Features come back in the call result (a few MB), and are also committed
+#     to the Volume as a backup. One cold start, two 46 GB loads (subprocess, then stock).
+
+RELEASE_DIR_LOCAL = Path(__file__).resolve().parents[2] / "data" / "sapling" / "sapling_v2" / "hf_release"
+RELEASE_MOUNT = "/release"
+V3_TIMEOUT_S = 1500
+release_image = (
+    gpu_image.add_local_dir(str(RELEASE_DIR_LOCAL), RELEASE_MOUNT, ignore=["__pycache__", "**/__pycache__", "eval"])
+    if modal.is_local() else gpu_image
+)
+
+_V2_CHECK = r'''
+import contextlib, io, json, runpy, sys, time
+sys.path.insert(0, "/release")
+import sapling_research as sr
+args = json.load(open(sys.argv[1]))
+cache = {}
+orig = sr.SaplingResearch.from_pretrained.__func__
+def memo(cls, *a, **k):
+    if "m" not in cache:
+        t = time.time(); cache["m"] = orig(cls, *a, **k); cache["load_s"] = time.time() - t
+    return cache["m"]
+sr.SaplingResearch.from_pretrained = classmethod(memo)
+sys.argv = ["example.py", "--base-dir", args["base_dir"]]
+buf = io.StringIO()
+t0 = time.time()
+with contextlib.redirect_stdout(buf):
+    runpy.run_path("/release/example.py", run_name="__main__")
+out = {"example_stdout": buf.getvalue(), "example_s": time.time() - t0, "load_s": cache.get("load_s"), "rows": []}
+m = cache["m"]
+for r in args["rows"]:
+    p = m.predict(policy=r["policy"], evidence=r["evidence"], claim=r["claim"])
+    out["rows"].append({"id": r["id"], "logits": p["logits"], "label": p["label"], "status_a01": p["status"],
+                        "prediction_set_a01": p["prediction_set"], "input_tokens": p["usage"]["input_tokens"],
+                        "model_ms": p["timing_ms"]["model"]})
+json.dump(out, open(args["out"], "w"))
+'''
+
+
+@app.function(image=release_image, gpu="H100", volumes={MOUNT: volume}, cpu=H100_CPU, memory=H100_MEMORY_MB,
+              timeout=V3_TIMEOUT_S, scaledown_window=2, max_containers=1, retries=0)
+def h100_v3_session(rows: list[dict[str, Any]], check_rows: list[dict[str, Any]], run_name: str,
+                    v2_check_timeout_s: float = 600.0) -> dict[str, Any]:
+    import io
+    import subprocess
+
+    import numpy as np
+
+    from workers.verifier import sapling_runtime as rt
+
+    t_call = time.time()
+    out: dict[str, Any] = {"driver": _driver(), "versions": _versions(), "container_age_at_call_s": t_call - _CONTAINER_T0}
+    volume.reload()
+    if _read_marker() is None:
+        raise RuntimeError(f"no verified package at {MODEL_DIR}: run download_weights first")
+
+    # (a) v2 package end to end, in a subprocess so its GPU memory is freed before the stock load
+    Path("/tmp/v2_check.py").write_text(_V2_CHECK)
+    Path("/tmp/v2_args.json").write_text(json.dumps({"base_dir": MODEL_DIR, "rows": check_rows, "out": "/tmp/v2_out.json"}))
+    t0 = time.time()
+    try:
+        proc = subprocess.run([sys.executable, "/tmp/v2_check.py", "/tmp/v2_args.json"], capture_output=True, text=True,
+                              timeout=v2_check_timeout_s, cwd=RELEASE_MOUNT)
+        out["v2_check"] = {"returncode": proc.returncode, "stderr_tail": proc.stderr[-3000:], "wall_s": time.time() - t0}
+        if proc.returncode == 0:
+            out["v2_check"] |= json.loads(Path("/tmp/v2_out.json").read_text())
+    except subprocess.TimeoutExpired as exc:
+        out["v2_check"] = {"error": f"timeout after {v2_check_timeout_s}s", "stderr_tail": str(exc.stderr)[-3000:]}
+    print(f"[v3] v2 check done in {time.time() - t0:.0f}s rc={out['v2_check'].get('returncode')}", flush=True)
+
+    # (b) stock model: reference + features for every row (check rows first)
+    st = _load()
+    out["stock_load_s"] = st["load_s"]
+    model, tok, cal = st["model"], st["tokenizer"], st["calibrator"]
+    res = st["handler"].predict_for_endpoint(model, tok, cal, st["manifest"], dict(REFERENCE_EXAMPLE))
+    out["reference"] = {**reference_report(res["logits"]), "status": res["status"], "prediction_set": res["prediction_set"]}
+    all_rows = validate_rows(list(check_rows) + list(rows))
+    t0 = time.time()
+    feats, logits, records = rt.extract_rows(model, tok, cal, all_rows, encode=st["encode"], infer=st["infer"])
+    out["extract"] = {"rows": len(all_rows), "ok": int(len(feats)), "seconds": time.time() - t0,
+                      "s_per_case": (time.time() - t0) / max(1, len(all_rows))}
+    if len(feats):
+        out["parity"] = rt.head_parity(model.head, feats, logits, device="cuda")
+    base = Path(MOUNT) / "outputs" / run_name
+    base.mkdir(parents=True, exist_ok=True)
+    np.save(base / "features.npy", feats)
+    np.save(base / "logits.npy", logits)
+    write_jsonl(base / "records.jsonl", records)
+    volume.commit()
+    buf = io.BytesIO()
+    np.save(buf, feats)
+    out["features_npy"] = buf.getvalue()
+    out["records"] = records
+    out["call_s"] = time.time() - t_call
+    return out
+
+
 # --------------------------------------------------------------------------- client side
 
 
@@ -410,11 +513,24 @@ def _smoke_rows() -> list[dict[str, str]]:
 
 def cmd_extract(rows_paths: str | list[str], run_name: str, *, chunk: int = DEFAULT_CHUNK,
                 max_usd: float = DEFAULT_MAX_USD, out_dir: str | None = None, s_per_case: float = 0.15,
-                load_s: float = 120.0) -> dict[str, Any]:
+                load_s: float = 120.0, deadline_s: float = float(H100_TIMEOUT_S),
+                ephemeral: bool = False) -> dict[str, Any]:
     """Extract one or more JSONL files in ONE run (one cold start); ids must be unique across files.
 
     Estimate defaults are conservative vs the H100 smoke (load 44 s, ~0.07-0.16 s/case at ~120 tokens).
+    ``ephemeral`` runs on an ephemeral app (no deploy needed; the app and its container stop when
+    the run ends). ``deadline_s`` is the client-side cap per chunk call (cancels + terminates).
     """
+    if ephemeral:
+        with modal.enable_output(), app.run():
+            return _extract(rows_paths, run_name, h100_batch, chunk=chunk, max_usd=max_usd, out_dir=out_dir,
+                            s_per_case=s_per_case, load_s=load_s, deadline_s=deadline_s)
+    return _extract(rows_paths, run_name, _fn("h100_batch"), chunk=chunk, max_usd=max_usd, out_dir=out_dir,
+                    s_per_case=s_per_case, load_s=load_s, deadline_s=deadline_s)
+
+
+def _extract(rows_paths: str | list[str], run_name: str, fn: Any, *, chunk: int, max_usd: float,
+             out_dir: str | None, s_per_case: float, load_s: float, deadline_s: float) -> dict[str, Any]:
     paths = [rows_paths] if isinstance(rows_paths, str) else list(rows_paths)
     rows = validate_rows(project_rows([r for p in paths for r in read_jsonl(p)]))
     est = estimate_extraction(len(rows), s_per_case=s_per_case, load_s=load_s, cpu_cores=H100_CPU,
@@ -423,7 +539,6 @@ def cmd_extract(rows_paths: str | list[str], run_name: str, *, chunk: int = DEFA
           file=sys.stderr)
     if est["usd"] > max_usd:
         raise SystemExit(f"estimated ${est['usd']:.2f} exceeds --max-usd {max_usd:.2f}")
-    fn = _fn("h100_batch")
     local = Path(out_dir or f"data/sapling/{run_name}")
     local.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -434,8 +549,10 @@ def cmd_extract(rows_paths: str | list[str], run_name: str, *, chunk: int = DEFA
         spent = estimate_cost(time.time() - t0, gpu="H100", cpu_cores=H100_CPU, mem_gib=H100_MEMORY_MB / 1024)
         if spent > max_usd:
             raise SystemExit(f"stopping before chunk {i}: ~${spent:.2f} spent >= cap ${max_usd:.2f}")
-        res = _get_with_deadline(fn.spawn(part, run_name, i, reference=(i == 0), parity=True, dump_head=(i == 0)),
-                                 H100_TIMEOUT_S)
+        fc = fn.spawn(part, run_name, i, reference=(i == 0), parity=True, dump_head=(i == 0))
+        print(f"[sapling] chunk {i}: call {fc.object_id} ({len(part)} rows, deadline {deadline_s:.0f}s)", file=sys.stderr)
+        res = _get_with_deadline(fc, deadline_s)
+        res["call_id"] = fc.object_id
         all_records.extend(res.pop("records"))
         summaries.append(res)
         e = res["extract"]
@@ -449,6 +566,40 @@ def cmd_extract(rows_paths: str | list[str], run_name: str, *, chunk: int = DEFA
               "fetch": f"python -m workers.runners.modal_sapling fetch outputs/{run_name} {local}/volume"}
     (local / "report.json").write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
     return report
+
+
+def cmd_v3_session(rows_paths: list[str], check_path: str, run_name: str, out_dir: str, *,
+                   deadline_s: float = float(V3_TIMEOUT_S), max_usd: float = 1.5) -> dict[str, Any]:
+    """One H100 call: v2 package check on ``check_path`` rows + stock features for check + ``rows_paths`` rows."""
+    import numpy as np
+
+    rows = validate_rows(project_rows([r for p in rows_paths for r in read_jsonl(p)]))
+    check = validate_rows(project_rows(read_jsonl(check_path)))
+    # Two 46 GB loads (~40 s each, conservative 90 s) + ~0.15 s/case for the longer judge-format rows.
+    est = estimate_extraction(len(rows) + 2 * len(check), s_per_case=0.15, load_s=180.0, cpu_cores=H100_CPU,
+                              mem_gib=H100_MEMORY_MB / 1024)
+    print(f"[sapling] v3 session: {len(rows)} rows + {len(check)} check rows, estimate {est['minutes']:.1f} min / "
+          f"${est['usd']:.2f} (cap ${max_usd:.2f}, deadline {deadline_s:.0f}s = "
+          f"${estimate_cost(deadline_s, gpu='H100', cpu_cores=H100_CPU, mem_gib=H100_MEMORY_MB / 1024):.2f} worst case)",
+          file=sys.stderr)
+    if est["usd"] > max_usd:
+        raise SystemExit(f"estimated ${est['usd']:.2f} exceeds --max-usd {max_usd:.2f}")
+    t0 = time.time()
+    fc = _fn("h100_v3_session").spawn(rows, check, run_name)
+    print(f"[sapling] v3 session call {fc.object_id}", file=sys.stderr)
+    res = _get_with_deadline(fc, deadline_s)
+    wall = time.time() - t0
+    local = Path(out_dir)
+    local.mkdir(parents=True, exist_ok=True)
+    import io
+
+    feats = np.load(io.BytesIO(res.pop("features_npy")))
+    np.save(local / "features.npy", feats)
+    write_jsonl(local / "records.jsonl", res.pop("records"))
+    res |= {"call_id": fc.object_id, "client_wall_s": wall, "features_shape": list(feats.shape),
+            "est_usd_upper": estimate_cost(wall + 2, gpu="H100", cpu_cores=H100_CPU, mem_gib=H100_MEMORY_MB / 1024)}
+    (local / "report.json").write_text(json.dumps(res, indent=2, default=str), encoding="utf-8")
+    return res
 
 
 def cmd_fetch(volume_path: str, local_path: str) -> list[str]:
@@ -495,6 +646,10 @@ def main(argv: list[str]) -> None:
                 opts["max_usd"] = float(next(it))
             elif a == "--out":
                 opts["out_dir"] = next(it)
+            elif a == "--deadline":
+                opts["deadline_s"] = float(next(it))
+            elif a == "--ephemeral":
+                opts["ephemeral"] = True
             else:
                 pos.append(a)
         if len(pos) < 2:
@@ -502,6 +657,10 @@ def main(argv: list[str]) -> None:
         _print(_summary(cmd_extract(pos[:-1], pos[-1], **opts)))
     elif cmd == "fetch":
         _print(cmd_fetch(rest[0], rest[1]))
+    elif cmd == "v3-session":  # v3-session <check.jsonl> <run_name> <out_dir> <rows.jsonl> [more.jsonl ...]
+        res = cmd_v3_session(rest[3:], rest[0], rest[1], rest[2])
+        _print({k: v for k, v in res.items() if k != "v2_check"} | {"v2_check": {
+            k: v for k, v in res.get("v2_check", {}).items() if k != "rows"}})
     else:
         raise SystemExit(f"unknown command {cmd!r}")
 

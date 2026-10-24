@@ -1,0 +1,69 @@
+[
+ {
+  "role": "fake_caught",
+  "case_id": "trap_v1_020",
+  "split": "test",
+  "category": "eval_on_train_levels",
+  "ground_truth": {
+   "set": "trap",
+   "truth": "fake",
+   "acceptable": [
+    "invalid"
+   ],
+   "category": "eval_on_train_levels"
+  },
+  "explanation": "Invalid: eval_on_train_levels evaluated on the 16 training levels (eval level seed 1000 = training level seed) instead of the 64 held-out levels, so the 30.6 return gain is not a held-out result.",
+  "opus_answer_R40": {
+   "verdict": "invalid",
+   "reason_code": "contamination_or_eval_leak",
+   "from": "R40 trapeval-2026-10-24-claude-opus-5-5-test-043437.jsonl",
+   "mubit_request_id": "mreq_01a16c309a4571329445dceb3b68140b"
+  },
+  "user_file": "fake_caught.trap_v1_020.user.txt"
+ },
+ {
+  "role": "real_gain",
+  "case_id": "trap_v1_024",
+  "split": "test",
+  "category": "big_real_gain",
+  "ground_truth": {
+   "set": "trap",
+   "truth": "real",
+   "acceptable": [
+    "valid"
+   ],
+   "category": "big_real_gain"
+  },
+  "explanation": "Valid: a large gain from fixing a weak previous best; held-out splits are distinct, nothing was trained or selected on the evaluation data, the evaluation is unchanged and the 558.2 gain is well above the seed std 55.1.",
+  "opus_answer_R40": {
+   "verdict": "valid",
+   "reason_code": "clean_gain",
+   "from": "R40 trapeval-2026-10-24-claude-opus-5-5-test-043437.jsonl",
+   "mubit_request_id": "mreq_01a16c309f987b92924fb6f4f9551405"
+  },
+  "user_file": "real_gain.trap_v1_024.user.txt"
+ },
+ {
+  "role": "noise",
+  "case_id": "trap_v1_048",
+  "split": "test",
+  "category": "noise_within_spread",
+  "ground_truth": {
+   "set": "trap",
+   "truth": "noise",
+   "acceptable": [
+    "invalid",
+    "unsure"
+   ],
+   "category": "noise_within_spread"
+  },
+  "explanation": "Invalid (unsure acceptable): a single run gained 7.5, less than the seed std 15.7 of the previous best.",
+  "opus_answer_R40": {
+   "verdict": "unsure",
+   "reason_code": "gain_within_noise",
+   "from": "R40 trapeval-2026-10-24-claude-opus-5-5-test-043437.jsonl",
+   "mubit_request_id": "mreq_01a16c30aefb77a0b9d1d096db3bd43c"
+  },
+  "user_file": "noise.trap_v1_048.user.txt"
+ }
+]

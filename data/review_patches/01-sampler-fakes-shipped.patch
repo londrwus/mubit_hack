@@ -1,0 +1,155 @@
+diff --git a/backend/benchmark/metrics.py b/backend/benchmark/metrics.py
+index 90a11f5..d3528fd 100644
+--- a/backend/benchmark/metrics.py
++++ b/backend/benchmark/metrics.py
+@@ -214,7 +214,12 @@ def source_extras(experiments: Iterable[Mapping[str, Any]], *, shipped: Mapping[
+                   best: Mapping[str, Any] | None = None) -> dict[str, Any]:
+     """Who proposed the runs (``experiments.source``: baseline | llm | optuna | sampler, the
+     backfill engine feature's no-AI sampler), and which source produced the shipped model and the
+-    best counted run. Rows from before the column existed have no source (``unknown``)."""
++    best counted run. Rows from before the column existed have no source (``unknown``).
++
++    ``sampler_fakes_shipped`` is 0 or 1: the model the arm SHIPS (``shipped``, its last accepted
++    best) is a sampler trap run. ``is_best`` stays set on a run that was accepted as a new best
++    and later replaced, so counting ``is_best`` trap runs gives ``sampler_fakes_accepted_as_best``
++    (any time during the race), not what was shipped."""
+     exps = list(experiments)
+ 
+     def src(e: Mapping[str, Any]) -> str:
+@@ -241,7 +246,10 @@ def source_extras(experiments: Iterable[Mapping[str, Any]], *, shipped: Mapping[
+         "sampler_trap_runs": len(samp_trap),
+         "sampler_claims_judged": sum(1 for e in samp if _get(e, "judge_verdict") is not None),
+         "sampler_trap_claims_rejected": sum(1 for e in samp_trap if _get(e, "judge_verdict") == "invalid"),
+-        "sampler_fakes_shipped": sum(1 for e in samp_trap if bool(_get(e, "is_best", False))),
++        "sampler_fakes_shipped": int(shipped is not None and src(shipped) == "sampler"
++                                     and bool(_get(shipped, "is_trap", False))
++                                     and _get(shipped, "status") == ExperimentStatus.succeeded.value),
++        "sampler_fakes_accepted_as_best": sum(1 for e in samp_trap if bool(_get(e, "is_best", False))),
+         "shipped_source": src(shipped) if shipped is not None else None,
+         "best_source": src(best) if best is not None else None,
+     }
+diff --git a/scripts/headline.py b/scripts/headline.py
+index d446ce2..faf2647 100644
+--- a/scripts/headline.py
++++ b/scripts/headline.py
+@@ -869,7 +869,8 @@ class EngineStats:
+     sampler_trap_runs: int = 0
+     sampler_claims: int = 0
+     sampler_trap_rejected: int = 0
+-    sampler_fakes_shipped: int = 0
++    sampler_fakes_shipped: int = 0     # races whose SHIPPED model is a sampler trap run
++    sampler_fakes_accepted: int = 0    # sampler trap runs accepted as a new best at some point
+     shipped_from: dict[str, int] = field(default_factory=dict)
+     # planner cadence (D47): the declared interval and the planner (propose) calls made
+     cadence_s: float | None = None
+@@ -879,7 +880,7 @@ class EngineStats:
+         for k in ("runs", "early_stopped", "early_stop_too_late", "slot_s_freed", "stops_unconfirmed",
+                   "judge_claims", "judge_llm_invalid", "judge_no_reply", "judge_rule_real", "judge_rule_noise",
+                   "races", "sampler_trap_runs", "sampler_claims", "sampler_trap_rejected", "sampler_fakes_shipped",
+-                  "propose_calls"):
++                  "sampler_fakes_accepted", "propose_calls"):
+             setattr(self, k, getattr(self, k) + getattr(o, k))
+         self.cadence_s = self.cadence_s if self.cadence_s is not None else o.cadence_s
+         for src, dst in ((o.judge_final, self.judge_final), (o.cost_sources, self.cost_sources),
+@@ -913,6 +914,7 @@ def engine_stats(rows: Rows, fp: Mapping[str, Any] | None) -> dict[str, EngineSt
+         st.sampler_claims = int(src["sampler_claims_judged"])
+         st.sampler_trap_rejected = int(src["sampler_trap_claims_rejected"])
+         st.sampler_fakes_shipped = int(src["sampler_fakes_shipped"])
++        st.sampler_fakes_accepted = int(src.get("sampler_fakes_accepted_as_best", 0))
+         if src["shipped_source"] is not None:
+             st.shipped_from[str(src["shipped_source"])] = 1
+         sigmas: list[float] = []
+@@ -1445,7 +1447,8 @@ def _engine_lines(g: Group, kinds: Sequence[str]) -> list[str]:
+             c = (f"{ai} runs proposed by the AI · {samp} by the no-AI sampler · shipped model from the sampler in "
+                  f"{e.shipped_from.get('sampler', 0)} of {e.races} race(s)")
+             c += (f" · sampler fakes: {e.sampler_trap_runs} run(s), {e.sampler_trap_rejected} claim(s) rejected by "
+-                  f"the checker, {e.sampler_fakes_shipped} shipped")
++                  f"the checker, {e.sampler_fakes_accepted} accepted as a best at some point, shipped model a "
++                  f"sampler fake in {e.sampler_fakes_shipped} of {e.races} race(s)")
+             fill_cells.append(c)
+         else:
+             fill_cells.append("off")
+diff --git a/tests/test_review_sampler_fakes_shipped.py b/tests/test_review_sampler_fakes_shipped.py
+new file mode 100644
+index 0000000..ae0d2ed
+--- /dev/null
++++ b/tests/test_review_sampler_fakes_shipped.py
+@@ -0,0 +1,78 @@
++"""Review fix: ``sampler_fakes_shipped`` counts the model actually shipped.
++
++``is_best`` means "accepted as a new best when it finished" and stays set after a later run
++replaces it. Before the fix ``sampler_fakes_shipped = sum(trap and is_best)``, so a sampler trap
++run that was briefly the best and then replaced was reported as shipped. Pure functions; no
++network.
++"""
++
++from __future__ import annotations
++
++import importlib.util
++import sys
++from pathlib import Path
++from typing import Any
++
++from backend.benchmark.metrics import source_extras, summarize_arm
++
++REPO = Path(__file__).resolve().parents[1]
++
++
++def _row(eid: str, end: float, *, source: str, trap: bool = False, best: bool = True) -> dict[str, Any]:
++    return {"id": eid, "arm_id": "a", "status": "succeeded", "score": 1.0, "metrics": {"heldout_score": 1.0},
++            "is_trap": trap, "is_best": best, "source": source, "started_at": end - 5, "ended_at": end}
++
++
++def _summ(exps: list[dict[str, Any]]) -> dict[str, Any]:
++    _, x = summarize_arm("opus_bm", direction="min", target_value=0.5, race_start=0.0, experiments=exps,
++                         intervals=[], llm_calls=[])
++    return x
++
++
++def test_a_replaced_sampler_fake_was_accepted_but_not_shipped() -> None:
++    exps = [_row("base", 10, source="baseline"), _row("samp-trap", 20, source="sampler", trap=True),
++            _row("llm-best", 30, source="llm")]
++    x = _summ(exps)
++    assert x["shipped_experiment_id"] == "llm-best" and x["shipped_source"] == "llm"
++    assert x["sampler_fakes_shipped"] == 0
++    assert x["sampler_fakes_accepted_as_best"] == 1
++
++
++def test_a_shipped_sampler_fake_is_counted_once() -> None:
++    exps = [_row("base", 10, source="baseline"), _row("samp-trap", 20, source="sampler", trap=True),
++            _row("samp-trap2", 30, source="sampler", trap=True)]
++    x = _summ(exps)
++    assert x["shipped_experiment_id"] == "samp-trap2"
++    assert x["sampler_fakes_shipped"] == 1 and x["sampler_fakes_accepted_as_best"] == 2
++
++
++def test_an_honest_shipped_sampler_run_is_not_a_fake() -> None:
++    exps = [_row("base", 10, source="baseline"), _row("samp", 20, source="sampler")]
++    assert _summ(exps)["sampler_fakes_shipped"] == 0
++    assert source_extras(exps)["sampler_fakes_shipped"] == 0      # no shipped row given: nothing shipped
++
++
++def test_headline_engine_line_uses_both_counts() -> None:
++    if "headline" not in sys.modules:
++        spec = importlib.util.spec_from_file_location("headline", REPO / "scripts" / "headline.py")
++        assert spec and spec.loader
++        mod = importlib.util.module_from_spec(spec)
++        sys.modules["headline"] = mod
++        spec.loader.exec_module(mod)
++    hl = sys.modules["headline"]
++    rows = {"races": [{"id": "r", "runner": "surrogate"}],
++            "arms": [{"id": "a", "kind": "opus_bm"}],
++            "experiments": [_row("base", 10, source="baseline"), _row("samp-trap", 20, source="sampler", trap=True),
++                            _row("llm-best", 30, source="llm")],
++            "llm_calls": []}
++    fp = {"arms": {"opus_bm": {"engine_features": ["backfill"]}}}
++    st = hl.engine_stats(rows, fp)["opus_bm"]
++    assert st.sampler_fakes_shipped == 0 and st.sampler_fakes_accepted == 1
++    total = hl.EngineStats()
++    total.add(st)
++    total.add(st)
++    assert total.sampler_fakes_accepted == 2 and total.sampler_fakes_shipped == 0
++    from types import SimpleNamespace
++
++    lines = "\n".join(hl._engine_lines(SimpleNamespace(engine={"opus_bm": st}), ["opus_bm"]))
++    assert "1 accepted as a best at some point" in lines and "sampler fake in 0 of 1 race(s)" in lines

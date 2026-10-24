@@ -1,0 +1,319 @@
+diff --git a/scripts/analyze_races.py b/scripts/analyze_races.py
+index c8f5f28..29af326 100644
+--- a/scripts/analyze_races.py
++++ b/scripts/analyze_races.py
+@@ -2,8 +2,9 @@
+ docs/results_log.md, and plain-language PNG charts.
+ 
+ Reads races from the SQLite DB written by ``backend/db.py`` (opened read-only) and/or from
+-JSONL exports (``backend/benchmark/export.py``), groups them by target, and reports per arm
+-the mean +/- std over seeds of:
++JSONL exports (``backend/benchmark/export.py``), groups them by target AND fairness fingerprint
++(one report per setup: races that ran a different setup are never pooled into one mean), and
++reports per arm the mean +/- std over seeds of:
+ 
+ - Cost to reach the goal ($-to-target = GPU $ + LLM $ up to the first run that reaches the
+   target threshold), Time to reach the goal (time-to-target)
+@@ -102,6 +103,9 @@ TARGET_LABEL = {"lm": "Language model", "rl": "Game-playing AI", "cifar": "Image
+ PROBE_MARKERS = ("probe", "collection")
+ DEV_LLM_MODES = ("mock", "replay")
+ DEV_STAMP = "DEV / MOCK: not a benchmark result"
++MIXED_STAMP = "MIXED SETUPS / REPEATED SEEDS: not a benchmark result"
++# fairness_warnings lines that mean the pooled races are not one setup over independent seeds
++_UNLIKE_MARKS = ("mean over unlike", "different arm sets", "repeated seeds", "(unfair)")
+ 
+ # Tables a race needs (metrics are not used by any headline number).
+ RACE_TABLES = ("arms", "experiments", "llm_calls", "gpu_intervals", "corrections")
+@@ -416,6 +420,8 @@ class ArmAggregate:
+ 
+ @dataclass
+ class TargetReport:
++    """One setup of one target: races with the same fairness fingerprint (``setup_id``)."""
++
+     target: str
+     direction: str
+     target_value: float
+@@ -429,6 +435,22 @@ class TargetReport:
+     arms: dict[str, ArmAggregate]
+     runs: list[ArmRun]
+     warnings: list[str]
++    setup_id: str | None = None      # fingerprint_id of every race in the report (None: no manifest)
++    n_setups: int = 1                # setups of this target in the same analysis (each its own report)
++
++    @property
++    def mixed(self) -> bool:
++        """The pooled races are not one setup over independent seeds (see the warnings)."""
++        return any(m in w for w in self.warnings for m in _UNLIKE_MARKS)
++
++    @property
++    def n_seeds(self) -> int:
++        """Distinct seeds (a re-run seed counts once; ``n_races`` counts the races)."""
++        return len({r.seed for r in self.runs})
++
++    @property
++    def n_races(self) -> int:
++        return len(self.race_ids)
+ 
+ 
+ def normalise(q: float | None, start: float | None, best: float | None) -> float | None:
+@@ -639,18 +661,38 @@ def analyse(
+     target_values: Mapping[str, float] | None = None,
+     best_known: Mapping[str, float] | None = None,
+     start_scores: Mapping[str, float] | None = None,
++    exclusions: Exclusions | None = None,
+ ) -> list[TargetReport]:
++    """One report per (target, fairness fingerprint). A target that cannot be analysed (its
++    races ran with different goals, or there is no goal) is never dropped silently: each of its
++    races is listed in ``exclusions`` (``Excluded from this analysis``) with the reason, and the
++    reason is printed to stderr."""
+     target_values = target_values or {}
+     best_known = best_known or {}
+     start_scores = start_scores or {}
+-    by_target: dict[str, list[tuple[Rows, bool]]] = {}
++    by_setup: dict[tuple[str, str | None], list[tuple[Rows, bool]]] = {}
+     for rows, dev in kept:
+-        by_target.setdefault(rows["races"][0]["target"], []).append((rows, dev))
++        key = (rows["races"][0]["target"], fingerprint_id(fairness_fingerprint(rows)))
++        by_setup.setdefault(key, []).append((rows, dev))
++    setups_per_target: dict[str, list[str | None]] = {}
++    for target, fid in by_setup:
++        setups_per_target.setdefault(target, []).append(fid)
++
++    def skip(group: list[tuple[Rows, bool]], why: str) -> None:
++        print(f"analyze_races: skipped: {why}", file=sys.stderr)
++        if exclusions is not None:
++            for g, _ in group:
++                exclusions.races.append((str(g["races"][0]["id"]), f"not analysed: {why}"))
+ 
+     reports: list[TargetReport] = []
+-    for target in sorted(by_target):
+-        group = by_target[target]
++    for target, setup_id in sorted(by_setup, key=lambda k: (k[0], str(k[1]))):
++        group = by_setup[(target, setup_id)]
+         warnings = fairness_warnings([g for g, _ in group])
++        others = [f for f in setups_per_target[target] if f != setup_id]
++        if others:
++            warnings.append(f"{target!r} races ran {len(others) + 1} different setups (fairness fingerprints "
++                            f"{', '.join(f'`{f}`' for f in sorted(map(str, [setup_id, *others])))}): each setup is "
++                            "reported on its own and never pooled")
+         try:
+             from workers.targets.base import get_target
+ 
+@@ -675,15 +717,15 @@ def analyse(
+                 race_goals.add(float(v) if v is not None else (None if tv is None else float(tv)))
+                 provisional = provisional or bool(c.get("provisional"))
+             if len(race_goals) > 1:
+-                warnings.append(f"races for {target!r} ran with different goals {sorted(race_goals, key=str)}: "
+-                                f"not aggregated (pass --target-value {target}=X to force one)")
++                skip(group, f"races for {target!r} ran with different goals {sorted(race_goals, key=str)}: "
++                            f"not aggregated (pass --target-value {target}=X to force one)")
+                 continue
+             if from_config and race_goals:
+                 tv, tv_src = next(iter(race_goals)), "race config (bench.py goal)"
+             if provisional:
+                 tv_src += ", PROVISIONAL"
+         if tv is None:
+-            warnings.append(f"no target value for {target!r}: skipped (pass --target-value {target}=X)")
++            skip(group, f"no target value for {target!r} (pass --target-value {target}=X)")
+             continue
+ 
+         runs: list[ArmRun] = []
+@@ -732,7 +774,8 @@ def analyse(
+             target=target, direction=direction, target_value=float(tv), target_value_source=tv_src,
+             start_score=start, start_source=start_src, best_known=best, best_source=best_src,
+             is_dev=any(d for _, d in group), race_ids=[g["races"][0]["id"] for g, _ in group],
+-            arms=arms, runs=runs, warnings=warnings,
++            arms=arms, runs=runs, warnings=warnings, setup_id=setup_id,
++            n_setups=len(setups_per_target[target]),
+         ))
+     return reports
+ 
+@@ -817,10 +860,14 @@ def render_markdown(reports: list[TargetReport], ex: Exclusions) -> str:
+         out.append("_No races left to analyse after exclusions._\n")
+     for rep in reports:
+         label = TARGET_LABEL.get(rep.target, rep.target)
+-        n_seeds = max((len(a.seeds) for a in rep.arms.values()), default=0)
+         stamp = f" **[{DEV_STAMP}]**" if rep.is_dev else ""
++        if rep.mixed:
++            stamp += f" **[{MIXED_STAMP}]**"
+         goal = "≤" if rep.direction == "min" else "≥"
+-        out.append(f"### night/bench: {label} (`{rep.target}`), {n_seeds} seed(s){stamp}\n")
++        seeds = (f"{rep.n_seeds} seed(s)" if rep.n_seeds == rep.n_races
++                 else f"{rep.n_races} race(s) over {rep.n_seeds} distinct seed(s)")
++        setup = f", setup `{rep.setup_id}`" if rep.n_setups > 1 or rep.setup_id is not None else ""
++        out.append(f"### night/bench: {label} (`{rep.target}`){setup}, {seeds}{stamp}\n")
+         out.append(f"- Goal: held-out score {goal} {rep.target_value:g} (source: {rep.target_value_source}).")
+         out.append(f"- Model quality 0–100: 0 = {_fmt_q(rep.start_score)} ({rep.start_source}); "
+                    f"100 = {_fmt_q(rep.best_known)} ({rep.best_source}).")
+@@ -885,9 +932,15 @@ def render_markdown(reports: list[TargetReport], ex: Exclusions) -> str:
+             s = a.stats
+             notes = (f"held-out {_fmt(s['best_quality'], digits=4, spec='g')}; LLM {_fmt(s['llm_cost_usd'], prefix='$', digits=3)}; "
+                      f"{_evidence(a)}; races {', '.join(r[:8] for r in a.race_ids)}")
++            if rep.mixed:
++                notes = f"{MIXED_STAMP} (see the warnings); {notes}"
+             if rep.is_dev:
+                 notes = f"{DEV_STAMP}; {notes}"
+-            out.append(f"| {label} | {ARM_LABEL.get(kind, kind)} | {len(a.seeds)} | "
++            if len(set(a.seeds)) != len(a.seeds):
++                notes = f"{len(a.seeds)} races; {notes}"
++            if rep.setup_id is not None:
++                notes = f"{notes}; setup {rep.setup_id}"
++            out.append(f"| {label} | {ARM_LABEL.get(kind, kind)} | {len(set(a.seeds))} | "
+                        f"{_fmt_reach(s['time_to_target_s'], scale=1 / 60, digits=1, unit=' min')} | "
+                        f"{_fmt_reach(s['cost_to_target_usd'], prefix='$')} | {_fmt(s['gpu_idle_pct'], digits=1, unit='%')} | "
+                        f"{_fmt(s['normalised_quality'], digits=0)} (0–100) | {notes} |")
+@@ -1004,16 +1057,20 @@ def render_charts(reports: list[TargetReport], out_dir: str | Path, theme: str =
+             fig.text(0.02, top, f"{title} · {label}", ha="left", va="top", color=th["text"], fontsize=20,
+                      fontweight="bold")
+             sub = f"{how} · mean of {n_runs} run(s), grey line = ± 1 std"
++            if rep.n_setups > 1:
++                sub += f" · setup {rep.setup_id}"
+             fig.text(0.02, top - 0.48 / fig_h, sub, ha="left", va="top", color=th["muted"], fontsize=12)
+-            if rep.is_dev:
+-                fig.text(0.02, top - 0.78 / fig_h, DEV_STAMP, ha="left", va="top", color=th["arm"]["opus"],
++            if rep.is_dev or rep.mixed:
++                stamp_txt = " · ".join(s for s, on in ((DEV_STAMP, rep.is_dev), (MIXED_STAMP, rep.mixed)) if on)
++                fig.text(0.02, top - 0.78 / fig_h, stamp_txt, ha="left", va="top", color=th["arm"]["opus"],
+                          fontsize=12, fontweight="bold")
+             fair = ("Same GPUs, same budget, same seeds." if not rep.warnings
+                     else f"Fairness warnings ({len(rep.warnings)}): see the results table.")
+             fig.text(0.02, 0.012, f"{fair} Source: night/bench races " + ", ".join(r[:8] for r in rep.race_ids),
+                      color=th["muted"], fontsize=9)
+             fig.tight_layout(rect=(0, 0.25 / fig_h, 1, 1.0 - 1.15 / fig_h))
+-            path = out / f"{rep.target}-{stem}{'-dev' if rep.is_dev else ''}.png"
++            setup_sfx = f"-{rep.setup_id}" if rep.n_setups > 1 else ""
++            path = out / f"{rep.target}{setup_sfx}-{stem}{'-dev' if rep.is_dev else ''}.png"
+             fig.savefig(path, facecolor=th["surface"])
+             plt.close(fig)
+             written.append(path)
+@@ -1066,7 +1123,7 @@ def main(argv: list[str] | None = None) -> int:
+         races.extend(load_jsonl(args.jsonl))
+     kept, ex = screen(races, allow_dev=args.allow_dev, include_unfinished=args.include_unfinished)
+     reports = analyse(kept, target_values=_kv(args.target_value), best_known=_kv(args.best_known),
+-                      start_scores=_kv(args.start_score))
++                      start_scores=_kv(args.start_score), exclusions=ex)
+     md = render_markdown(reports, ex)
+     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+     print(md)
+diff --git a/tests/test_analyze_races.py b/tests/test_analyze_races.py
+index 740b606..aadc53a 100644
+--- a/tests/test_analyze_races.py
++++ b/tests/test_analyze_races.py
+@@ -290,12 +290,15 @@ def test_fairness_fingerprint(tmp_path: Path) -> None:
+     assert fps["f0"]["arms"]["opus"]["record_mode"] == "off" and fps["f0"]["arms"]["optuna"]["engine_features"] == []
+     diff = ar.fingerprint_diff(fps["f0"], fps["f2"])
+     assert "arms.mubit.llm_policy.prompts.judge_improvement: v0:623366123052 vs v1:5c1d3cfd2941" in diff
+-    # no manifest -> None; analyse warns when one target pools unlike setups
++    # no manifest -> None; analyse never pools unlike setups: f0 + f1 (same fingerprint) are one
++    # report, f2 (a different judge prompt) is its own, and both say the target has two setups
+     assert ar.fairness_fingerprint({"races": [{"id": "x"}], "arms": []}) is None
+     kept, _ = ar.screen(list(races.values()))
+-    (rep,) = ar.analyse(kept, target_values=TV)
+-    assert any("fairness fingerprint" in w and "f2" in w for w in rep.warnings)
+-    assert not any("fairness fingerprint" in w and "f1" in w for w in rep.warnings)
++    reps = ar.analyse(kept, target_values=TV)
++    assert sorted(sorted(r.race_ids) for r in reps) == [["f0", "f1"], ["f2"]]
++    assert all(r.n_setups == 2 and r.setup_id == ids[r.race_ids[0]] for r in reps)
++    assert all(any("2 different setups" in w for w in r.warnings) for r in reps)
++    assert not any("fairness fingerprint" in w and "differs" in w for r in reps for w in r.warnings)
+ 
+ 
+ def test_runtime_multiplier_inferred_from_run_refs() -> None:
+diff --git a/tests/test_review_analyze_setups.py b/tests/test_review_analyze_setups.py
+new file mode 100644
+index 0000000..aeb2a62
+--- /dev/null
++++ b/tests/test_review_analyze_setups.py
+@@ -0,0 +1,92 @@
++"""Review fix: analyze_races never drops a target silently and never pools unlike setups.
++
++Before the fix (1) a target whose races ran with different goals, or had no goal, was skipped
++with a warning that was never printed and was not listed under "Excluded from this analysis";
++(2) every race of a target was pooled into one mean whatever its setup (the LCBench section
++pooled 11 races from 4 setups, "11 seed(s)" counting races, with ready-to-paste results_log
++rows and charts). Synthetic DBs only; no network.
++"""
++
++from __future__ import annotations
++
++from pathlib import Path
++
++import pytest
++
++from backend.db import Database
++from test_analyze_races import TV, _fairness, _race, ar
++
++
++def _db(tmp_path: Path, races: list[tuple[str, int, dict | None, dict | None]]) -> Path:
++    path = tmp_path / "bench.db"
++    db = Database(path)
++    for rid, seed, config, fairness in races:
++        _race(db, rid, seed, config=config)
++        if fairness is not None:
++            db.update_race(rid, fairness=fairness)
++    db.close()
++    return path
++
++
++def test_mixed_goals_are_listed_as_excluded_not_dropped(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
++    path = _db(tmp_path, [("m0", 0, {"target": "rl", "target_value": -245.0}, None),
++                          ("m1", 1, {"target": "rl", "target_value": -165.0, "provisional": True}, None)])
++    kept, ex = ar.screen(ar.load_db(path))
++    assert ar.analyse(kept, exclusions=ex) == []
++    why = dict(ex.races)
++    assert set(why) == {"m0", "m1"} and all("different goals" in w for w in why.values())
++    md = ar.render_markdown([], ex)
++    assert "race `m0`: not analysed" in md and "race `m1`: not analysed" in md
++    assert "different goals" in capsys.readouterr().err
++    # the CLI passes its exclusions through
++    assert ar.main(["--db", str(path), "--no-charts"]) == 0
++    out = capsys.readouterr().out
++    assert "race `m0`: not analysed" in out and "Nothing excluded" not in out
++
++
++def test_a_target_without_a_goal_is_listed_as_excluded(tmp_path: Path) -> None:
++    path = _db(tmp_path, [("u0", 0, {"target": "rl"}, None)])
++    kept, ex = ar.screen(ar.load_db(path))
++    for rows, _ in kept:
++        rows["races"][0]["target"] = "not-a-registered-target"   # unknown target, no goal anywhere
++    assert ar.analyse(kept, exclusions=ex) == []
++    assert any(rid == "u0" and "no target value" in w for rid, w in ex.races)
++
++
++def test_unlike_setups_are_reported_apart(tmp_path: Path) -> None:
++    v0, v1 = _fairness("v0:623366123052"), _fairness("v1:5c1d3cfd2941")
++    path = _db(tmp_path, [("a0", 0, None, v0), ("a1", 1, None, v0), ("a2", 2, None, v0),
++                          ("b0", 0, None, v1), ("b1", 1, None, v1)])
++    kept, ex = ar.screen(ar.load_db(path))
++    reps = ar.analyse(kept, target_values=TV, exclusions=ex)
++    assert sorted(sorted(r.race_ids) for r in reps) == [["a0", "a1", "a2"], ["b0", "b1"]]
++    ids = {r.setup_id for r in reps}
++    assert len(ids) == 2 and None not in ids
++    md = ar.render_markdown(reps, ex)
++    for r in reps:
++        assert f"setup `{r.setup_id}`" in md
++    assert "3 seed(s)" in md and "2 seed(s)" in md and "5 seed(s)" not in md
++    assert ar.MIXED_STAMP not in md          # each report is one setup over distinct seeds
++
++
++def test_repeated_seeds_are_counted_once_and_stamped(tmp_path: Path) -> None:
++    v0 = _fairness("v0:623366123052")
++    path = _db(tmp_path, [("r0", 0, None, v0), ("r0b", 0, None, v0), ("r1", 1, None, v0)])
++    kept, ex = ar.screen(ar.load_db(path))
++    (rep,) = ar.analyse(kept, target_values=TV, exclusions=ex)
++    assert rep.n_races == 3 and rep.n_seeds == 2 and rep.mixed
++    md = ar.render_markdown([rep], ex)
++    assert "3 race(s) over 2 distinct seed(s)" in md
++    paste = md.split('Rows for the "Benchmark results" table', 1)[1]
++    assert ar.MIXED_STAMP in paste and "| Busy Machines (Mubit) | 2 |" in paste and "3 races;" in paste
++
++
++def test_charts_get_one_file_set_per_setup(tmp_path: Path) -> None:
++    pytest.importorskip("matplotlib")
++    v0, v1 = _fairness("v0:623366123052"), _fairness("v1:5c1d3cfd2941")
++    path = _db(tmp_path, [("a0", 0, None, v0), ("b0", 0, None, v1)])
++    kept, _ = ar.screen(ar.load_db(path))
++    reps = ar.analyse(kept, target_values=TV)
++    paths = ar.render_charts(reps, tmp_path / "charts")
++    assert len(paths) == 8 and len({p.name for p in paths}) == 8
++    assert all(any(f"-{r.setup_id}-" in p.name for r in reps) for p in paths)

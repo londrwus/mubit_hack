@@ -15,6 +15,8 @@ From the Busy Machines team (Night Shift London, 23–25 Oct 2026). We built an 
 | F11 | Generative steps (propose) can't pass a match exam | R28, R20, R21, R36 | The slowest, most frequent step, where GPUs wait, is the one that can't be served | Outcome or validity grading for generative tasks |
 | F12 | HTTP 503 `engine_unavailable` from the gateway during a recording run | R39 | A lab loop stalls or loses inputs; no hint when to retry | `Retry-After`, a clear "Mubit vs provider" error, an optional pass-through to the provider |
 | F13 | Hosted Sapling endpoint: no way to check it matches the release | D33 (not measured yet) | Labs can't tell whether published Sapling numbers apply to the endpoint | Revision and calibration hash in the response; reference logits |
+| F14 | Diagnose task: "Can't train: the training run failed", no reason given | R46 | 86 recorded calls give no adapter and no next step | A failure reason (data, schema, quota) and a retry button |
+| F15 | A closed-output task (3 verdicts × reason codes, provider self-agreement 40/40) trained to an adapter that matches only 11.4% of the provider's answers in one workspace and 58.3% in another from the same inputs; training took ~6.5–7 h | R39, R70, R79 | The output format we designed to make matching easy didn't help; we can't see why from the card | Show the adapter's answers next to the provider's on the test cases, and a format-validity rate |
 | F1 | Adapter replies don't keep the JSON output format | R7, R8, R9 | Agents that parse replies break; the broken replies are also the fast ones | Constrained decoding for `output_config.format`, plus a "malformed outputs: needs 0" exam line |
 | F2 | The API doesn't say per call who answered | probe answers, R29 | Labs can't audit which model made a decision or measure adapters in their own tooling | A `served-by` response header and a lookup by request ID |
 | F3 | `record: off` also drops the task fingerprint | docs, `backend/benchmark/configs.py` | Privacy, routing and "force the provider" are tied to one header | Separate "store content" from "who answers" |
@@ -97,6 +99,10 @@ Measured, and worth saying first:
 **Why it matters to AI labs.** A lab quoting Sapling numbers needs to know the hosted model, the open weights and the model card are the same thing. Calibration matters most: it decides whether Sapling answers or says `unsure` (F7).
 
 **Suggested fix.** Return the Hub revision and a calibration hash in each response; publish reference logits for a few rows; document the input format and rate limits. A key (even a free one) would protect your bill and let you see usage.
+
+### F14. Diagnose task training failed with no reason
+The `diagnose_run` task ("On-call debugging expert", 86 recorded calls, R26) shows *Can't train: No adapter yet: the training run failed* (console, 2026-10-24 ~08:45, R46). The page gives no cause and no retry. A lab can't tell whether the data, the schema or a quota is at fault, so it can't fix the input.
+**Ask:** show the failure reason and allow a retry without re-recording.
 
 ## Earlier findings, updated
 

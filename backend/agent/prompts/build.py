@@ -21,7 +21,7 @@ import math
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.agent.prompts import CURRENT_VERSION
 from backend.core.types import (
@@ -29,6 +29,7 @@ from backend.core.types import (
     FailureClass,
     JudgeOutput,
     JudgeReasonCode,
+    ProposedExperiment,
     ProposeOutput,
     StepType,
     StopDecision,
@@ -348,7 +349,42 @@ SETTINGS_SCHEMA: dict[str, Any] = {
 }
 
 
-def propose_wire_schema(spec: TargetSpec | None = None) -> dict[str, Any]:
+PROPOSE_DIFF_VERSIONS: dict[str, int] = {"v2": 10, "v3": 6}
+"""Lean propose prompt versions (draft, selectable by config; default stays v1): the reply lists
+only the settings changed vs the current best config (``changes``), with a short hypothesis of at
+most this many words. ``expand_diff`` turns a reply back into full configs before validation."""
+
+
+def is_diff_version(version: str | None) -> bool:
+    return (version or CURRENT_VERSION[StepType.propose_experiments]) in PROPOSE_DIFF_VERSIONS
+
+
+def propose_wire_schema(spec: TargetSpec | None = None, version: str | None = None) -> dict[str, Any]:
+    if is_diff_version(version):
+        words = PROPOSE_DIFF_VERSIONS[version]  # type: ignore[index]
+        return {
+            "type": "object",
+            "properties": {
+                "experiments": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "changes": {
+                                "type": "string",
+                                "description": "Only the settings changed vs the current best config, "
+                                               "as name=value pairs separated by commas.",
+                            },
+                            "hypothesis": {"type": "string", "description": f"At most {words} words."},
+                        },
+                        "required": ["changes", "hypothesis"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+            "required": ["experiments"],
+            "additionalProperties": False,
+        }
     return {
         "type": "object",
         "properties": {
@@ -411,24 +447,75 @@ def judge_wire_schema(version: str | None = None) -> dict[str, Any]:
     raise ValueError(f"no judge wire schema for prompt version {version!r}")
 
 
-def wire_schema_for(step: StepType | str, spec: TargetSpec | None = None) -> dict[str, Any]:
+def wire_schema_for(step: StepType | str, spec: TargetSpec | None = None,
+                    propose_version: str | None = None) -> dict[str, Any]:
     step = StepType(step)
     if step is StepType.propose_experiments:
         if spec is None:
             raise ValueError("propose_experiments needs the target spec for its config schema")
-        return propose_wire_schema(spec)
+        return propose_wire_schema(spec, propose_version)
     if step is StepType.early_stop:
         return early_stop_wire_schema()
     return diagnose_wire_schema() if step is StepType.diagnose_run else judge_wire_schema()
 
 
-def propose_validator(spec: TargetSpec, max_experiments: int | None = None) -> Callable[[ProposeOutput], ProposeOutput]:
+# --------------------------------------------------------------------------- lean (diff) replies
+
+
+class ProposedChanges(BaseModel):
+    """One experiment of a diff-form reply (v2/v3): settings changed vs the current best config."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    changes: dict[str, Any]
+    hypothesis: str
+
+    @field_validator("changes", mode="before")
+    @classmethod
+    def _parse_changes(cls, v: Any) -> Any:
+        # Same wire grammar as a full v1 settings string ("lr=0.003, n_layer=6").
+        return ProposedExperiment.model_validate({"config": v, "hypothesis": "x"}).config
+
+    @field_validator("hypothesis")
+    @classmethod
+    def _short(cls, v: str) -> str:
+        # Same trimming rule as v1 (D26): trim, never reject for length.
+        return ProposedExperiment.model_validate({"config": {}, "hypothesis": v}).hypothesis
+
+
+class ProposeDiffOutput(BaseModel):
+    """propose_experiments reply in diff form; ``expand_diff`` -> ``ProposeOutput``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    experiments: list[ProposedChanges] = Field(min_length=1)
+
+
+def propose_base_config(spec: TargetSpec, history: Sequence[ResultRow]) -> dict[str, Any]:
+    """The config a diff reply is relative to: exactly the 'current best config' line of
+    ``build_propose_user`` (leaderboard top), else the default config."""
+    top = leaderboard(spec, history, 1)
+    return dict(top[0].config) if top else spec.default_config()
+
+
+def expand_diff(out: ProposeDiffOutput, base: dict[str, Any]) -> ProposeOutput:
+    """Each experiment's config = base overridden by its changes. Not validated here: run
+    ``propose_validator`` / ``spec.validate_config`` after (unknown names are rejected there)."""
+    return ProposeOutput(experiments=[ProposedExperiment(config={**base, **e.changes}, hypothesis=e.hypothesis)
+                                      for e in out.experiments])
+
+
+def propose_validator(spec: TargetSpec, max_experiments: int | None = None,
+                      base: dict[str, Any] | None = None) -> Callable[[Any], ProposeOutput]:
     """Post-Pydantic check for propose replies: each config must pass ``spec.validate_config``
     and is replaced by its coerced form. Invalid experiments are dropped (logged) and the rest
     kept; the reply is invalid only if none survive. Extras beyond K are dropped. Same rule on
-    every arm."""
+    every arm. A diff-form reply (``ProposeDiffOutput``) is first expanded against ``base``
+    (default: the spec's default config)."""
 
-    def _validate(out: ProposeOutput) -> ProposeOutput:
+    def _validate(out: Any) -> ProposeOutput:
+        if isinstance(out, ProposeDiffOutput):
+            out = expand_diff(out, base if base is not None else spec.default_config())
         exps = out.experiments[:max_experiments] if max_experiments else out.experiments
         kept, errors = [], []
         for i, e in enumerate(exps):
@@ -452,7 +539,10 @@ __all__ = [
     "DiagnoseOutput",
     "JudgeClaim",
     "JudgeOutput",
+    "PROPOSE_DIFF_VERSIONS",
+    "ProposeDiffOutput",
     "ProposeOutput",
+    "ProposedChanges",
     "ResultRow",
     "build_diagnose_user",
     "build_judge_user",
@@ -463,6 +553,9 @@ __all__ = [
     "downsample_curve",
     "early_stop_curve_metric",
     "early_stop_wire_schema",
+    "expand_diff",
+    "is_diff_version",
+    "propose_base_config",
     "diagnose_wire_schema",
     "fmt_config",
     "fmt_num",

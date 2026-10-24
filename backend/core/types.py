@@ -41,6 +41,10 @@ class ArmKind(StrEnum):
     # faster model (claude-haiku-5-5 through Mubit, record off). A smaller faster model in the
     # same loop, NOT a Mubit adapter. Tests the planner-speed mechanism (R43 projection).
     fast = "fast"
+    # Ablation only (dev mode, never a benchmark / headline arm): Opus 5.5 with the lean planner
+    # prompt (propose_experiments v2: diff-form reply, effort low). Same model as "opus"; only the
+    # propose prompt and its effort differ (configs.ARM_PROPOSE_VARIANTS). Tests the lean planner.
+    lean = "lean"
 
 
 class StepType(StrEnum):

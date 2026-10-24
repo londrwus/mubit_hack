@@ -1,0 +1,1049 @@
+diff --git a/backend/agent/optuna_arm.py b/backend/agent/optuna_arm.py
+index 27e7541..a99affa 100644
+--- a/backend/agent/optuna_arm.py
++++ b/backend/agent/optuna_arm.py
+@@ -10,6 +10,12 @@ The scheduler's starting-code baseline is added to the study as a completed tria
+ Early stopping: the arm gets the same median rule as the Busy Machines arms (engine code in
+ the scheduler, ``RaceConfig.features_for(optuna)`` = median_stop, flagged in the manifest):
+ the standard MedianPruner practice. A run the rule stopped is told to the study as PRUNED.
++
++Isolation (``isolation="thread" | "process"``, ``study_worker.proposer_isolation``): with
++"process" the study (same TPE settings and seed) lives in a child process
++(``backend.agent.study_worker``), so its CPU-bound asks never compete for the race process's
++GIL with the other arms and the event loop. The operations reach the study in the same order,
++so the configs are the same as in-thread. Benchmark races use "process".
+ """
+ 
+ from __future__ import annotations
+@@ -29,6 +35,7 @@ from optuna.distributions import (
+ )
+ from optuna.trial import TrialState
+ 
++from backend.agent.study_worker import Isolation, StudyWorker
+ from backend.core.types import ArmKind, DiagnoseOutput, ExperimentStatus, JudgeOutput, LLMCallRecord
+ from backend.scheduler import ExperimentSnapshot, JudgeClaim, Proposal, ResearchDigest
+ from workers.targets.base import TargetSpec
+@@ -57,17 +64,38 @@ def distributions(spec: TargetSpec) -> dict[str, BaseDistribution]:
+ class OptunaResearcher:
+     kind = ArmKind.optuna
+ 
+-    def __init__(self, spec: TargetSpec, seed: int, *, n_startup_trials: int = 10) -> None:
++    def __init__(self, spec: TargetSpec, seed: int, *, n_startup_trials: int = 10,
++                 isolation: Isolation = "thread") -> None:
+         self.spec = spec
+         self.seed = seed
+-        sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=n_startup_trials, constant_liar=True)
+-        self.study = optuna.create_study(
+-            direction="minimize" if spec.direction == "min" else "maximize", sampler=sampler
+-        )
++        self.n_startup_trials = n_startup_trials
++        self.isolation: Isolation = isolation
++        direction = "minimize" if spec.direction == "min" else "maximize"
++        # thread: the study lives here. process: in a child process (study_worker), and the
++        # observe() operations are queued and sent with the next ask, in order.
++        self.study: optuna.Study | None = None
++        self._worker: StudyWorker | None = None
++        if isolation == "process":
++            self._worker = StudyWorker(spec, seed, n_startup_trials, direction)
++        else:
++            sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=n_startup_trials, constant_liar=True)
++            self.study = optuna.create_study(direction=direction, sampler=sampler)
+         self._dists = distributions(spec)
+         self._trials: dict[str, optuna.trial.Trial] = {}
++        self._numbers: dict[str, int] = {}               # process: experiment id -> trial number
++        self._ops: list[tuple[Any, ...]] = []           # process: observe() operations not sent yet
++        self._ops_lock = threading.Lock()
+         self.on_call: Callable[[LLMCallRecord], None] = lambda _r: None
+ 
++    def wait_ready(self) -> None:
++        """Start the study's child process now (process isolation; before the race clock)."""
++        if self._worker is not None:
++            self._worker.start()
++
++    def close(self) -> None:
++        if self._worker is not None:
++            self._worker.close()
++
+     async def propose(self, digest: ResearchDigest, k: int) -> list[Proposal]:
+         # TPE's ask() is CPU-bound and grows with the study (measured on the rl-wide space:
+         # propose(8) takes ~0.17 s at 100 trials and ~0.5 s at 600+). Run on the event loop
+@@ -80,6 +108,15 @@ class OptunaResearcher:
+ 
+     def _ask_batch(self, k: int) -> list[Proposal]:
+         out: list[Proposal] = []
++        if self._worker is not None:
++            with self._ops_lock:
++                ops, self._ops = self._ops, []
++            got = self._worker.run(ops, k)
++            for config, number in zip(got["configs"], got["numbers"], strict=True):
++                p = Proposal(config=config, hypothesis=HYPOTHESIS)
++                self._numbers[p.experiment_id] = number
++                out.append(p)
++            return out
+         for _ in range(k):
+             trial = self.study.ask()
+             config = self.spec.validate_config(self.spec.suggest_optuna(trial))
+@@ -90,6 +127,9 @@ class OptunaResearcher:
+ 
+     def observe(self, exp: ExperimentSnapshot) -> None:
+         ok = exp.status == ExperimentStatus.succeeded and exp.score is not None and math.isfinite(exp.score)
++        if self._worker is not None:
++            self._queue_observe(exp, ok)
++            return
+         trial = self._trials.pop(exp.id, None)
+         if trial is not None:
+             if ok:
+@@ -106,6 +146,24 @@ class OptunaResearcher:
+                 params=params, distributions={k: self._dists[k] for k in params}, value=float(exp.score),  # type: ignore[arg-type]
+             ))
+ 
++    def _queue_observe(self, exp: ExperimentSnapshot, ok: bool) -> None:
++        """Process isolation: the same decisions as the in-thread ``observe``, as operations."""
++        number = self._numbers.pop(exp.id, None)
++        if number is not None:
++            if ok:
++                op: tuple[Any, ...] = ("tell", number, float(exp.score))  # type: ignore[arg-type]
++            elif (exp.summary or {}).get("early_stop", {}).get("outcome") == "stopped":
++                op = ("tell_state", number, "pruned")
++            else:
++                op = ("tell_state", number, "fail")
++        elif ok:
++            params: dict[str, Any] = {k: exp.config[k] for k in self._dists if k in exp.config}
++            op = ("add", params, float(exp.score), False)  # type: ignore[arg-type]
++        else:
++            return
++        with self._ops_lock:
++            self._ops.append(op)
++
+     async def diagnose(self, exp: ExperimentSnapshot) -> DiagnoseOutput | None:
+         return None
+ 
+@@ -134,20 +192,32 @@ class BackfillSampler:
+     tells and then asks, under a second lock, so the study is only ever used by one thread at a
+     time (Optuna's InMemoryStorage locks its own calls, but trial objects and ask/tell order do
+     not belong to it).
++
++    ``isolation="process"``: the study lives in a child process (``study_worker``); the queued
++    tells are turned into operations under the same lock and sent with the ask, in the same
++    order ``_drain`` applies them, so the configs are the same as in-thread.
+     """
+ 
+     kind = "sampler"
+ 
+-    def __init__(self, spec: TargetSpec, seed: int, *, n_startup_trials: int = 10) -> None:
++    def __init__(self, spec: TargetSpec, seed: int, *, n_startup_trials: int = 10,
++                 isolation: Isolation = "thread") -> None:
+         self.spec = spec
+         self.seed = seed
+         self.n_startup_trials = n_startup_trials
+-        sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=n_startup_trials, constant_liar=True)
+-        self.study = optuna.create_study(
+-            direction="minimize" if spec.direction == "min" else "maximize", sampler=sampler
+-        )
++        self.isolation: Isolation = isolation
++        direction = "minimize" if spec.direction == "min" else "maximize"
++        self._direction = direction
++        self.study: optuna.Study | None = None
++        self._worker: StudyWorker | None = None
++        if isolation == "process":
++            self._worker = StudyWorker(spec, seed, n_startup_trials, direction)
++        else:
++            sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=n_startup_trials, constant_liar=True)
++            self.study = optuna.create_study(direction=direction, sampler=sampler)
+         self._dists = distributions(spec)
+         self._trials: dict[str, optuna.trial.Trial] = {}   # experiment id -> its open trial
++        self._numbers: dict[str, int] = {}                  # process: experiment id -> open trial number
+         self._queue: list[tuple[str, dict[str, Any], float | None]] = []
+         self._queue_lock = threading.Lock()
+         self._study_lock = threading.Lock()
+@@ -159,13 +229,61 @@ class BackfillSampler:
+ 
+     def manifest(self) -> dict[str, Any]:
+         return {"sampler": "optuna-tpe", "seed": self.seed, "n_startup_trials": self.n_startup_trials,
+-                "constant_liar": True, "direction": self.study.direction.name.lower()}
++                "constant_liar": True, "direction": self._direction, "isolation": self.isolation}
+ 
+     def counts(self) -> dict[str, int]:
+         with self._queue_lock:
+             pending = len(self._queue)
++        open_trials = len(self._numbers) if self._worker is not None else len(self._trials)
+         return {"asked": self.asked, "told": self.told, "told_failed": self.told_failed, "added": self.added,
+-                "add_skipped": self.add_skipped, "tells_pending": pending, "open_trials": len(self._trials)}
++                "add_skipped": self.add_skipped, "tells_pending": pending, "open_trials": open_trials}
++
++    def wait_ready(self) -> None:
++        """Start the study's child process now (process isolation; before the race clock)."""
++        if self._worker is not None:
++            self._worker.start()
++
++    def close(self) -> None:
++        if self._worker is not None:
++            self._worker.close()
++
++    def _drain_ops(self) -> list[tuple[Any, ...]]:
++        """Process isolation: ``_drain``'s decisions as operations for the child, same order.
++        Tells to this sampler's own trials are counted here; added trials when the child replies."""
++        with self._queue_lock:
++            batch, self._queue = self._queue, []
++        ops: list[tuple[Any, ...]] = []
++        for exp_id, config, value in batch:
++            number = self._numbers.pop(exp_id, None)
++            if number is not None:
++                if value is None:
++                    ops.append(("tell_state", number, "fail"))
++                    self.told_failed += 1
++                else:
++                    ops.append(("tell", number, value))
++                    self.told += 1
++                continue
++            if value is None:
++                self.add_skipped += 1
++                continue
++            ops.append(("add", dict(config), value, True))
++        return ops
++
++    def _run_remote(self, k: int) -> list[Proposal]:
++        assert self._worker is not None
++        ops = self._drain_ops()
++        if not ops and k <= 0:
++            return []
++        got = self._worker.run(ops, k)
++        self.added += int(got["added"])
++        self.add_skipped += int(got["add_skipped"])
++        out: list[Proposal] = []
++        for config, number in zip(got["configs"], got["numbers"], strict=True):
++            p = Proposal(config=config, hypothesis=BACKFILL_HYPOTHESIS)
++            self._numbers[p.experiment_id] = number
++            self.asked += 1
++            out.append(p)
++        return out
+ 
+     def tell(self, experiment_id: str, config: dict[str, Any], value: float | None) -> None:
+         """Queue one finished run (any source). ``value`` None = no usable score (failed run)."""
+@@ -201,12 +319,17 @@ class BackfillSampler:
+     def apply_tells(self) -> None:
+         """Apply queued tells now (tests / shutdown); same lock as ``ask_batch``."""
+         with self._study_lock:
++            if self._worker is not None:
++                self._run_remote(0)
++                return
+             self._drain()
+ 
+     def ask_batch(self, k: int) -> list[Proposal]:
+         """Apply the queued tells, then ask ``k`` configs. CPU-bound: call it in a worker thread."""
+         out: list[Proposal] = []
+         with self._study_lock:
++            if self._worker is not None:
++                return self._run_remote(max(0, k))
+             self._drain()
+             for _ in range(max(0, k)):
+                 trial = self.study.ask()
+diff --git a/backend/agent/study_worker.py b/backend/agent/study_worker.py
+new file mode 100644
+index 0000000..53201c3
+--- /dev/null
++++ b/backend/agent/study_worker.py
+@@ -0,0 +1,195 @@
++"""A TPE study in its own process: GIL isolation for the CPU-bound proposers.
++
++Why (review finding, R67): TPE's ``ask`` is CPU-bound Python + numpy and grows with the study
++(about 0.15 s per config at 600 trials on the rl-wide space). In one interpreter the backfill
++sampler of a Busy Machines arm, the Optuna arm's own study and the shared event loop (run ends,
++slot refills, the timing of every arm's LLM replies) take turns on one GIL, so one arm's asks
++slow the others down: the Optuna arm's ``ask_batch(8)`` measured 1.6x slower with a sampler
++thread asking next to it. With ``isolation="process"`` each study lives in a child process with
++its own interpreter and the event loop only sends operations and receives configs.
++
++Same behaviour, only the process differs: the child builds the same study (``TPESampler`` with
++the same seed, ``n_startup_trials`` and ``constant_liar=True``, same direction) and the parent
++sends the queued operations (tells, added trials) with each ask, in exactly the order the
++in-process classes apply them (``BackfillSampler._drain`` before its asks; the Optuna arm's
++``observe`` calls between its asks). Same seed + same sequence of operations -> the same
++configs (tests/test_review_proposer_isolation.py).
++
++Protocol (pickled tuples over a ``multiprocessing`` pipe, one request at a time):
++    ("run", ops, k) -> ("ok", {"configs": [...], "numbers": [...], "added": n, "add_skipped": n,
++                               "open": n})  |  ("err", "Type: message")
++    ("close",)      -> ("ok", None) and the child exits
++ops: ("tell", number, value) | ("tell_state", number, "fail" | "pruned")
++     | ("add", params, value, guarded)   guarded: a ValueError from Optuna is counted, not raised
++"""
++
++from __future__ import annotations
++
++import math
++import multiprocessing as mp
++import os
++import threading
++import time
++import weakref
++from typing import Any, Literal
++
++Isolation = Literal["thread", "process"]
++ISOLATION_ENV = "BUSY_PROPOSER_ISOLATION"
++READY_TIMEOUT_S = 120.0   # child start: spawn + import optuna (a few seconds on the laptop)
++CLOSE_TIMEOUT_S = 5.0
++
++
++def proposer_isolation(mode: str | None) -> Isolation:
++    """Where a race's CPU-bound proposers (the backfill sampler, the Optuna arm's study) run.
++    Benchmark races: each in its own process. Dev / mock / dry-run races: a worker thread, as
++    before. ``BUSY_PROPOSER_ISOLATION=thread|process`` overrides both (recorded in the manifest)."""
++    v = os.environ.get(ISOLATION_ENV, "").strip().lower()
++    if v in ("thread", "process"):
++        return v  # type: ignore[return-value]
++    return "process" if mode == "benchmark" else "thread"
++
++
++# --------------------------------------------------------------------------- child
++
++
++def _serve(conn: Any, spec: Any, seed: int, n_startup_trials: int, direction: str) -> None:
++    import optuna
++    from optuna.trial import TrialState
++
++    from backend.agent.optuna_arm import distributions
++
++    optuna.logging.set_verbosity(optuna.logging.WARNING)
++    sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=n_startup_trials, constant_liar=True)
++    study = optuna.create_study(direction=direction, sampler=sampler)
++    dists = distributions(spec)
++    trials: dict[int, Any] = {}
++    conn.send(("ready", os.getpid()))
++    states = {"fail": TrialState.FAIL, "pruned": TrialState.PRUNED}
++    while True:
++        try:
++            msg = conn.recv()
++        except EOFError:
++            return
++        if msg[0] == "close":
++            conn.send(("ok", None))
++            return
++        try:
++            _, ops, k = msg
++            added = add_skipped = 0
++            for op in ops:
++                if op[0] == "tell":
++                    study.tell(trials.pop(op[1]), op[2])
++                elif op[0] == "tell_state":
++                    study.tell(trials.pop(op[1]), state=states[op[2]])
++                elif op[0] == "add":
++                    _, params, value, guarded = op
++                    keep = {n: params[n] for n in dists if n in params}
++                    try:
++                        study.add_trial(optuna.trial.create_trial(
++                            params=keep, distributions={n: dists[n] for n in keep}, value=value))
++                    except ValueError:
++                        if not guarded:
++                            raise
++                        add_skipped += 1
++                        continue
++                    added += 1
++                else:
++                    raise ValueError(f"unknown op {op[0]!r}")
++            configs, numbers = [], []
++            for _ in range(max(0, int(k))):
++                trial = study.ask()
++                configs.append(spec.validate_config(spec.suggest_optuna(trial)))
++                trials[trial.number] = trial
++                numbers.append(trial.number)
++            conn.send(("ok", {"configs": configs, "numbers": numbers, "added": added,
++                              "add_skipped": add_skipped, "open": len(trials)}))
++        except Exception as e:  # noqa: BLE001 - reported to the parent, which raises it there
++            conn.send(("err", f"{type(e).__name__}: {e}"))
++
++
++# --------------------------------------------------------------------------- parent
++
++
++def _shutdown(proc: Any, conn: Any) -> None:
++    try:
++        if proc.is_alive():
++            try:
++                conn.send(("close",))
++                if conn.poll(CLOSE_TIMEOUT_S):
++                    conn.recv()
++            except (OSError, EOFError, BrokenPipeError):
++                pass
++            proc.join(CLOSE_TIMEOUT_S)
++        if proc.is_alive():
++            proc.terminate()
++            proc.join(CLOSE_TIMEOUT_S)
++    finally:
++        try:
++            conn.close()
++        except OSError:
++            pass
++
++
++class StudyWorker:
++    """Parent-side handle of one child-process TPE study. ``run`` is blocking (call it from a
++    worker thread, e.g. ``asyncio.to_thread``: waiting on the pipe releases the GIL); one request
++    at a time (a lock). The child starts on ``start()`` or the first ``run``."""
++
++    def __init__(self, spec: Any, seed: int, n_startup_trials: int, direction: str) -> None:
++        self._args = (spec, int(seed), int(n_startup_trials), direction)
++        self._lock = threading.Lock()
++        self._proc: Any = None
++        self._conn: Any = None
++        self._finalizer: Any = None
++        self.pid: int | None = None
++        self.start_s: float | None = None
++        self.closed = False
++
++    def start(self) -> None:
++        with self._lock:
++            self._start_locked()
++
++    def _start_locked(self) -> None:
++        if self._proc is not None:
++            return
++        if self.closed:
++            raise RuntimeError("study worker closed")
++        t = time.perf_counter()
++        ctx = mp.get_context("spawn")
++        parent, child = ctx.Pipe()
++        proc = ctx.Process(target=_serve, args=(child, *self._args), daemon=True, name="tpe-study")
++        proc.start()
++        child.close()
++        if not parent.poll(READY_TIMEOUT_S):
++            _shutdown(proc, parent)
++            raise RuntimeError(f"study worker did not start within {READY_TIMEOUT_S:g}s")
++        tag, pid = parent.recv()
++        if tag != "ready":
++            _shutdown(proc, parent)
++            raise RuntimeError(f"study worker failed to start: {pid}")
++        self._proc, self._conn, self.pid = proc, parent, int(pid)
++        self.start_s = time.perf_counter() - t
++        self._finalizer = weakref.finalize(self, _shutdown, proc, parent)
++
++    def run(self, ops: list[tuple[Any, ...]], k: int) -> dict[str, Any]:
++        with self._lock:
++            self._start_locked()
++            try:
++                self._conn.send(("run", list(ops), int(k)))
++                tag, payload = self._conn.recv()
++            except (EOFError, OSError, BrokenPipeError) as e:
++                raise RuntimeError(f"study worker died: {type(e).__name__}: {e}") from e
++        if tag != "ok":
++            raise RuntimeError(f"study worker: {payload}")
++        return payload
++
++    def close(self) -> None:
++        with self._lock:
++            self.closed = True
++            if self._finalizer is not None:
++                self._finalizer()   # runs _shutdown once
++            self._proc = self._conn = None
++
++
++def finite_or_none(value: float | None) -> float | None:
++    return float(value) if value is not None and math.isfinite(float(value)) else None
+diff --git a/backend/app.py b/backend/app.py
+index 8f95efa..26c0856 100644
+--- a/backend/app.py
++++ b/backend/app.py
+@@ -120,8 +120,11 @@ def default_arm_deps(race_id: str, cfg: RaceConfig, spec: TargetSpec, kind: ArmK
+     runner = _make_runner(cfg, spec)
+     if kind == ArmKind.optuna:
+         from backend.agent.optuna_arm import OptunaResearcher
++        from backend.agent.study_worker import proposer_isolation
+ 
+-        return ArmDeps(kind=kind, researcher=OptunaResearcher(spec, cfg.seed), runner=runner, llm_mode="none")
++        # Benchmark races run the study in its own process (GIL isolation, same TPE and seed).
++        return ArmDeps(kind=kind, researcher=OptunaResearcher(spec, cfg.seed, isolation=proposer_isolation(cfg.mode)),
++                       runner=runner, llm_mode="none")
+ 
+     from backend.agent.loop import LLMResearcher, load_prompts
+ 
+diff --git a/backend/scheduler.py b/backend/scheduler.py
+index 6897564..590f0dd 100644
+--- a/backend/scheduler.py
++++ b/backend/scheduler.py
+@@ -487,6 +487,22 @@ def target_default_budget_s(cfg: RaceConfig, spec: TargetSpec | None = None) ->
+         return float(spec.budget_s)
+ 
+ 
++def _durations(prefix: str, xs: list[float]) -> dict[str, float | None]:
++    """p50 / p95 / max of a list of durations in seconds (None when empty)."""
++    if not xs:
++        return {f"{prefix}_p50_s": None, f"{prefix}_p95_s": None, f"{prefix}_max_s": None}
++    s = sorted(xs)
++    return {f"{prefix}_p50_s": statistics.median(s), f"{prefix}_p95_s": s[min(len(s) - 1, int(0.95 * len(s)))],
++            f"{prefix}_max_s": s[-1]}
++
++
++def _cpu_proposers(engine: Any) -> list[Any]:
++    """The race's CPU-bound TPE proposers: backfill samplers and Optuna researchers."""
++    out = [st.sampler for st in engine.engine_states.values() if st.sampler is not None]
++    out += [d.researcher for d in engine.arm_deps if d.kind == ArmKind.optuna]
++    return out
++
++
+ def resolve_engine_state(cfg: RaceConfig, kind: ArmKind, spec: TargetSpec, *,
+                          default_budget_s: float | None = None,
+                          tables: dict[str, Any] | None = None) -> EngineState:
+@@ -509,8 +525,12 @@ def resolve_engine_state(cfg: RaceConfig, kind: ArmKind, spec: TargetSpec, *,
+     if "backfill" in feats and kind != ArmKind.optuna:
+         # Lazy import: optuna_arm imports this module (ExperimentSnapshot, Proposal, ...).
+         from backend.agent.optuna_arm import BackfillSampler
++        from backend.agent.study_worker import proposer_isolation
+ 
+-        st.sampler = BackfillSampler(spec, cfg.seed, n_startup_trials=BACKFILL_N_STARTUP_TRIALS)
++        # Benchmark races run the sampler's study in its own process (GIL isolation from the
++        # other arms and the event loop); same TPE settings and seed either way.
++        st.sampler = BackfillSampler(spec, cfg.seed, n_startup_trials=BACKFILL_N_STARTUP_TRIALS,
++                                     isolation=proposer_isolation(cfg.mode))
+     st.params = cfg.params_for(kind)
+     if "planner_cadence" in feats and kind != ArmKind.optuna:
+         st.min_propose_interval_s = cfg.min_propose_interval_for(kind)
+@@ -833,6 +853,13 @@ class ArmRunner:
+         self._worst_score: float | None = None      # worst reported score seen (checker-gated feedback)
+         self.backfill_batches = 0
+         self.backfill_ask_s = 0.0
++        self.backfill_ask_each: list[float] = []      # wall time of every sampler ask (s)
++        # Shared-CPU evidence (review: GIL contention between the arms' proposers): the wall time
++        # of every Optuna-arm propose (a TPE ask) and this arm's event-loop lag (how late each
++        # monitor tick woke up, s). The event loop is shared, so the lag is the race's, seen by
++        # this arm's monitor.
++        self.proposer_ask_each: list[float] = []
++        self.loop_lag: list[float] = []
+         self.backfill_dropped = 0                    # sampler proposals dropped by the deadline rule
+         self.backfill_tells: dict[str, int] = {"raw": 0, "worst_on_rejected": 0, "fail_on_rejected": 0,
+                                                "no_score": 0}
+@@ -959,7 +986,15 @@ class ArmRunner:
+                 **self.engine.sampler.counts(), "batches": self.backfill_batches, "ask_s": self.backfill_ask_s,
+                 "dropped_by_deadline_rule": self.backfill_dropped, "tells": dict(self.backfill_tells),
+                 "error": self.backfill_error,
++                "isolation": getattr(self.engine.sampler, "isolation", "thread"),
++                **_durations("ask", self.backfill_ask_each),
+             }
++        if self.kind == ArmKind.optuna:
++            extras["proposer"] = {"isolation": getattr(self.researcher, "isolation", "thread"),
++                                  "asks": len(self.proposer_ask_each), "ask_s": sum(self.proposer_ask_each),
++                                  **_durations("ask", self.proposer_ask_each)}
++        extras["event_loop_lag"] = {"tick_s": self.tick_s, "samples": len(self.loop_lag),
++                                    **_durations("lag", self.loop_lag)}
+         return summary, extras
+ 
+     def apply_correction(self, experiment_id: str, label: CorrectionLabel, *, recorded: bool = False) -> bool:
+@@ -1047,7 +1082,10 @@ class ArmRunner:
+                 self._apply_cutoff(t)
+             if self.db is not None:
+                 self.db.flush_metrics()
+-            await asyncio.sleep(max(0.001, min(self.tick_s, self.deadline - t)))
++            want = max(0.001, min(self.tick_s, self.deadline - t))
++            t_sleep = now()
++            await asyncio.sleep(want)
++            self.loop_lag.append(max(0.0, now() - t_sleep - want))
+ 
+     # ------------------------------------------------------------------ events / storage
+ 
+@@ -1187,6 +1225,7 @@ class ArmRunner:
+                 t = now()
+                 proposals = await asyncio.to_thread(sampler.ask_batch, want)
+                 self.backfill_ask_s += now() - t
++                self.backfill_ask_each.append(now() - t)
+                 self.backfill_batches += 1
+                 if self.stopped:
+                     return
+@@ -1470,7 +1509,10 @@ class ArmRunner:
+                     self._hold_for_cadence(wait)
+                     continue
+                 self._note_propose_start(k)
++                t_ask = now()
+                 proposals = await self.researcher.propose(self._digest(k), k)
++                if self.kind == ArmKind.optuna:
++                    self.proposer_ask_each.append(now() - t_ask)
+                 if self.stopped:
+                     return
+                 added = sum(1 for p in proposals[:k] if self._add_proposal(p))
+@@ -1902,6 +1944,11 @@ class RaceEngine:
+             if st.sampler is not None and "backfill" in st.features:
+                 row["backfill"] = {**st.sampler.manifest(), "feedback": BACKFILL_FEEDBACK, "llm_first": True,
+                                    "label": ENGINE_FEATURE_LABELS["backfill"]}
++                row["proposer_isolation"] = getattr(st.sampler, "isolation", "thread")
++            if k == ArmKind.optuna:
++                d = next((d for d in self.arm_deps if d.kind == k), None)
++                if d is not None:
++                    row["proposer_isolation"] = getattr(d.researcher, "isolation", "thread")
+             if st.params:
+                 row["params"] = {f: dict(p) for f, p in st.params.items()}
+             if "planner_cadence" in st.features:
+@@ -1976,6 +2023,12 @@ class RaceEngine:
+                                 gpus_per_arm=self.cfg.gpus_per_arm, seed=self.cfg.seed,
+                                 config=self.cfg.model_dump(mode="json"), name=self.cfg.name, mode=self.cfg.mode,
+                                 llm_mode=self.cfg.llm, runner=self.cfg.runner)
++        # Process-isolated TPE studies start (spawn + import) before the race clock, so no arm's
++        # first ask pays for it.
++        for p in _cpu_proposers(self):
++            start = getattr(p, "wait_ready", None)
++            if start is not None:
++                await asyncio.to_thread(start)
+         t0 = now()
+         self.t0 = t0
+         deadline = t0 + self.cfg.budget_s
+@@ -2028,6 +2081,13 @@ class RaceEngine:
+             if self.db is not None:
+                 self.db.update_arm(a.arm_id, status="finished", stop_reason=a.stop_reason, ended_at=a.t_end,
+                                    summary=summary.model_dump(mode="json"), report=extras)
++        for p in _cpu_proposers(self):
++            close = getattr(p, "close", None)
++            if close is not None:
++                try:
++                    close()   # child processes of process-isolated studies; counts stay readable
++                except Exception:  # noqa: BLE001 - never hide the race result
++                    log.warning("could not close a proposer process", exc_info=True)
+         t_end = max((a.t_end or now()) for a in self.arms.values()) if self.arms else now()
+         self.status = "finished" if reason in ("budget", "cost_cap") else reason
+         if self.db is not None:
+diff --git a/scripts/analyze_races.py b/scripts/analyze_races.py
+index c8f5f28..0dbd806 100644
+--- a/scripts/analyze_races.py
++++ b/scripts/analyze_races.py
+@@ -531,6 +531,11 @@ def fairness_fingerprint(rows: Rows) -> dict[str, Any] | None:
+             # the sampler's settings; its seed follows the race seed, so it is not a pooling key
+             entry["backfill"] = {x: eng["backfill"].get(x) for x in
+                                  ("sampler", "n_startup_trials", "constant_liar", "feedback", "llm_first")}
++        if eng.get("proposer_isolation") not in (None, "thread"):
++            # Where the arm's CPU-bound TPE study ran (backend.agent.study_worker): its own process
++            # takes it off the race process's GIL, which changes the Optuna arm's waiting and
++            # experiment counts. Absent on races from before (all ran it in a thread): unchanged.
++            entry["proposer_isolation"] = eng["proposer_isolation"]
+         if eng.get("planner_cadence"):
+             # D47: a preset-declared feature parameter; part of the pooling key (absent on every
+             # race from before the feature existed, so their fingerprints are unchanged).
+diff --git a/scripts/bench_proposer_contention.py b/scripts/bench_proposer_contention.py
+new file mode 100644
+index 0000000..f944b42
+--- /dev/null
++++ b/scripts/bench_proposer_contention.py
+@@ -0,0 +1,198 @@
++"""Micro-benchmark: TPE ask latency and event-loop lag, with and without a second TPE study
++asking next to it, in-thread (the old layout) vs one child process per study (the fix).
++
++What it reproduces (review finding, R67): the Optuna arm's study and a Busy Machines arm's
++backfill sampler ask TPE in worker threads of the race process, while the event loop times
++every arm's runs. Here:
++
++- the "Optuna arm" asks ``--k-optuna`` configs per propose (``OptunaResearcher._ask_batch``),
++  ``--repeats`` times, and is told a score for each;
++- with contention, a "backfill sampler" (``BackfillSampler``) asks ``--k-sampler`` configs in a
++  loop in another worker thread, the way ``ArmRunner._backfill_loop`` does;
++- an asyncio ticker sleeps ``--tick-s`` and records how late it wakes (event-loop lag), like
++  ``ArmRunner._monitor``.
++
++Both studies start with ``--trials`` completed trials (random configs in the target's space,
++added the way other runs are added), since TPE's ask cost grows with the study. The same seeds,
++TPE settings and operations are used in every scenario; only the isolation and the contention
++change. No LLM, no Modal, no network: CPU only.
++
++CPU-heavy (a few cores for up to a minute): do NOT run it on the race host while races run, it
++would perturb them. ``--quick`` is a smoke run (small study, 2 repeats).
++
++Usage:
++    python -m uv run python scripts/bench_proposer_contention.py                    # rl, 600 trials
++    python -m uv run python scripts/bench_proposer_contention.py --target lcbench --trials 1200
++    python -m uv run python scripts/bench_proposer_contention.py --quick --json out.json
++"""
++
++from __future__ import annotations
++
++import argparse
++import asyncio
++import json
++import math
++import random
++import statistics
++import sys
++import threading
++import time
++from pathlib import Path
++from typing import Any
++
++REPO_ROOT = Path(__file__).resolve().parents[1]
++if str(REPO_ROOT) not in sys.path:
++    sys.path.insert(0, str(REPO_ROOT))
++
++from backend.agent.optuna_arm import BackfillSampler, OptunaResearcher  # noqa: E402
++from backend.core.types import ExperimentStatus  # noqa: E402
++from backend.scheduler import ExperimentSnapshot  # noqa: E402
++from workers.targets.base import TargetSpec, get_target  # noqa: E402
++
++
++def random_config(spec: TargetSpec, rng: random.Random) -> dict[str, Any]:
++    out: dict[str, Any] = {}
++    for name, p in spec.config_space.items():
++        if p.type == "bool":
++            out[name] = rng.random() < 0.5
++        elif p.type == "categorical":
++            out[name] = rng.choice(list(p.choices or []))
++        elif p.type == "int":
++            lo, hi = int(p.low), int(p.high)  # type: ignore[arg-type]
++            out[name] = int(round(math.exp(rng.uniform(math.log(lo), math.log(hi))))) if p.log else rng.randint(lo, hi)
++            out[name] = min(hi, max(lo, out[name]))
++        else:
++            lo, hi = float(p.low), float(p.high)  # type: ignore[arg-type]
++            out[name] = math.exp(rng.uniform(math.log(lo), math.log(hi))) if p.log else rng.uniform(lo, hi)
++    return spec.validate_config(out)
++
++
++def fake_score(spec: TargetSpec, config: dict[str, Any]) -> float:
++    """Any deterministic function of the config (TPE only needs values to rank)."""
++    return random.Random(json.dumps(config, sort_keys=True, default=str)).random()
++
++
++def preload(spec: TargetSpec, optuna_r: OptunaResearcher, sampler: BackfillSampler, n: int, seed: int) -> None:
++    rng = random.Random(seed)
++    for i in range(n):
++        c = random_config(spec, rng)
++        optuna_r.observe(ExperimentSnapshot(id=f"pre-{i}", config=c, status=ExperimentStatus.succeeded,
++                                            score=fake_score(spec, c)))
++        sampler.tell(f"pre-{i}", c, fake_score(spec, c))
++    sampler.apply_tells()
++    optuna_r._ask_batch(1)   # flushes the queued adds in process mode; one ask in both modes (same state)
++
++
++def _pct(xs: list[float], q: float) -> float | None:
++    if not xs:
++        return None
++    s = sorted(xs)
++    return s[min(len(s) - 1, int(q * len(s)))]
++
++
++async def scenario(spec: TargetSpec, *, isolation: str, contended: bool, trials: int, k_optuna: int,
++                   k_sampler: int, repeats: int, tick_s: float, seed: int) -> dict[str, Any]:
++    optuna_r = OptunaResearcher(spec, seed, isolation=isolation)  # type: ignore[arg-type]
++    sampler = BackfillSampler(spec, seed + 1, isolation=isolation)  # type: ignore[arg-type]
++    try:
++        t = time.perf_counter()
++        optuna_r.wait_ready()
++        sampler.wait_ready()
++        start_s = time.perf_counter() - t
++        preload(spec, optuna_r, sampler, trials, seed)
++        stop = threading.Event()
++        sampler_asks: list[float] = []
++        lags: list[float] = []
++
++        def sampler_loop() -> None:
++            while not stop.is_set():
++                t0 = time.perf_counter()
++                batch = sampler.ask_batch(k_sampler)
++                sampler_asks.append(time.perf_counter() - t0)
++                for p in batch:
++                    sampler.tell(p.experiment_id, p.config, fake_score(spec, p.config))
++
++        async def ticker() -> None:
++            while not stop.is_set():
++                t0 = time.perf_counter()
++                await asyncio.sleep(tick_s)
++                lags.append(max(0.0, time.perf_counter() - t0 - tick_s))
++
++        tick = asyncio.create_task(ticker())
++        samp = asyncio.create_task(asyncio.to_thread(sampler_loop)) if contended else None
++        if samp is not None:
++            await asyncio.sleep(0.2)   # let the sampler get going
++        asks: list[float] = []
++        for _ in range(repeats):
++            t0 = time.perf_counter()
++            props = await asyncio.to_thread(optuna_r._ask_batch, k_optuna)
++            asks.append(time.perf_counter() - t0)
++            for p in props:
++                optuna_r.observe(ExperimentSnapshot(id=p.experiment_id, config=p.config,
++                                                    status=ExperimentStatus.succeeded, score=fake_score(spec, p.config)))
++        stop.set()
++        if samp is not None:
++            await samp
++        await tick
++        return {
++            "isolation": isolation, "contended": contended, "trials": trials, "child_start_s": round(start_s, 3),
++            "optuna_ask_p50_s": statistics.median(asks), "optuna_ask_max_s": max(asks), "optuna_asks": len(asks),
++            "sampler_asks": len(sampler_asks),
++            "sampler_ask_p50_s": statistics.median(sampler_asks) if sampler_asks else None,
++            "loop_lag_p50_ms": 1000 * (statistics.median(lags) if lags else 0.0),
++            "loop_lag_p95_ms": 1000 * (_pct(lags, 0.95) or 0.0), "loop_lag_max_ms": 1000 * (max(lags) if lags else 0.0),
++        }
++    finally:
++        optuna_r.close()
++        sampler.close()
++
++
++def render(rows: list[dict[str, Any]]) -> str:
++    out = ["| Isolation | Sampler asking next to it | Optuna ask p50 | Optuna ask max | Sampler asks | "
++           "Event-loop lag p50 / p95 / max |", "|---|---|---|---|---|---|"]
++    for r in rows:
++        out.append(f"| {r['isolation']} | {'yes' if r['contended'] else 'no'} | {r['optuna_ask_p50_s']:.3f} s | "
++                   f"{r['optuna_ask_max_s']:.3f} s | {r['sampler_asks']} | {r['loop_lag_p50_ms']:.1f} / "
++                   f"{r['loop_lag_p95_ms']:.1f} / {r['loop_lag_max_ms']:.1f} ms |")
++    base = {(r["isolation"], r["contended"]): r["optuna_ask_p50_s"] for r in rows}
++    for iso in ("thread", "process"):
++        if (iso, False) in base and (iso, True) in base and base[(iso, False)] > 0:
++            out.append(f"\n{iso}: contention slows the Optuna ask {base[(iso, True)] / base[(iso, False)]:.2f}x (p50)")
++    return "\n".join(out)
++
++
++def main(argv: list[str] | None = None) -> int:
++    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
++    ap.add_argument("--target", default="rl", help="registered target whose config space is used (default rl)")
++    ap.add_argument("--trials", type=int, default=600, help="completed trials in each study before timing")
++    ap.add_argument("--k-optuna", type=int, default=8)
++    ap.add_argument("--k-sampler", type=int, default=30)
++    ap.add_argument("--repeats", type=int, default=5)
++    ap.add_argument("--tick-s", type=float, default=0.05)
++    ap.add_argument("--seed", type=int, default=0)
++    ap.add_argument("--isolation", choices=["thread", "process", "both"], default="both")
++    ap.add_argument("--quick", action="store_true", help="smoke run: 60 trials, 2 repeats")
++    ap.add_argument("--json", help="also write the rows here")
++    args = ap.parse_args(argv)
++    if args.quick:
++        args.trials, args.repeats = min(args.trials, 60), min(args.repeats, 2)
++    spec = get_target(args.target).spec
++    modes = ["thread", "process"] if args.isolation == "both" else [args.isolation]
++    rows = []
++    for iso in modes:
++        for contended in (False, True):
++            r = asyncio.run(scenario(spec, isolation=iso, contended=contended, trials=args.trials,
++                                     k_optuna=args.k_optuna, k_sampler=args.k_sampler, repeats=args.repeats,
++                                     tick_s=args.tick_s, seed=args.seed))
++            rows.append(r)
++            print(f"done: {iso}, contended={contended}: Optuna ask p50 {r['optuna_ask_p50_s']:.3f} s", file=sys.stderr)
++    print(f"target {args.target}, {args.trials} trials per study, Optuna asks {args.k_optuna}/propose, "
++          f"sampler asks {args.k_sampler}/batch, {args.repeats} repeats\n")
++    print(render(rows))
++    if args.json:
++        Path(args.json).write_text(json.dumps({"args": vars(args), "rows": rows}, indent=2), encoding="utf-8")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tests/test_backfill.py b/tests/test_backfill.py
+index a438f17..dc85e71 100644
+--- a/tests/test_backfill.py
++++ b/tests/test_backfill.py
+@@ -340,8 +340,9 @@ async def test_trap_configs_from_the_sampler_are_caught_by_the_checker(sigma_tab
+     import inspect
+ 
+     assert list(inspect.signature(BackfillSampler.tell).parameters) == ["self", "experiment_id", "config", "value"]
++    # (isolation = where the study runs, thread or child process: never trap information)
+     assert list(inspect.signature(BackfillSampler.__init__).parameters) == ["self", "spec", "seed",
+-                                                                           "n_startup_trials"]
++                                                                           "n_startup_trials", "isolation"]
+ 
+ 
+ # =========================================================================== D44 with backfill on
+@@ -484,7 +485,7 @@ async def test_manifest_and_export_record_the_sources(tmp_path: Path, sigma_tabl
+     bf = m["engine"]["per_arm"]["opus_bm"]["backfill"]
+     assert bf == {"sampler": "optuna-tpe", "seed": cfg.seed, "n_startup_trials": 10, "constant_liar": True,
+                   "direction": "minimize", "feedback": "worst_on_rejected", "llm_first": True,
+-                  "label": ENGINE_FEATURE_LABELS["backfill"]}
++                  "label": ENGINE_FEATURE_LABELS["backfill"], "isolation": "thread"}   # a dev race
+     assert m["differs_only_in"]["opus_bm"]["engine_features"] == ["backfill", "judge_policy", "lean_planner"]
+     assert any("backfill" in c for c in m["engine"]["checks"])
+     path = export_race(db, eng.race_id, tmp_path / "r.jsonl")
+diff --git a/tests/test_review_proposer_isolation.py b/tests/test_review_proposer_isolation.py
+new file mode 100644
+index 0000000..1c67f87
+--- /dev/null
++++ b/tests/test_review_proposer_isolation.py
+@@ -0,0 +1,200 @@
++"""Review fix: the CPU-bound TPE proposers run in their own processes (GIL isolation).
++
++The backfill sampler of a Busy Machines arm and the Optuna arm's study shared one interpreter
++(and its GIL) with each other and with the event loop that times every arm's runs and LLM
++replies. With ``isolation="process"`` (benchmark races) each study lives in a child process.
++The behaviour must be identical apart from the process: same seed, same TPE settings, same
++order of operations, so the same configs. Child processes on this machine only; no network.
++"""
++
++from __future__ import annotations
++
++import math
++import os
++import random
++from typing import Any
++
++import pytest
++
++from backend.agent.optuna_arm import BackfillSampler, OptunaResearcher
++from backend.agent.study_worker import ISOLATION_ENV, StudyWorker, proposer_isolation
++from backend.benchmark.configs import RaceConfig
++from backend.core.types import ArmKind, ExperimentStatus
++from backend.db import Database
++from backend.scheduler import ArmDeps, EventBus, ExperimentSnapshot, RaceEngine, ResearchDigest
++from test_busy_machines import SPEC, CurveRunner, ScriptedLLM, llm_deps, sigma_tables  # noqa: F401
++
++DIGEST = ResearchDigest(k=1, n_slots=1, elapsed_s=0.0, remaining_s=0.0)
++
++
++def _score(cfg: dict[str, Any]) -> float:
++    return 1.0 + (math.log10(float(cfg["lr"])) + 2.0) ** 2 + 0.001 * int(cfg["width"])
++
++
++def test_isolation_follows_the_race_mode_and_the_override(monkeypatch: pytest.MonkeyPatch) -> None:
++    monkeypatch.delenv(ISOLATION_ENV, raising=False)
++    assert proposer_isolation("benchmark") == "process" and proposer_isolation("dev") == "thread"
++    monkeypatch.setenv(ISOLATION_ENV, "thread")
++    assert proposer_isolation("benchmark") == "thread"
++    monkeypatch.setenv(ISOLATION_ENV, "process")
++    assert proposer_isolation("dev") == "process"
++    monkeypatch.setenv(ISOLATION_ENV, "bogus")
++    assert proposer_isolation("dev") == "thread"
++
++
++def _drive_sampler(s: BackfillSampler) -> tuple[list[dict[str, Any]], dict[str, int]]:
++    """The same sequence of operations the scheduler produces: asks, tells of own trials
++    (values and FAILs), tells of other runs (added; one outside the space; one without a score)."""
++    rng = random.Random(7)
++    seen: list[dict[str, Any]] = []
++    for k in (4, 6, 3, 8):
++        batch = s.ask_batch(k)
++        seen += [p.config for p in batch]
++        for i, p in enumerate(batch):
++            s.tell(p.experiment_id, p.config, None if i == 1 else _score(p.config) + rng.random() * 0.01)
++        other = {**SPEC.default_config(), "lr": 10 ** rng.uniform(-4, 0), "width": rng.randint(8, 256)}
++        s.tell(f"llm-{k}", other, _score(other))
++        s.tell(f"llm-out-{k}", {**other, "width": 10_000}, 1.0)      # outside the space: skipped
++        s.tell(f"llm-none-{k}", other, None)                          # no score: skipped
++    s.apply_tells()
++    return seen, s.counts()
++
++
++def test_backfill_sampler_gives_the_same_configs_in_a_child_process() -> None:
++    a = BackfillSampler(SPEC, 3, n_startup_trials=5)
++    b = BackfillSampler(SPEC, 3, n_startup_trials=5, isolation="process")
++    try:
++        ca, na = _drive_sampler(a)
++        cb, nb = _drive_sampler(b)
++        assert cb == ca and nb == na
++        assert na["asked"] == 21 and na["added"] == 4 and na["add_skipped"] == 8 and na["open_trials"] == 0
++        assert b.study is None and b._worker is not None and b._worker.pid not in (None, os.getpid())
++        assert b.manifest() == {**a.manifest(), "isolation": "process"}
++    finally:
++        b.close()
++    assert b.counts() == nb                       # counts stay readable after the child exits
++
++
++def test_optuna_arm_gives_the_same_configs_in_a_child_process() -> None:
++    async def drive(r: OptunaResearcher) -> list[dict[str, Any]]:
++        seen: list[dict[str, Any]] = []
++        r.observe(ExperimentSnapshot(id="baseline", config=SPEC.default_config(), status=ExperimentStatus.succeeded,
++                                     score=_score(SPEC.default_config()), is_baseline=True))
++        for k in (4, 4, 6):
++            props = await r.propose(DIGEST, k)
++            seen += [p.config for p in props]
++            for i, p in enumerate(props):
++                if i == 0:      # stopped by the median rule: PRUNED
++                    snap = ExperimentSnapshot(id=p.experiment_id, config=p.config, status=ExperimentStatus.cancelled,
++                                              summary={"early_stop": {"outcome": "stopped"}})
++                elif i == 1:    # failed: FAIL
++                    snap = ExperimentSnapshot(id=p.experiment_id, config=p.config, status=ExperimentStatus.failed)
++                else:
++                    snap = ExperimentSnapshot(id=p.experiment_id, config=p.config,
++                                              status=ExperimentStatus.succeeded, score=_score(p.config))
++                r.observe(snap)
++        return seen
++
++    import asyncio
++
++    a = OptunaResearcher(SPEC, 11, n_startup_trials=3)
++    b = OptunaResearcher(SPEC, 11, n_startup_trials=3, isolation="process")
++    try:
++        assert asyncio.run(drive(b)) == asyncio.run(drive(a))
++    finally:
++        b.close()
++
++
++def test_child_errors_reach_the_caller_and_close_stops_the_child() -> None:
++    w = StudyWorker(SPEC, 0, 10, "minimize")
++    w.start()
++    proc = w._proc
++    assert proc is not None and proc.is_alive() and w.pid != os.getpid()
++    with pytest.raises(RuntimeError, match="KeyError"):
++        w.run([("tell", 999, 1.0)], 0)               # no such open trial
++    assert w.run([], 2)["numbers"] == [0, 1]           # still serving after an error
++    w.close()
++    proc.join(5)
++    assert not proc.is_alive()
++    with pytest.raises(RuntimeError, match="closed"):
++        w.run([], 1)
++
++
++async def test_a_race_with_process_isolation_records_it_and_its_timings(monkeypatch: pytest.MonkeyPatch,
++                                                                        sigma_tables: Any) -> None:  # noqa: F811
++    monkeypatch.setenv(ISOLATION_ENV, "process")
++    cfg = RaceConfig(target="bm-curve", arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna], budget_s=2.0,
++                     gpus_per_arm=3, llm="mock", seed=1)
++    deps = [llm_deps(k, "r", CurveRunner(3, run_s=0.2), ScriptedLLM(seed=1, latency_s=0.3, trap_rate=0.0))
++            for k in (ArmKind.opus, ArmKind.opus_bm)]
++    optuna_r = OptunaResearcher(SPEC, cfg.seed, isolation=proposer_isolation(cfg.mode))
++    deps.append(ArmDeps(kind=ArmKind.optuna, researcher=optuna_r, runner=CurveRunner(3, run_s=0.2)))
++    eng = RaceEngine(cfg, deps, spec=SPEC, db=Database(":memory:"), bus=EventBus(), tick_s=0.02)
++    sampler = eng.engine_states[ArmKind.opus_bm].sampler
++    assert sampler is not None and sampler.isolation == "process"
++    await eng.run()
++    m = eng.fairness_manifest()
++    assert m["engine"]["per_arm"]["opus_bm"]["proposer_isolation"] == "process"
++    assert m["engine"]["per_arm"]["optuna"]["proposer_isolation"] == "process"
++    assert "proposer_isolation" not in m["engine"]["per_arm"]["opus"]
++    rep = eng.reports
++    assert rep["optuna"]["proposer"]["isolation"] == "process" and rep["optuna"]["proposer"]["asks"] >= 1
++    assert rep["optuna"]["proposer"]["ask_p50_s"] is not None
++    assert rep["opus_bm"]["backfill"]["isolation"] == "process" and rep["opus_bm"]["backfill"]["batches"] >= 1
++    assert rep["opus_bm"]["backfill"]["ask_max_s"] is not None
++    for kind in ("opus", "opus_bm", "optuna"):
++        lag = rep[kind]["event_loop_lag"]
++        assert lag["samples"] > 10 and lag["lag_p50_s"] is not None and lag["lag_max_s"] >= lag["lag_p50_s"] >= 0
++    assert eng.arms[ArmKind.optuna].exps
++    # the children were closed at the end of the race
++    for w in (sampler._worker, optuna_r._worker):
++        assert w is not None and w.closed
++
++
++def test_fingerprint_keeps_thread_races_and_splits_process_races() -> None:
++    import importlib.util
++    import sys
++    from pathlib import Path
++
++    if "analyze_races" not in sys.modules:
++        p = Path(__file__).resolve().parents[1] / "scripts" / "analyze_races.py"
++        spec = importlib.util.spec_from_file_location("analyze_races", p)
++        assert spec and spec.loader
++        mod = importlib.util.module_from_spec(spec)
++        sys.modules["analyze_races"] = mod
++        spec.loader.exec_module(mod)
++    ar = sys.modules["analyze_races"]
++
++    def rows(iso: str | None) -> dict[str, Any]:
++        per_arm: dict[str, Any] = {"optuna": {"features": []}}
++        if iso is not None:
++            per_arm["optuna"]["proposer_isolation"] = iso
++        return {"races": [{"id": "r", "fairness": {"per_arm": {"optuna": {}}, "engine": {"per_arm": per_arm}}}],
++                "arms": [{"id": "o", "kind": "optuna", "model": None, "llm_mode": "none"}],
++                "llm_calls": [], "experiments": []}
++
++    old, thread, proc = (ar.fairness_fingerprint(rows(x)) for x in (None, "thread", "process"))
++    assert ar.fingerprint_id(old) == ar.fingerprint_id(thread) != ar.fingerprint_id(proc)
++    assert proc["arms"]["optuna"]["proposer_isolation"] == "process"
++
++
++def test_the_contention_micro_benchmark_runs(tmp_path: Any, capsys: pytest.CaptureFixture[str]) -> None:
++    """Smoke run of scripts/bench_proposer_contention.py (tiny study; the real run is manual)."""
++    import importlib.util
++    import json
++    from pathlib import Path
++
++    p = Path(__file__).resolve().parents[1] / "scripts" / "bench_proposer_contention.py"
++    spec = importlib.util.spec_from_file_location("bench_proposer_contention", p)
++    assert spec and spec.loader
++    mod = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(mod)
++    out = tmp_path / "rows.json"
++    assert mod.main(["--target", "bm-curve", "--trials", "10", "--repeats", "1", "--k-sampler", "5",
++                     "--json", str(out)]) == 0
++    rows = json.loads(out.read_text(encoding="utf-8"))["rows"]
++    assert [(r["isolation"], r["contended"]) for r in rows] == [("thread", False), ("thread", True),
++                                                                ("process", False), ("process", True)]
++    assert all(r["optuna_asks"] == 1 and r["optuna_ask_p50_s"] > 0 for r in rows)
++    assert all(r["sampler_asks"] >= 1 for r in rows if r["contended"])
++    assert "contention slows the Optuna ask" in capsys.readouterr().out

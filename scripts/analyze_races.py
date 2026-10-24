@@ -2,8 +2,9 @@
 docs/results_log.md, and plain-language PNG charts.
 
 Reads races from the SQLite DB written by ``backend/db.py`` (opened read-only) and/or from
-JSONL exports (``backend/benchmark/export.py``), groups them by target, and reports per arm
-the mean +/- std over seeds of:
+JSONL exports (``backend/benchmark/export.py``), groups them by target AND fairness fingerprint
+(one report per setup: races that ran a different setup are never pooled into one mean), and
+reports per arm the mean +/- std over seeds of:
 
 - Cost to reach the goal ($-to-target = GPU $ + LLM $ up to the first run that reaches the
   target threshold), Time to reach the goal (time-to-target)
@@ -54,22 +55,44 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from backend.benchmark.export import read_export  # noqa: E402
-from backend.benchmark.metrics import is_counted, quality, summarize_arm  # noqa: E402
+from backend.benchmark.metrics import TRAP_CONTAMINATES_HELDOUT, is_counted, quality, summarize_arm  # noqa: E402
 
 Rows = dict[str, list[dict[str, Any]]]
 
-ARM_ORDER = ("mubit", "opus", "optuna", "mock")
+ARM_ORDER = ("mubit", "opus_bm", "opus", "optuna", "mock")
 ARM_LABEL = {
     "mubit": "Busy Machines (Mubit)",
+    "opus_bm": "Busy Machines with Opus",
     "opus": "Opus 5.5",
     "optuna": "Optuna (no AI)",
     "mock": "Mock LLM (dev)",
-    # Ablation only (rl-planner-ablation), never a headline arm.
+    # Ablation only (rl-planner-ablation, lcbench-lean-15m), never a headline arm.
     "fast": "Haiku 5.5 in the same loop (smaller faster model, not a Mubit adapter)",
+    "lean": "Opus 5.5 with the lean planner prompt (ablation only)",
 }
+# Plain-language engine feature labels (UI copy); mirrors backend.benchmark.configs.ENGINE_FEATURE_LABELS.
+FEATURE_LABEL = {
+    "judge_policy": "checks every claimed improvement",
+    "median_stop": "stops clearly worse runs",
+    "backfill": "keeps GPUs busy with a no-AI sampler while the AI thinks",
+    "lean_planner": "shorter planner replies: only the settings it changes",
+    "planner_cadence": "calls the AI planner at most every N seconds; the no-AI sampler keeps GPUs busy in between",
+}
+
+
+def feature_label(f: str, entry: Mapping[str, Any] | None = None) -> str:
+    """Plain label of one engine feature; the planner cadence shows its interval when known."""
+    if f == "planner_cadence":
+        v = ((entry or {}).get("planner_cadence") or {}).get("min_propose_interval_s")
+        if v is not None:
+            return f"calls the AI planner at most every {float(v):g} s; the no-AI sampler keeps GPUs busy in between"
+    return FEATURE_LABEL.get(f, f.replace("_", " "))
+
+
 # Chart labels (demo.md "Dashboard labels"): the Opus arm is the "Standard AI assistant".
 ARM_CHART_LABEL = {
     "mubit": "Busy Machines\n(powered by Mubit)",
+    "opus_bm": "Busy Machines\n(with Opus 5.5)",
     "opus": "Standard AI assistant\n(Opus 5.5)",
     "optuna": "Automatic search\n(no AI, Optuna)",
     "mock": "Mock assistant\n(dev only)",
@@ -80,6 +103,9 @@ TARGET_LABEL = {"lm": "Language model", "rl": "Game-playing AI", "cifar": "Image
 PROBE_MARKERS = ("probe", "collection")
 DEV_LLM_MODES = ("mock", "replay")
 DEV_STAMP = "DEV / MOCK: not a benchmark result"
+MIXED_STAMP = "MIXED SETUPS / REPEATED SEEDS: not a benchmark result"
+# fairness_warnings lines that mean the pooled races are not one setup over independent seeds
+_UNLIKE_MARKS = ("mean over unlike", "different arm sets", "repeated seeds", "(unfair)")
 
 # Tables a race needs (metrics are not used by any headline number).
 RACE_TABLES = ("arms", "experiments", "llm_calls", "gpu_intervals", "corrections")
@@ -262,7 +288,7 @@ class ArmRun:
     experiments_failed: int
     best_quality: float | None
     best_reported_score: float | None
-    shipped_quality: float | None
+    shipped_quality: float | None      # None also when a contaminated fake was shipped (shipped_is_fake)
     start_quality: float | None        # held-out score of this arm's starting-config run(s)
     gpu_cost_usd: float
     idle_cost_usd: float
@@ -281,6 +307,22 @@ class ArmRun:
     n_run_refs: int
     n_corrections: int
     normalised_quality: float | None = None
+    # Who proposed the launched runs (experiments.source; the backfill engine feature's no-AI
+    # sampler is "sampler") and which source produced the shipped model.
+    runs_by_source: dict[str, int] = field(default_factory=dict)
+    shipped_source: str | None = None
+    # The shipped model is a ground-truth trap run (a fake improvement the arm accepted).
+    shipped_is_fake: bool = False
+    # Engine features + planner/judge prompt versions from the fairness manifest (``arm_setup``).
+    setup: dict[str, str] | None = None
+
+
+def _sum_counts(dicts: Iterable[Mapping[str, int]]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for d in dicts:
+        for k, v in d.items():
+            out[str(k)] = out.get(str(k), 0) + int(v)
+    return out
 
 
 def _p50(xs: list[float]) -> float | None:
@@ -290,6 +332,7 @@ def _p50(xs: list[float]) -> float | None:
 def arm_runs_for_race(rows: Rows, *, direction: str, target_value: float, is_dev: bool) -> list[ArmRun]:
     race = rows["races"][0]
     out: list[ArmRun] = []
+    fp = fairness_fingerprint(rows)
     for arm in rows["arms"]:
         aid = arm["id"]
         exps = [e for e in rows.get("experiments", []) if e["arm_id"] == aid]
@@ -298,6 +341,7 @@ def arm_runs_for_race(rows: Rows, *, direction: str, target_value: float, is_dev
         summary, extras = summarize_arm(
             arm["kind"], direction=direction, target_value=float(target_value),
             race_start=float(race["started_at"]), experiments=exps, intervals=ivs, llm_calls=calls,
+            target=race.get("target"),
         )
         n = len(calls)
         by_step: dict[str, list[float]] = {}
@@ -329,6 +373,10 @@ def arm_runs_for_race(rows: Rows, *, direction: str, target_value: float, is_dev
             n_experiments=len(exps),
             n_run_refs=sum(1 for e in exps if e.get("run_ref")),
             n_corrections=sum(1 for c in rows.get("corrections", []) if c.get("arm_id") == aid),
+            runs_by_source=dict(extras.get("runs_by_source") or {}),
+            shipped_source=extras.get("shipped_source"),
+            shipped_is_fake=bool(extras.get("shipped_is_fake")),
+            setup=arm_setup(fp, canon_kind(arm["kind"])),
         ))
     return out
 
@@ -370,10 +418,14 @@ class ArmAggregate:
     p50_valid_by_step: dict[str, Stat]
     calls_by_step: dict[str, int]
     evidence: dict[str, int]
+    runs_by_source: dict[str, int] = field(default_factory=dict)   # summed over seeds
+    shipped_from: dict[str, int] = field(default_factory=dict)     # source -> races whose shipped model it made
 
 
 @dataclass
 class TargetReport:
+    """One setup of one target: races with the same fairness fingerprint (``setup_id``)."""
+
     target: str
     direction: str
     target_value: float
@@ -387,6 +439,22 @@ class TargetReport:
     arms: dict[str, ArmAggregate]
     runs: list[ArmRun]
     warnings: list[str]
+    setup_id: str | None = None      # fingerprint_id of every race in the report (None: no manifest)
+    n_setups: int = 1                # setups of this target in the same analysis (each its own report)
+
+    @property
+    def mixed(self) -> bool:
+        """The pooled races are not one setup over independent seeds (see the warnings)."""
+        return any(m in w for w in self.warnings for m in _UNLIKE_MARKS)
+
+    @property
+    def n_seeds(self) -> int:
+        """Distinct seeds (a re-run seed counts once; ``n_races`` counts the races)."""
+        return len({r.seed for r in self.runs})
+
+    @property
+    def n_races(self) -> int:
+        return len(self.race_ids)
 
 
 def normalise(q: float | None, start: float | None, best: float | None) -> float | None:
@@ -404,6 +472,8 @@ def _better(a: float, b: float, direction: str) -> bool:
 
 # Race-wide settings from the fairness manifest (scheduler ``ArmRunner.fairness``) that must
 # match before two races are pooled into one mean (fairness review 05:55, D41 #2).
+STANDARD_PROPOSE_EFFORT = "medium"   # mirrors backend.benchmark.configs.STANDARD_PROPOSE[1]
+OUTCOME_ONLY_STEPS = frozenset({"diagnose_run"})  # called only after a failed run (D50)
 FP_RACE_KEYS = ("target", "target_value", "budget_s", "run_budget_s", "n_slots", "runner", "cost_cap_usd",
                 "accept_unsure", "pipelining", "lookahead", "max_proposals_per_call", "run_baseline_first",
                 "launch_cutoff_s", "median_stop_rule")
@@ -483,13 +553,33 @@ def fairness_fingerprint(rows: Rows) -> dict[str, Any] | None:
                                     for x in ("fractions", "min_completed", "curve_metric", "time_scale")}
         if eng.get("judge_policy"):
             entry["judge_policy"] = eng["judge_policy"]
+        if eng.get("backfill"):
+            # the sampler's settings; its seed follows the race seed, so it is not a pooling key
+            entry["backfill"] = {x: eng["backfill"].get(x) for x in
+                                 ("sampler", "n_startup_trials", "constant_liar", "feedback", "llm_first")}
+        if eng.get("planner_cadence"):
+            # D47: a preset-declared feature parameter; part of the pooling key (absent on every
+            # race from before the feature existed, so their fingerprints are unchanged).
+            entry["planner_cadence"] = {x: eng["planner_cadence"].get(x)
+                                        for x in ("min_propose_interval_s", "max_proposals_per_call")}
         p = policies.get(raw) or policies.get(k)
         if p:
             prompts = parse_prompts(p.get("prompts"))
             entry["llm_policy"] = {
                 **{x: p.get(x) for x in ("researcher", "max_retries", "has_fallback", "fallback_model")},
-                "prompts": {s: v for s, v in sorted(prompts.items()) if s in steps_used},
+                # D50: diagnose_run is called only after a failed run, so whether it shows up is an
+                # outcome of the race, not its setup; it stays out of the key (races that never
+                # called it, i.e. every race before D50, keep their fingerprint).
+                "prompts": {s: v for s, v in sorted(prompts.items())
+                            if s in steps_used and s not in OUTCOME_ONLY_STEPS},
             }
+            # Planner effort (D46 lean planner: effort low). Only a NON-standard effort is a key:
+            # races from before the manifest recorded effort all ran the standard medium, so a
+            # standard arm keeps pooling with them; the lean planner's prompt version is already
+            # in "prompts" and its feature in "engine_features".
+            eff = p.get("propose_effort")
+            if eff is not None and eff != STANDARD_PROPOSE_EFFORT and "propose_experiments" in steps_used:
+                entry["llm_policy"]["propose_effort"] = eff
             gone = [f"{s}={v}" for s, v in sorted(prompts.items()) if s not in steps_used]
             if gone:
                 unused[k] = gone
@@ -575,18 +665,38 @@ def analyse(
     target_values: Mapping[str, float] | None = None,
     best_known: Mapping[str, float] | None = None,
     start_scores: Mapping[str, float] | None = None,
+    exclusions: Exclusions | None = None,
 ) -> list[TargetReport]:
+    """One report per (target, fairness fingerprint). A target that cannot be analysed (its
+    races ran with different goals, or there is no goal) is never dropped silently: each of its
+    races is listed in ``exclusions`` (``Excluded from this analysis``) with the reason, and the
+    reason is printed to stderr."""
     target_values = target_values or {}
     best_known = best_known or {}
     start_scores = start_scores or {}
-    by_target: dict[str, list[tuple[Rows, bool]]] = {}
+    by_setup: dict[tuple[str, str | None], list[tuple[Rows, bool]]] = {}
     for rows, dev in kept:
-        by_target.setdefault(rows["races"][0]["target"], []).append((rows, dev))
+        key = (rows["races"][0]["target"], fingerprint_id(fairness_fingerprint(rows)))
+        by_setup.setdefault(key, []).append((rows, dev))
+    setups_per_target: dict[str, list[str | None]] = {}
+    for target, fid in by_setup:
+        setups_per_target.setdefault(target, []).append(fid)
+
+    def skip(group: list[tuple[Rows, bool]], why: str) -> None:
+        print(f"analyze_races: skipped: {why}", file=sys.stderr)
+        if exclusions is not None:
+            for g, _ in group:
+                exclusions.races.append((str(g["races"][0]["id"]), f"not analysed: {why}"))
 
     reports: list[TargetReport] = []
-    for target in sorted(by_target):
-        group = by_target[target]
+    for target, setup_id in sorted(by_setup, key=lambda k: (k[0], str(k[1]))):
+        group = by_setup[(target, setup_id)]
         warnings = fairness_warnings([g for g, _ in group])
+        others = [f for f in setups_per_target[target] if f != setup_id]
+        if others:
+            warnings.append(f"{target!r} races ran {len(others) + 1} different setups (fairness fingerprints "
+                            f"{', '.join(f'`{f}`' for f in sorted(map(str, [setup_id, *others])))}): each setup is "
+                            "reported on its own and never pooled")
         try:
             from workers.targets.base import get_target
 
@@ -611,15 +721,15 @@ def analyse(
                 race_goals.add(float(v) if v is not None else (None if tv is None else float(tv)))
                 provisional = provisional or bool(c.get("provisional"))
             if len(race_goals) > 1:
-                warnings.append(f"races for {target!r} ran with different goals {sorted(race_goals, key=str)}: "
-                                f"not aggregated (pass --target-value {target}=X to force one)")
+                skip(group, f"races for {target!r} ran with different goals {sorted(race_goals, key=str)}: "
+                            f"not aggregated (pass --target-value {target}=X to force one)")
                 continue
             if from_config and race_goals:
                 tv, tv_src = next(iter(race_goals)), "race config (bench.py goal)"
             if provisional:
                 tv_src += ", PROVISIONAL"
         if tv is None:
-            warnings.append(f"no target value for {target!r}: skipped (pass --target-value {target}=X)")
+            skip(group, f"no target value for {target!r} (pass --target-value {target}=X)")
             continue
 
         runs: list[ArmRun] = []
@@ -661,12 +771,15 @@ def analyse(
                     "run_ids": sum(r.n_run_refs for r in rs),
                     "corrections": sum(r.n_corrections for r in rs),
                 },
+                runs_by_source=_sum_counts(r.runs_by_source for r in rs),
+                shipped_from=_sum_counts({r.shipped_source: 1} for r in rs if r.shipped_source),
             )
         reports.append(TargetReport(
             target=target, direction=direction, target_value=float(tv), target_value_source=tv_src,
             start_score=start, start_source=start_src, best_known=best, best_source=best_src,
             is_dev=any(d for _, d in group), race_ids=[g["races"][0]["id"] for g, _ in group],
-            arms=arms, runs=runs, warnings=warnings,
+            arms=arms, runs=runs, warnings=warnings, setup_id=setup_id,
+            n_setups=len(setups_per_target[target]),
         ))
     return reports
 
@@ -700,16 +813,75 @@ def _evidence(a: ArmAggregate) -> str:
             f"{e['run_ids']}/{e['experiments']} runs with run ID")
 
 
+def arm_setup(fp: Mapping[str, Any] | None, kind: str) -> dict[str, str] | None:
+    """One arm's setup from a fairness fingerprint: engine features (plain labels) and the
+    planner / judge prompt versions it called (planner effort when not the standard medium)."""
+    entry = next((v for k, v in ((fp or {}).get("arms") or {}).items() if canon_kind(k) == kind), None)
+    if entry is None:
+        return None
+    feats = entry.get("engine_features") or []
+    pol = entry.get("llm_policy") or {}
+    prompts = pol.get("prompts") or {}
+
+    def ver(step: str) -> str:
+        v = prompts.get(step)
+        return "not called" if v is None else str(v).split(":")[0]
+
+    planner = "no LLM" if not pol else ver("propose_experiments")
+    if pol and "propose_experiments" in prompts:
+        planner += f", effort {pol.get('propose_effort') or STANDARD_PROPOSE_EFFORT}"
+    return {
+        "features": " + ".join(feature_label(f, entry) for f in feats) if feats else "none",
+        "planner": planner,
+        "judge": "no LLM" if not pol else ver("judge_improvement"),
+    }
+
+
+def _setup_lines(rep: TargetReport) -> list[str]:
+    """Per arm: engine features and prompt versions, from each race's fairness fingerprint
+    (races with differing fingerprints are listed under the warnings above)."""
+    rows: list[str] = []
+    for kind in rep.arms:
+        cells: list[str] = []
+        for run in rep.runs:
+            if run.arm == kind and run.setup is not None:
+                cells.append(json.dumps(run.setup, sort_keys=True))
+        if not cells:
+            continue
+        uniq = list(dict.fromkeys(cells))
+        st = json.loads(uniq[0])
+        more = f" ({len(uniq)} different setups over these races)" if len(uniq) > 1 else ""
+        rows.append(f"| {ARM_LABEL.get(kind, kind)} | {st['features']} | {st['planner']} | {st['judge']}{more} |")
+    if not rows:
+        return []
+    return ["Setup per arm (from the fairness manifest):\n",
+            "| Arm | Engine features | Planner prompt (effort) | Judge prompt |", "|---|---|---|---|", *rows, ""]
+
+
+def _fake_shipped_note(rep: TargetReport, kind: str) -> str:
+    """Shipped-model cell suffix: races whose shipped model is an in-race trap (a fake). On a
+    target whose trap contaminates the held-out split its score is not in the mean before it."""
+    n = sum(1 for r in rep.runs if r.arm == kind and r.shipped_is_fake)
+    if not n:
+        return ""
+    withheld = rep.target in TRAP_CONTAMINATES_HELDOUT
+    return f" ({n} fake shipped" + (", held-out not counted)" if withheld else ")")
+
+
 def render_markdown(reports: list[TargetReport], ex: Exclusions) -> str:
     out: list[str] = []
     if not reports:
         out.append("_No races left to analyse after exclusions._\n")
     for rep in reports:
         label = TARGET_LABEL.get(rep.target, rep.target)
-        n_seeds = max((len(a.seeds) for a in rep.arms.values()), default=0)
         stamp = f" **[{DEV_STAMP}]**" if rep.is_dev else ""
+        if rep.mixed:
+            stamp += f" **[{MIXED_STAMP}]**"
         goal = "≤" if rep.direction == "min" else "≥"
-        out.append(f"### night/bench: {label} (`{rep.target}`), {n_seeds} seed(s){stamp}\n")
+        seeds = (f"{rep.n_seeds} seed(s)" if rep.n_seeds == rep.n_races
+                 else f"{rep.n_races} race(s) over {rep.n_seeds} distinct seed(s)")
+        setup = f", setup `{rep.setup_id}`" if rep.n_setups > 1 or rep.setup_id is not None else ""
+        out.append(f"### night/bench: {label} (`{rep.target}`){setup}, {seeds}{stamp}\n")
         out.append(f"- Goal: held-out score {goal} {rep.target_value:g} (source: {rep.target_value_source}).")
         out.append(f"- Model quality 0–100: 0 = {_fmt_q(rep.start_score)} ({rep.start_source}); "
                    f"100 = {_fmt_q(rep.best_known)} ({rep.best_source}).")
@@ -734,7 +906,7 @@ def render_markdown(reports: list[TargetReport], ex: Exclusions) -> str:
                 _fmt(s["experiments_finished"], digits=1),
                 _fmt(s["normalised_quality"], digits=0),
                 _fmt(s["best_quality"], digits=4, spec="g"),
-                _fmt(s["shipped_quality"], digits=4, spec="g"),
+                _fmt(s["shipped_quality"], digits=4, spec="g") + _fake_shipped_note(rep, kind),
                 _fmt(s["llm_cost_usd"], prefix="$", digits=3),
                 f"{_fmt(s['gpu_cost_usd'], prefix='$')} ({_fmt(s['idle_cost_usd'], prefix='$')})",
                 _fmt(s["llm_p50_latency_ms"], scale=1 / 1000, digits=2, unit=" s") if is_llm else "no LLM",
@@ -743,6 +915,19 @@ def render_markdown(reports: list[TargetReport], ex: Exclusions) -> str:
                 _evidence(a),
             ]) + " |")
         out.append("")
+        out.extend(_setup_lines(rep))
+        src_rows = [(k, a) for k, a in rep.arms.items() if a.runs_by_source.get("sampler")]
+        if src_rows:
+            out.append("Backfill (keeps GPUs busy with a no-AI sampler while the AI thinks): who proposed the runs, "
+                       "summed over seeds, and which source produced the shipped model:\n")
+            out.append("| Arm | Runs proposed by the AI | Runs from the no-AI sampler | Starting code | "
+                       "Shipped model from the sampler |")
+            out.append("|---|---|---|---|---|")
+            for kind, a in src_rows:
+                out.append(f"| {ARM_LABEL.get(kind, kind)} | {a.runs_by_source.get('llm', 0)} | "
+                           f"{a.runs_by_source.get('sampler', 0)} | {a.runs_by_source.get('baseline', 0)} | "
+                           f"{a.shipped_from.get('sampler', 0)} of {len(a.seeds)} race(s) |")
+            out.append("")
         step_rows = [(k, a) for k, a in rep.arms.items() if a.p50_by_step]
         if step_rows:
             out.append("p50 LLM latency per step type (mean ± std of per-seed p50s). The last column counts valid "
@@ -761,9 +946,15 @@ def render_markdown(reports: list[TargetReport], ex: Exclusions) -> str:
             s = a.stats
             notes = (f"held-out {_fmt(s['best_quality'], digits=4, spec='g')}; LLM {_fmt(s['llm_cost_usd'], prefix='$', digits=3)}; "
                      f"{_evidence(a)}; races {', '.join(r[:8] for r in a.race_ids)}")
+            if rep.mixed:
+                notes = f"{MIXED_STAMP} (see the warnings); {notes}"
             if rep.is_dev:
                 notes = f"{DEV_STAMP}; {notes}"
-            out.append(f"| {label} | {ARM_LABEL.get(kind, kind)} | {len(a.seeds)} | "
+            if len(set(a.seeds)) != len(a.seeds):
+                notes = f"{len(a.seeds)} races; {notes}"
+            if rep.setup_id is not None:
+                notes = f"{notes}; setup {rep.setup_id}"
+            out.append(f"| {label} | {ARM_LABEL.get(kind, kind)} | {len(set(a.seeds))} | "
                        f"{_fmt_reach(s['time_to_target_s'], scale=1 / 60, digits=1, unit=' min')} | "
                        f"{_fmt_reach(s['cost_to_target_usd'], prefix='$')} | {_fmt(s['gpu_idle_pct'], digits=1, unit='%')} | "
                        f"{_fmt(s['normalised_quality'], digits=0)} (0–100) | {notes} |")
@@ -880,16 +1071,20 @@ def render_charts(reports: list[TargetReport], out_dir: str | Path, theme: str =
             fig.text(0.02, top, f"{title} · {label}", ha="left", va="top", color=th["text"], fontsize=20,
                      fontweight="bold")
             sub = f"{how} · mean of {n_runs} run(s), grey line = ± 1 std"
+            if rep.n_setups > 1:
+                sub += f" · setup {rep.setup_id}"
             fig.text(0.02, top - 0.48 / fig_h, sub, ha="left", va="top", color=th["muted"], fontsize=12)
-            if rep.is_dev:
-                fig.text(0.02, top - 0.78 / fig_h, DEV_STAMP, ha="left", va="top", color=th["arm"]["opus"],
+            if rep.is_dev or rep.mixed:
+                stamp_txt = " · ".join(s for s, on in ((DEV_STAMP, rep.is_dev), (MIXED_STAMP, rep.mixed)) if on)
+                fig.text(0.02, top - 0.78 / fig_h, stamp_txt, ha="left", va="top", color=th["arm"]["opus"],
                          fontsize=12, fontweight="bold")
             fair = ("Same GPUs, same budget, same seeds." if not rep.warnings
                     else f"Fairness warnings ({len(rep.warnings)}): see the results table.")
             fig.text(0.02, 0.012, f"{fair} Source: night/bench races " + ", ".join(r[:8] for r in rep.race_ids),
                      color=th["muted"], fontsize=9)
             fig.tight_layout(rect=(0, 0.25 / fig_h, 1, 1.0 - 1.15 / fig_h))
-            path = out / f"{rep.target}-{stem}{'-dev' if rep.is_dev else ''}.png"
+            setup_sfx = f"-{rep.setup_id}" if rep.n_setups > 1 else ""
+            path = out / f"{rep.target}{setup_sfx}-{stem}{'-dev' if rep.is_dev else ''}.png"
             fig.savefig(path, facecolor=th["surface"])
             plt.close(fig)
             written.append(path)
@@ -942,7 +1137,7 @@ def main(argv: list[str] | None = None) -> int:
         races.extend(load_jsonl(args.jsonl))
     kept, ex = screen(races, allow_dev=args.allow_dev, include_unfinished=args.include_unfinished)
     reports = analyse(kept, target_values=_kv(args.target_value), best_known=_kv(args.best_known),
-                      start_scores=_kv(args.start_score))
+                      start_scores=_kv(args.start_score), exclusions=ex)
     md = render_markdown(reports, ex)
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     print(md)

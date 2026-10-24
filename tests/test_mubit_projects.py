@@ -274,3 +274,25 @@ async def test_manifest_helper() -> None:
     assert KEY_A not in blob and KEY_B not in blob     # env var names only, never keys
     await opus.aclose()
     await mubit.aclose()
+
+
+# --------------------------------------------------------------------------- adapter headers
+
+
+def test_adapter_headers_only_on_the_mubit_arm_and_sent_with_the_call() -> None:
+    from backend.agent.mubit_client import ProjectRouting
+    from backend.core.types import ArmKind, StepType
+
+    base = {"default": "A", "keys": {"A": "MUBIT_API_KEY"}}
+    r = ProjectRouting.from_dict({**base, "adapter_headers": {"mubit": {"judge_improvement": {"x-adapter-id": "ad_lane_1"}}}})
+    assert r.headers_for(ArmKind.mubit, StepType.judge_improvement) == {"x-adapter-id": "ad_lane_1"}
+    assert r.headers_for(ArmKind.opus, StepType.judge_improvement) == {}
+    assert r.to_dict()["adapter_headers"] == {"mubit": {"judge_improvement": {"x-adapter-id": "ad_lane_1"}}}
+    assert "adapter_headers" not in ProjectRouting.from_dict(base).to_dict()
+    for bad in ({"opus": {"judge_improvement": {"x-adapter-id": "a"}}},              # baseline arm
+                {"mubit": {"judge_improvement": {"x-middleware-record": "full"}}},   # record override
+                {"mubit": {"judge_improvement": {"Authorization": "x"}}},            # not an x- header
+                {"mubit": {"judge_improvement": {"x-adapter-id": "a b"}}},
+                {"mubit": {"nope": {"x-adapter-id": "a"}}}):
+        with pytest.raises(ValueError):
+            ProjectRouting.from_dict({**base, "adapter_headers": bad})

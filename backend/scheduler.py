@@ -46,6 +46,33 @@ prompt change):
   cancelled with ``summary["early_stop"]`` (checkpoint, value, median, stop latency, estimated
   slot time freed). A run that ends on its own first keeps its real outcome (``too_late``, or
   failed and diagnosed).
+- ``backfill`` (the backfill gate, data/backfill/): "keeps GPUs busy with a no-AI sampler while
+  the AI thinks". The arm holds an Optuna TPE sampler (``optuna_arm.BackfillSampler``,
+  ``EngineState.sampler``). The LLM's demand K counts only the LLM's own runs and buffered
+  proposals; the LLM's proposals always launch first (their own buffer, drained first); every
+  slot still free afterwards gets a sampler config at once (a dedicated backfill task asks TPE in
+  a worker thread, woken whenever a slot is free and the LLM buffer is empty). Sampler runs go
+  through the same ``_process`` as LLM runs (a claimed new best is judged by the same LLM judge
+  and judge policy) and render in the planner digest exactly like LLM runs. The sampler is told
+  every processed run of the arm AFTER the verdict: its reported score, or, for a claim the LLM
+  judge rejected (planner verdict ``invalid``, the LLM's own verdict, D44), the worst score seen
+  so far ("checker-gated feedback"). It is never told which option is the trap. Each experiment
+  records its ``source`` (baseline | llm | optuna | sampler).
+- ``lean_planner`` (D46, R62/R63): "shorter planner replies: only the settings it changes". The
+  arm's propose call uses the lean prompt v2 (diff form) at effort low; applied to the arm's
+  researcher by ``app.default_arm_deps`` (``loop.apply_propose_setup``). It is the only prompt
+  difference a strict race accepts between LLM arms (``check_llm_policies``): every other step's
+  prompt, the retry / fallback policy and the user message stay identical, and a standard arm
+  must send the standard planner (v1, effort medium). Declared and actual planner setups per arm
+  are in the fairness manifest (``propose``).
+- ``planner_cadence`` (D47, off by default; a preset declares it per arm with
+  ``RaceConfig.feature_params``): "calls the AI planner at most every N seconds; the no-AI sampler
+  keeps GPUs busy in between". The agent loop starts a propose call only ``min_propose_interval_s``
+  after the previous call's START; until then it keeps processing finished runs (judge and
+  diagnose calls are never throttled) and backfill fills the free slots. When the call is due,
+  K = min(max_proposals_per_call, LLM demand) at that moment (``_demand``: with backfill it counts
+  only the LLM's own runs). Needs backfill on the same arm. Reported per arm (``planner_cadence``:
+  call starts, K per call, gaps) and in the manifest (``engine.per_arm``, ``per_arm.feature_params``).
 Feature flags are in the fairness manifest (``engine``); a race whose BM arms differ, whose
 Optuna arm does not share the BM arms' median rule, or (benchmark / ablation) whose arms do not
 run their defaults, or whose judge policy has no calibration for the target, is refused.
@@ -69,6 +96,7 @@ It is the one deliberate difference besides the client, so it sits in the manife
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import re
@@ -82,10 +110,15 @@ from pydantic import BaseModel, Field
 
 from backend.benchmark.configs import (
     ABLATION_ONLY_ARMS,
+    BACKFILL_FEEDBACK,
+    BACKFILL_N_STARTUP_TRIALS,
     BUSY_MACHINES_ARMS,
     DEFAULT_ENGINE_FEATURES,
+    ENGINE_FEATURE_LABELS,
     FAST_ARM_LABEL,
+    PRESET_DECLARED_FEATURES,
     RaceConfig,
+    cadence_label,
     estimate_gpu_cost_usd,
 )
 from backend.benchmark.engine_rules import (
@@ -344,6 +377,103 @@ def sigma_tables() -> dict[str, Any]:
     return _SIGMA_TABLES
 
 
+_PROPOSE_STEP = "propose_experiments"
+
+
+def llm_policy_of(researcher: Any) -> dict[str, Any] | None:
+    """What must match across LLM arms besides the LLM itself: same researcher class, prompts
+    (Mubit groups calls by identical instructions) and retry/fallback policy, plus the planner
+    setup actually sent (``propose_prompt`` version, ``propose_effort``; None when unknown, see
+    ``loop.propose_setup_of``). The record mode is per arm by design (``differs_only_in``).
+    None for a non-LLM arm (Optuna)."""
+    r = researcher
+    prompts = getattr(r, "prompts", None)
+    if prompts is None:
+        return None
+    try:
+        from backend.agent.loop import propose_setup_of
+
+        setup = propose_setup_of(r)
+    except Exception:  # noqa: BLE001 - pure engine tests without the agent package
+        setup = {"prompt_version": getattr(prompts, "propose_version", None), "effort": None}
+    return {
+        "researcher": type(r).__name__,
+        "prompts": getattr(prompts, "version", type(prompts).__name__),
+        "max_retries": getattr(r, "max_retries", None),
+        "has_fallback": getattr(r, "fallback_llm", None) is not None or getattr(r, "fallback_model", None) is not None,
+        "fallback_model": getattr(r, "fallback_model", None),
+        "propose_prompt": setup.get("prompt_version"),
+        "propose_effort": setup.get("effort"),
+    }
+
+
+def _strip_propose(prompts: Any) -> Any:
+    """The policy's prompt list without the planner (propose_experiments) entry."""
+    if not isinstance(prompts, str) or "=" not in prompts:
+        return prompts
+    return ",".join(p for p in prompts.split(",") if not p.strip().startswith(_PROPOSE_STEP + "="))
+
+
+def _canon(x: Any) -> str:
+    return json.dumps(x, sort_keys=True, default=str)
+
+
+def check_llm_policies(cfg: RaceConfig, policies: dict[Any, dict[str, Any]]) -> list[str]:
+    """Strict races: refuse (AsymmetricRaceError) LLM arms whose policies differ beyond the ONE
+    declared difference, the planner setup of arms that declare one (``RaceConfig.propose_variant_for``:
+    the ``lean_planner`` engine feature, D46). Checks, in order:
+    1. every LLM arm has the same researcher, retry / fallback policy and every non-planner
+       prompt (judge, diagnose, early_stop: same version and fingerprint);
+    2. the arms that declare nothing (standard planner) are identical, planner included;
+    3. every arm sends exactly its declared planner: prompt version (standard: v1) and, when
+       the client reports one, effort (standard: medium). An arm that declares the lean planner
+       but cannot show a versioned planner prompt is refused.
+    Returns the checks that passed."""
+    pols = {ArmKind(k): p for k, p in policies.items() if p is not None}
+    if not pols:
+        return []
+    done: list[str] = []
+
+    def core(p: dict[str, Any]) -> dict[str, Any]:
+        q = {k: v for k, v in p.items() if k not in ("propose_prompt", "propose_effort")}
+        q["prompts"] = _strip_propose(q.get("prompts"))
+        return q
+
+    cores = {k: core(p) for k, p in pols.items()}
+    if len({_canon(c) for c in cores.values()}) > 1:
+        raise AsymmetricRaceError(f"LLM arms differ in prompts / retry / fallback beyond the declared planner "
+                                  f"setup: { {k.value: c for k, c in cores.items()} }")
+    if len(pols) > 1:
+        done.append("LLM arms share researcher, retry/fallback policy and every non-planner prompt")
+    std = {k: p for k, p in pols.items() if cfg.propose_variant_for(k) is None}
+    if len({_canon(p) for p in std.values()}) > 1:
+        raise AsymmetricRaceError(f"LLM arms without a declared planner difference (no lean_planner) differ in "
+                                  f"their planner prompt or effort: { {k.value: p for k, p in std.items()} }")
+    for k, p in pols.items():
+        want = cfg.propose_setup_for(k)
+        declared = cfg.propose_variant_for(k) is not None
+        got_v, got_e = p.get("propose_prompt"), p.get("propose_effort")
+        if got_v is None:
+            if declared:
+                raise AsymmetricRaceError(
+                    f"arm {k.value} declares the planner propose {want['prompt_version']} / effort {want['effort']} "
+                    f"({want['source']}) but its prompt set has no planner versions ({p.get('prompts')})")
+            continue  # an unversioned prompt set on a standard arm: covered by checks 1-2
+        if got_v != want["prompt_version"]:
+            raise AsymmetricRaceError(
+                f"arm {k.value} sends planner prompt {got_v}, but the race declares {want['prompt_version']} "
+                f"({want['source']}): an undeclared prompt difference")
+        if got_e is not None and got_e != want["effort"]:
+            raise AsymmetricRaceError(
+                f"arm {k.value} sends planner effort {got_e}, but the race declares {want['effort']} ({want['source']})")
+    lean = sorted(k.value for k in pols if cfg.propose_variant_for(k) is not None)
+    done.append("planner per arm as declared: " + ", ".join(
+        f"{k.value}={cfg.propose_setup_for(k)['prompt_version']}/{cfg.propose_setup_for(k)['effort']}"
+        for k in sorted(pols, key=lambda a: a.value))
+        + (f" (declared difference only on {lean})" if lean else ""))
+    return done
+
+
 def target_default_budget_s(cfg: RaceConfig, spec: TargetSpec | None = None) -> float:
     """The REGISTERED target's default per-run budget (what ``bench.goal_key`` compares
     ``run_budget_s`` against). Never the race spec's budget: ``race_spec`` already applied
@@ -376,6 +506,14 @@ def resolve_engine_state(cfg: RaceConfig, kind: ArmKind, spec: TargetSpec, *,
         st.judge_rule = SeedSpreadRule(table)
         if table is None:
             st.notes.append(f"judge_policy: no calibrated seed spread for {key!r}; the LLM verdict stands")
+    if "backfill" in feats and kind != ArmKind.optuna:
+        # Lazy import: optuna_arm imports this module (ExperimentSnapshot, Proposal, ...).
+        from backend.agent.optuna_arm import BackfillSampler
+
+        st.sampler = BackfillSampler(spec, cfg.seed, n_startup_trials=BACKFILL_N_STARTUP_TRIALS)
+    st.params = cfg.params_for(kind)
+    if "planner_cadence" in feats and kind != ArmKind.optuna:
+        st.min_propose_interval_s = cfg.min_propose_interval_for(kind)
     return st
 
 
@@ -390,8 +528,24 @@ def check_engine_features(cfg: RaceConfig, states: dict[ArmKind, EngineState], t
     if len(set(bm.values())) > 1:
         raise AsymmetricRaceError(f"Busy Machines arms must get identical engine features: "
                                   f"{ {k.value: list(f) for k, f in bm.items()} }")
+    bm_params = {k: _canon(states[k].params) for k in bm}
+    if len(set(bm_params.values())) > 1:
+        raise AsymmetricRaceError(f"Busy Machines arms must get identical feature parameters: "
+                                  f"{ {k.value: states[k].params for k in bm} }")
     if len(bm) > 1:
         done.append(f"BM arms {sorted(k.value for k in bm)} share features {list(next(iter(bm.values())))}")
+    for k, st in states.items():
+        if "planner_cadence" in st.features:
+            if "backfill" not in st.features:
+                raise AsymmetricRaceError(f"arm {k.value}: planner_cadence needs backfill (slots would starve)")
+            if st.min_propose_interval_s is None or not st.min_propose_interval_s > 0:
+                raise AsymmetricRaceError(f"arm {k.value}: planner_cadence has no min_propose_interval_s")
+    cad = {k.value: st.min_propose_interval_s for k, st in states.items() if "planner_cadence" in st.features}
+    if cad:
+        done.append("planner cadence (" + ENGINE_FEATURE_LABELS["planner_cadence"] + ") on "
+                    + ", ".join(f"{k}: at most one propose call per {v:g} s (between call starts)"
+                                for k, v in sorted(cad.items()))
+                    + "; K = min(max_proposals_per_call, LLM demand); judge calls not throttled")
     if ArmKind.optuna in feats and bm:
         bm_median = "median_stop" in next(iter(bm.values()))
         if ("median_stop" in feats[ArmKind.optuna]) != bm_median:
@@ -399,15 +553,32 @@ def check_engine_features(cfg: RaceConfig, states: dict[ArmKind, EngineState], t
                 f"optuna must {'' if bm_median else 'not '}run the median rule like the Busy Machines arms "
                 f"(optuna {list(feats[ArmKind.optuna])}, BM {list(next(iter(bm.values())))})")
         done.append(f"optuna median rule matches the BM arms ({bm_median})")
+    for k, st in states.items():
+        if "backfill" in st.features and st.sampler is None:
+            raise AsymmetricRaceError(f"arm {k.value}: backfill is on but no sampler was built")
+    bf = sorted(k.value for k, st in states.items() if "backfill" in st.features)
+    if bf:
+        done.append(f"backfill (no-AI sampler fills free slots, LLM proposals first) on {bf}")
+    lean = sorted(k.value for k, st in states.items() if "lean_planner" in st.features)
+    if lean:
+        v, e = cfg.propose_variant_for(lean[0]) or ("?", "?")
+        done.append(f"lean planner (propose {v}, effort {e}; {ENGINE_FEATURE_LABELS['lean_planner']}) on {lean}")
     if cfg.strict:
         # Benchmark / ablation: every arm runs exactly its kind's default features (no per-race overrides),
-        # so a headline column always means the same engine.
+        # so a headline column always means the same engine. The one exception: features a preset
+        # declares per arm with their parameters (PRESET_DECLARED_FEATURES, e.g. planner_cadence),
+        # on top of the defaults; the manifest and the fingerprint carry them.
         off = {k.value: [list(f), list(DEFAULT_ENGINE_FEATURES.get(k, ()))] for k, f in feats.items()
-               if tuple(sorted(f)) != tuple(sorted(DEFAULT_ENGINE_FEATURES.get(k, ())))}
+               if tuple(sorted(x for x in f if x not in PRESET_DECLARED_FEATURES))
+               != tuple(sorted(DEFAULT_ENGINE_FEATURES.get(k, ())))}
         if off:
-            raise AsymmetricRaceError(f"{cfg.mode} races run each arm's default engine features; "
+            raise AsymmetricRaceError(f"{cfg.mode} races run each arm's default engine features (plus only "
+                                      f"preset-declared {sorted(PRESET_DECLARED_FEATURES)}); "
                                       f"overridden (got, default): {off}")
-        done.append("every arm runs its default engine features")
+        extra = {k.value: sorted(x for x in f if x in PRESET_DECLARED_FEATURES) for k, f in feats.items()
+                 if any(x in PRESET_DECLARED_FEATURES for x in f)}
+        done.append("every arm runs its default engine features"
+                    + (f" (plus preset-declared, with parameters: {extra})" if extra else ""))
         if feats.get(ArmKind.opus):
             raise AsymmetricRaceError(f"the opus arm is the standard agent; it has engine features "
                                       f"{list(feats[ArmKind.opus])}")
@@ -453,7 +624,7 @@ def summarize_result(spec: TargetSpec, status: ExperimentStatus, score: float | 
 
 # Engine records in an experiment summary that the planner must not see (D44: the judge policy
 # is verification of the shipped model, not an input to the search).
-PLANNER_HIDDEN_SUMMARY_KEYS = frozenset({"judge_policy"})
+PLANNER_HIDDEN_SUMMARY_KEYS = frozenset({"judge_policy", "sampler_feedback"})
 
 
 def planner_summary(summary: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -504,6 +675,10 @@ class _Exp:
     early_stop: dict[str, Any] | None = None
     cancel_sent: bool = False
     judge_policy: dict[str, Any] | None = None
+    # Who proposed it: baseline | llm | optuna | sampler (backfill). Stored, never shown to the
+    # planner (the snapshot has no source; sampler runs render like LLM runs).
+    source: str = "llm"
+    sampler_feedback: dict[str, Any] | None = None   # what the backfill sampler was told (audit)
 
     def full_summary(self, base: dict[str, Any] | None) -> dict[str, Any] | None:
         """``summarize_result`` output plus the engine's per-run records."""
@@ -514,6 +689,8 @@ class _Exp:
             out["early_stop"] = dict(self.early_stop)
         if self.judge_policy is not None:
             out["judge_policy"] = dict(self.judge_policy)
+        if self.sampler_feedback is not None:
+            out["sampler_feedback"] = dict(self.sampler_feedback)
         return out
 
     @property
@@ -547,7 +724,7 @@ class _Exp:
             "judge_reason": self.verdict_reason, "diagnosis": self.diagnosis, "summary": self.summary,
             "error": self.error, "metrics": self.metrics, "logs_tail": self.logs_tail,
             "llm_call_id": self.llm_call_id, "mubit_request_id": self.mubit_request_id,
-            "gpu_cost_usd": self.gpu_cost_usd,
+            "gpu_cost_usd": self.gpu_cost_usd, "source": self.source,
         }
 
 
@@ -647,6 +824,30 @@ class ArmRunner:
         self.median_checks = 0
         self.median_skipped_few_completed = 0
         self.early_stops_requested = 0
+        # backfill: the no-AI sampler and its own buffer (the LLM's buffer is drained first).
+        self.sampler = self.engine.sampler if "backfill" in self.engine.features else None
+        self.own_source = "optuna" if deps.kind == ArmKind.optuna else "llm"
+        self.sampler_buffer: deque[str] = deque()
+        self._backfill_wake = asyncio.Event()
+        self._backfill_task: asyncio.Task[None] | None = None
+        self._worst_score: float | None = None      # worst reported score seen (checker-gated feedback)
+        self.backfill_batches = 0
+        self.backfill_ask_s = 0.0
+        self.backfill_dropped = 0                    # sampler proposals dropped by the deadline rule
+        self.backfill_tells: dict[str, int] = {"raw": 0, "worst_on_rejected": 0, "fail_on_rejected": 0,
+                                               "no_score": 0}
+        self.backfill_error: str | None = None
+        # planner_cadence: at most one propose call per ``min_propose_interval_s`` (between call
+        # STARTS); judge / diagnose calls are never held back. Only with backfill (config check).
+        self.min_propose_interval_s: float | None = (
+            self.engine.min_propose_interval_s if "planner_cadence" in self.engine.features else None)
+        self.propose_starts: list[float] = []        # absolute start time of every propose call
+        self.propose_ks: list[int] = []              # K asked in each propose call
+        self.cadence_deferrals = 0                   # times a due call was held back by the cadence
+        self._cadence_due_since: float | None = None  # demand > 0 but held back since then
+        self.cadence_held_s = 0.0                    # total time demand waited on the cadence
+        self._cadence_timer: asyncio.TimerHandle | None = None
+        self._cadence_timer_at: float | None = None
 
         self.researcher.on_call = self._on_llm_call
 
@@ -679,6 +880,12 @@ class ArmRunner:
             # Engine features are per arm by design (manifest "engine"); the map and the median
             # rule's parameters are race-wide, so they are the same on every arm.
             "engine_features": self.cfg.engine_features_map(),
+            # Declared feature parameters per arm (e.g. planner_cadence min_propose_interval_s);
+            # race-wide map, so the same on every arm.
+            "feature_params": self.cfg.feature_params_map(),
+            # Declared planner (propose prompt version + effort) per LLM arm (D46 lean_planner);
+            # race-wide map, so the same on every arm. What each arm actually sent: manifest "propose".
+            "propose_setups": self.cfg.propose_setups(),
             "median_stop_rule": {"fractions": list(self.cfg.median_stop_fractions),
                                  "min_completed": self.cfg.median_stop_min_completed},
             "target": self.spec.name,
@@ -690,21 +897,8 @@ class ArmRunner:
         }
 
     def llm_policy(self) -> dict[str, Any] | None:
-        """What must match across LLM arms besides the LLM itself: same researcher class,
-        prompts (Mubit groups calls by identical instructions) and retry/fallback policy.
-        The record mode is per arm by design (see ``differs_only_in``). None for a non-LLM
-        arm (Optuna)."""
-        r = self.researcher
-        prompts = getattr(r, "prompts", None)
-        if prompts is None:
-            return None
-        return {
-            "researcher": type(r).__name__,
-            "prompts": getattr(prompts, "version", type(prompts).__name__),
-            "max_retries": getattr(r, "max_retries", None),
-            "has_fallback": getattr(r, "fallback_llm", None) is not None or getattr(r, "fallback_model", None) is not None,
-            "fallback_model": getattr(r, "fallback_model", None),
-        }
+        """``llm_policy_of`` this arm's researcher (None for Optuna)."""
+        return llm_policy_of(self.researcher)
 
     async def run(self) -> None:
         for s in self.slots:
@@ -714,6 +908,9 @@ class ArmRunner:
             p = Proposal(config=self.spec.default_config(), hypothesis=BASELINE_HYPOTHESIS)
             self._add_proposal(p, is_baseline=True)
             self._fill_slots()
+        if self.sampler is not None:
+            self._backfill_task = asyncio.create_task(self._backfill_loop(), name=f"backfill-{self.kind}")
+            self._backfill_wake.set()
         self._agent_task = asyncio.create_task(self._agent_loop(), name=f"agent-{self.kind}")
         self._monitor_task = asyncio.create_task(self._monitor(), name=f"monitor-{self.kind}")
         self._wake.set()
@@ -736,7 +933,7 @@ class ArmRunner:
         summary, extras = summarize_arm(
             self.kind, direction=self.spec.direction, target_value=self.spec.target_value,
             race_start=self.t0, experiments=[self.exps[i].row(self.race_id, self.runner.name) for i in self.order],
-            intervals=intervals, llm_calls=self.llm_calls,
+            intervals=intervals, llm_calls=self.llm_calls, target=self.spec.name,
         )
         extras.update({
             "stop_reason": self.stop_reason, "error": self.error, "configs_rejected": self.configs_rejected,
@@ -755,6 +952,14 @@ class ArmRunner:
             "median_stop_skipped_few_completed": self.median_skipped_few_completed,
             "early_stops_requested": self.early_stops_requested,
         })
+        if self.kind != ArmKind.optuna:
+            extras["planner_cadence"] = self.cadence_report()
+        if "backfill" in self.engine.features and self.engine.sampler is not None:
+            extras["backfill"] = {
+                **self.engine.sampler.counts(), "batches": self.backfill_batches, "ask_s": self.backfill_ask_s,
+                "dropped_by_deadline_rule": self.backfill_dropped, "tells": dict(self.backfill_tells),
+                "error": self.backfill_error,
+            }
         return summary, extras
 
     def apply_correction(self, experiment_id: str, label: CorrectionLabel, *, recorded: bool = False) -> bool:
@@ -799,13 +1004,16 @@ class ArmRunner:
             return
         self.cutoff_applied = True
         dropped = 0
-        while self.buffer:
-            exp = self.exps[self.buffer.popleft()]
-            exp.status = ExperimentStatus.cancelled
-            exp.error = (f"deadline rule: not launched, {max(0.0, self.deadline - t):.1f}s left < "
-                         f"launch_cutoff_s {self.cfg.launch_cutoff_s:g}s")
-            self._store(exp)
-            dropped += 1
+        for buf in (self.buffer, self.sampler_buffer):
+            while buf:
+                exp = self.exps[buf.popleft()]
+                exp.status = ExperimentStatus.cancelled
+                exp.error = (f"deadline rule: not launched, {max(0.0, self.deadline - t):.1f}s left < "
+                             f"launch_cutoff_s {self.cfg.launch_cutoff_s:g}s")
+                self._store(exp)
+                dropped += 1
+                if buf is self.sampler_buffer:
+                    self.backfill_dropped += 1
         self.launches_skipped_deadline += dropped
         for s in self.slots:
             if s.state == SlotState.idle and not s.closed:
@@ -892,17 +1100,28 @@ class ArmRunner:
     def _running_count(self) -> int:
         return sum(1 for s in self.slots if s.state == SlotState.busy)
 
+    def _own_running_count(self) -> int:
+        """Busy slots running the arm's own proposals (the baseline included), not the sampler's."""
+        return sum(1 for s in self.slots if s.state == SlotState.busy and s.experiment_id is not None
+                   and self.exps[s.experiment_id].source != "sampler")
+
+    def _free_count(self) -> int:
+        return sum(1 for s in self.slots if s.state == SlotState.idle and not s.closed)
+
     def _demand(self) -> int:
         if not self._can_launch():
             return 0
-        k = self.n + self.lookahead - self._running_count() - len(self.buffer)
+        # backfill: the LLM's demand counts only its own runs, so it proposes as if the sampler's
+        # runs were not there (its proposals take the next free slots, ahead of the sampler's).
+        running = self._running_count() if self.sampler is None else self._own_running_count()
+        k = self.n + self.lookahead - running - len(self.buffer)
         if self.cfg.max_proposals_per_call is not None:
             k = min(k, self.cfg.max_proposals_per_call)
         return max(0, k)
 
     # ------------------------------------------------------------------ proposals and runs
 
-    def _add_proposal(self, p: Proposal, *, is_baseline: bool = False) -> bool:
+    def _add_proposal(self, p: Proposal, *, is_baseline: bool = False, source: str | None = None) -> bool:
         try:
             config = self.spec.validate_config(dict(p.config))
         except ValueError as e:
@@ -913,15 +1132,18 @@ class ArmRunner:
         exp = _Exp(id=exp_id, arm_id=self.arm_id, config=config, hypothesis=p.hypothesis,
                    seed=self.cfg.seed, proposed_at=now(), is_baseline=is_baseline,
                    llm_call_id=p.llm_call_id, mubit_request_id=p.mubit_request_id,
-                   label=f"#{len(self.order) + 1}")
+                   label=f"#{len(self.order) + 1}",
+                   source="baseline" if is_baseline else (source or self.own_source))
         self.exps[exp.id] = exp
         self.order.append(exp.id)
-        self.buffer.append(exp.id)
+        (self.sampler_buffer if exp.source == "sampler" else self.buffer).append(exp.id)
         self._store(exp)
         return True
 
     def _fill_slots(self) -> None:
-        while self.buffer and self._live():
+        """Launch buffered proposals on free slots: the LLM's first, then the sampler's; with
+        backfill, wake the sampler if a slot is still free afterwards."""
+        while (self.buffer or self.sampler_buffer) and self._live():
             t = now()
             if not self._can_launch(t):
                 self._apply_cutoff(t)
@@ -929,7 +1151,7 @@ class ArmRunner:
             s = self._free_slot()
             if s is None:
                 return
-            exp = self.exps[self.buffer.popleft()]
+            exp = self.exps[(self.buffer if self.buffer else self.sampler_buffer).popleft()]
             exp.status, exp.started_at = ExperimentStatus.running, t
             exp.slot_id, exp.hardware = s.slot.slot_id, s.slot.hardware
             self._transition(s, SlotState.busy, t, exp.id)
@@ -939,6 +1161,72 @@ class ArmRunner:
                                               hypothesis=exp.hypothesis, seed=exp.seed,
                                               hardware=s.slot.hardware, ts=t))
             self.run_tasks[exp.id] = asyncio.create_task(self._run_experiment(exp, s), name=f"run-{exp.id[:8]}")
+        if (self.sampler is not None and not self.buffer and self._live() and self._can_launch()
+                and self._free_count() > len(self.sampler_buffer)):
+            self._backfill_wake.set()
+
+    # ------------------------------------------------------------------ backfill (engine feature)
+
+    async def _backfill_loop(self) -> None:
+        """Ask the sampler for exactly as many configs as there are free slots no LLM proposal
+        is waiting for, launch them, repeat whenever woken. TPE's ask is CPU-bound, so it runs in
+        a worker thread (``BackfillSampler.ask_batch`` applies the queued tells first)."""
+        sampler = self.sampler
+        assert sampler is not None
+        try:
+            while not self.stopped:
+                await self._backfill_wake.wait()
+                self._backfill_wake.clear()
+                if self.stopped:
+                    return
+                if self.buffer or not self._live() or not self._can_launch():
+                    continue
+                want = self._free_count() - len(self.sampler_buffer)
+                if want <= 0:
+                    continue
+                t = now()
+                proposals = await asyncio.to_thread(sampler.ask_batch, want)
+                self.backfill_ask_s += now() - t
+                self.backfill_batches += 1
+                if self.stopped:
+                    return
+                for p in proposals:
+                    self._add_proposal(p, source="sampler")
+                self._fill_slots()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 - the arm keeps running as the plain agent, and says so
+            log.exception("arm %s: backfill sampler crashed; backfill off for the rest of the race", self.kind)
+            self.backfill_error = f"{type(e).__name__}: {e}"
+            self.sampler = None
+
+    def _tell_sampler(self, exp: _Exp) -> None:
+        """Checker-gated feedback (after the verdict): the reported score, or for a claim the LLM
+        judge rejected (planner verdict invalid, D44) the worst score seen so far. Never a trap
+        flag or a ground-truth number. Every processed run of the arm (LLM, baseline, sampler)."""
+        if self.sampler is None:
+            return
+        ok = exp.status == ExperimentStatus.succeeded and exp.score is not None and math.isfinite(exp.score)
+        value: float | None
+        if not ok:
+            value, rule = None, "no_score"
+        elif exp.planner_verdict == Verdict.invalid:
+            # A rejected claim before any score was seen: FAIL rather than the inflated score.
+            if self._worst_score is not None:
+                value, rule = self._worst_score, "worst_on_rejected"
+            else:
+                value, rule = None, "fail_on_rejected"
+        else:
+            value, rule = float(exp.score), "raw"   # type: ignore[arg-type]
+        if ok:
+            sc = float(exp.score)  # type: ignore[arg-type]
+            w = self._worst_score
+            self._worst_score = sc if w is None else (max(w, sc) if self.spec.direction == "min" else min(w, sc))
+        self.backfill_tells[rule] += 1
+        self.sampler.tell(exp.id, exp.config, value)
+        exp.sampler_feedback = {"told": value, "rule": rule}
+        if exp.summary is not None:
+            exp.summary = exp.full_summary(exp.summary)
 
     async def _run_experiment(self, exp: _Exp, s: _SlotState) -> None:
         started = exp.started_at or now()
@@ -1174,6 +1462,14 @@ class ArmRunner:
                 k = self._demand()
                 if k <= 0:
                     continue
+                wait = self._cadence_wait()
+                if wait > 0:
+                    # planner_cadence: the call is due only ``min_propose_interval_s`` after the last
+                    # call's start. Hold it (finished runs, judge and diagnose calls keep flowing;
+                    # backfill fills the free slots) and wake when it is due; K is recomputed then.
+                    self._hold_for_cadence(wait)
+                    continue
+                self._note_propose_start(k)
                 proposals = await self.researcher.propose(self._digest(k), k)
                 if self.stopped:
                     return
@@ -1189,6 +1485,69 @@ class ArmRunner:
             log.exception("arm %s: researcher crashed", self.kind)
             self.error = f"{type(e).__name__}: {e}"
             self._stop("error", now())
+
+    # ------------------------------------------------------------------ planner cadence (engine feature)
+
+    CADENCE_EPS_S = 1e-3   # a due time this close counts as reached (timer vs wall-clock rounding)
+
+    def _cadence_wait(self, t: float | None = None) -> float:
+        """Seconds until the next propose call may start (0 = now): ``min_propose_interval_s``
+        after the previous call's START. Always 0 without the planner_cadence feature."""
+        if self.min_propose_interval_s is None or not self.propose_starts:
+            return 0.0
+        t = now() if t is None else t
+        wait = self.propose_starts[-1] + self.min_propose_interval_s - t
+        return wait if wait > self.CADENCE_EPS_S else 0.0
+
+    def _hold_for_cadence(self, wait: float) -> None:
+        """Demand is there but the cadence holds the call: wake the agent loop when it is due
+        (one timer at a time; re-armed only if the due time moved)."""
+        t = now()
+        if self._cadence_due_since is None:
+            self._cadence_due_since = t
+            self.cadence_deferrals += 1
+        due = t + wait
+        if self._cadence_timer is not None and self._cadence_timer_at is not None \
+                and abs(self._cadence_timer_at - due) < self.CADENCE_EPS_S:
+            return
+        if self._cadence_timer is not None:
+            self._cadence_timer.cancel()
+        self._cadence_timer_at = due
+        self._cadence_timer = asyncio.get_running_loop().call_later(wait, self._cadence_fire)
+
+    def _cadence_fire(self) -> None:
+        self._cadence_timer = None
+        self._cadence_timer_at = None
+        self._wake.set()
+
+    def _note_propose_start(self, k: int) -> None:
+        t = now()
+        if self._cadence_due_since is not None:
+            self.cadence_held_s += max(0.0, t - self._cadence_due_since)
+            self._cadence_due_since = None
+        self.propose_starts.append(t)
+        self.propose_ks.append(int(k))
+
+    def cadence_report(self) -> dict[str, Any]:
+        """What the planner cadence did (arm report ``planner_cadence``); propose-call counts and
+        start gaps are given for every LLM arm so the standard arm's pace is comparable."""
+        gaps = [b - a for a, b in zip(self.propose_starts, self.propose_starts[1:])]
+        out: dict[str, Any] = {
+            "on": self.min_propose_interval_s is not None,
+            "min_propose_interval_s": self.min_propose_interval_s,
+            "propose_calls": len(self.propose_starts),
+            "propose_starts_s": [round(x - self.t0, 3) for x in self.propose_starts],
+            "propose_k": list(self.propose_ks),
+            "min_gap_s": min(gaps) if gaps else None,
+            "median_gap_s": statistics.median(gaps) if gaps else None,
+        }
+        if self.min_propose_interval_s is not None:
+            out.update(deferrals=self.cadence_deferrals, held_s=self.cadence_held_s,
+                       label=cadence_label(self.min_propose_interval_s),
+                       measured="between the starts of propose calls",
+                       k_rule="K = min(max_proposals_per_call, LLM demand) when the call is due",
+                       judge_throttled=False)
+        return out
 
     async def _process(self, exp: _Exp) -> None:
         best = self.exps[self.best_id] if self.best_id else None
@@ -1235,6 +1594,7 @@ class ArmRunner:
                     elapsed_s=(exp.ended_at or now()) - self.t0,
                     reached_target=bool(is_counted(row) and q is not None and self.spec.reaches_target(q)),
                 ))
+        self._tell_sampler(exp)
         self._store(exp)
 
     def _apply_judge_policy(self, exp: _Exp, out: Any, best: _Exp | None) -> None:
@@ -1291,12 +1651,15 @@ class ArmRunner:
             # request_stop(): still close the slots and cancel the runs so nothing keeps paying.
             self._stop("cancelled", now())
         assert self.t_end is not None
-        for task in (self._agent_task, self._monitor_task):
+        if self._cadence_timer is not None:
+            self._cadence_timer.cancel()
+            self._cadence_timer = None
+        for task in (self._agent_task, self._monitor_task, self._backfill_task):
             if task is not None and not task.done():
                 task.cancel()
         if self._cancel_tasks:
             await asyncio.wait(list(self._cancel_tasks), timeout=SHUTDOWN_GRACE_S)
-        for task in (self._agent_task, self._monitor_task):
+        for task in (self._agent_task, self._monitor_task, self._backfill_task):
             if task is not None:
                 try:
                     await task
@@ -1393,6 +1756,12 @@ class RaceEngine:
             d.kind: resolve_engine_state(cfg, d.kind, self.spec, default_budget_s=default_budget)
             for d in arms}
         self.engine_checks = self._check_engine_features()
+        # Planner / prompt policy (D46): checked before t0 (and before any pre-warm), from the deps.
+        self.policy_checks = self._check_llm_policies(
+            {d.kind: llm_policy_of(d.researcher) for d in arms if d.kind != ArmKind.optuna})
+        # Resolved before t0: importing the LLM SDK can take seconds on a loaded machine, and the
+        # manifest is first built after the race clock starts (it must not eat race time).
+        self._mubit_projects = self.mubit_projects()
 
     # ------------------------------------------------------------------ setup checks
 
@@ -1486,6 +1855,38 @@ class RaceEngine:
         """Arms that should share engine features must (refused otherwise). Returns the checks."""
         return check_engine_features(self.cfg, self.engine_states, self.spec.name)
 
+    def _check_llm_policies(self, policies: dict[ArmKind, dict[str, Any] | None]) -> list[str]:
+        """Strict races: LLM arms identical except the declared planner difference (refused
+        otherwise). Dev races: only reported (``check_llm_policies`` result, or why not)."""
+        pols = {k: p for k, p in policies.items() if p is not None}
+        if self.cfg.strict:
+            return check_llm_policies(self.cfg, pols)
+        try:
+            return check_llm_policies(self.cfg, pols)
+        except AsymmetricRaceError as e:
+            return [f"dev race, not enforced: {e}"]
+
+    def propose_manifest(self) -> dict[str, Any]:
+        """Per LLM arm: the declared planner (``RaceConfig.propose_setup_for``) and what its
+        researcher actually sends (prompt version + fingerprint, effort), plus the policy checks."""
+        out: dict[str, Any] = {"per_arm": {}, "checks": list(self.policy_checks)}
+        for d in self.arm_deps:
+            if d.kind == ArmKind.optuna or getattr(d.researcher, "prompts", None) is None:
+                continue
+            try:
+                from backend.agent.loop import propose_setup_of
+
+                actual = propose_setup_of(d.researcher)
+            except Exception:  # noqa: BLE001 - pure engine tests
+                actual = {}
+            out["per_arm"][d.kind.value] = {
+                "declared": self.cfg.propose_setup_for(d.kind), "actual": actual,
+                "lean_planner": "lean_planner" in self.cfg.features_for(d.kind),
+                "label": (ENGINE_FEATURE_LABELS["lean_planner"] if "lean_planner" in self.cfg.features_for(d.kind)
+                          else None),
+            }
+        return out
+
     def engine_manifest(self) -> dict[str, Any]:
         out: dict[str, Any] = {"features": {k.value: list(st.features) for k, st in self.engine_states.items()},
                                "checks": list(self.engine_checks), "per_arm": {}}
@@ -1498,6 +1899,21 @@ class RaceEngine:
                                       "checkpoints_t": [c for _, c in a._checkpoints] if a else None}
             if st.judge_rule is not None:
                 row["judge_policy"] = st.judge_rule.manifest()
+            if st.sampler is not None and "backfill" in st.features:
+                row["backfill"] = {**st.sampler.manifest(), "feedback": BACKFILL_FEEDBACK, "llm_first": True,
+                                   "label": ENGINE_FEATURE_LABELS["backfill"]}
+            if st.params:
+                row["params"] = {f: dict(p) for f, p in st.params.items()}
+            if "planner_cadence" in st.features:
+                row["planner_cadence"] = {
+                    "min_propose_interval_s": st.min_propose_interval_s,
+                    "measured": "between the starts of propose calls",
+                    "k_rule": "K = min(max_proposals_per_call, LLM demand) when the call is due; LLM demand "
+                              "counts only the LLM's own runs and buffered proposals (backfill)",
+                    "max_proposals_per_call": self.cfg.max_proposals_per_call,
+                    "judge_throttled": False, "requires": "backfill",
+                    "label": cadence_label(st.min_propose_interval_s),
+                }
             out["per_arm"][k.value] = row
         return out
 
@@ -1519,12 +1935,23 @@ class RaceEngine:
         identical = all(v == values[0] for v in values)
         policies = {k.value: p for k, a in self.arms.items() if (p := a.llm_policy()) is not None}
         pvals = list(policies.values())
+        try:
+            check_llm_policies(self.cfg, policies)
+            policy_ok = True
+        except AsymmetricRaceError:
+            policy_ok = False
         return {"identical": identical, "per_arm": per_arm,
                 "llm_policy": policies, "llm_policy_identical": all(p == pvals[0] for p in pvals),
+                # identical except the declared planner difference (D46 lean_planner): what strict races need
+                "llm_policy_ok": policy_ok,
+                "propose": self.propose_manifest(),
                 "differs_only_in": {k.value: {"researcher": type(a.researcher).__name__,
                                               "model": a.deps.model, "llm_mode": a.deps.llm_mode,
                                               "record_mode": a.deps.record_mode,
-                                              "engine_features": list(a.engine.features)}
+                                              "engine_features": list(a.engine.features),
+                                              "feature_params": self.cfg.params_for(k),
+                                              "propose_setup": (self.cfg.propose_setup_for(k)
+                                                                if k != ArmKind.optuna else None)}
                                     for k, a in self.arms.items()},
                 "engine": self.engine_manifest(),
                 "mode": self.cfg.mode,
@@ -1534,7 +1961,7 @@ class RaceEngine:
                 "goal": {"target_value": self.spec.target_value, "provisional": self.cfg.provisional,
                          "from_config": self.cfg.target_value is not None},
                 "prewarm": self.prewarm_info,
-                "mubit_projects": self.mubit_projects(),
+                "mubit_projects": self._mubit_projects,
                 "corrections_policy": "allowed (dev)" if not self.cfg.strict else self.cfg.benchmark_corrections,
                 "corrections": [dict(c) for c in self.corrections]}
 
@@ -1567,8 +1994,9 @@ class RaceEngine:
         manifest = self.fairness_manifest()
         if not manifest["identical"]:
             raise AsymmetricRaceError(f"arms are not identical: {manifest}")
-        if self.cfg.strict and not manifest["llm_policy_identical"]:
-            raise AsymmetricRaceError(f"LLM arms differ in prompts / retry / fallback / record: {manifest['llm_policy']}")
+        if self.cfg.strict:
+            # identical except the declared planner difference (lean_planner, D46); raises otherwise
+            check_llm_policies(self.cfg, manifest["llm_policy"])
         if self.db is not None:
             self.db.update_race(self.race_id, status="running", started_at=t0, fairness=manifest)
         reason = "budget"

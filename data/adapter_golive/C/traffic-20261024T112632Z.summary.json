@@ -1,0 +1,28 @@
+{
+ "planned_calls": 1,
+ "attempts": 1,
+ "valid_calls": 1,
+ "failed_attempts": 0,
+ "http_status": {},
+ "backoffs": 0,
+ "stopped_by_cap": false,
+ "usd_cap": 0.05,
+ "llm_cost_usd_est": 0.0195,
+ "mubit_fee_usd_est": 0.005,
+ "spent_usd_est": 0.0245,
+ "recorded_full_calls": 0,
+ "verdicts": {
+  "valid": 1
+ },
+ "latency_p50_ms": 2278.4,
+ "latency_p90_ms": 2278.4,
+ "by_source": {
+  "trap_test": 1
+ },
+ "traffic_file": "data\\adapter_golive\\C\\traffic-20261024T112632Z.jsonl",
+ "request_ids_file": "data\\adapter_golive\\C\\traffic-20261024T112632Z.request_ids.txt",
+ "workspace": "C",
+ "record": "metadata",
+ "dry_run": false,
+ "prompt_fingerprint": "5c1d3cfd2941"
+}

@@ -69,7 +69,7 @@ def _spec() -> TargetSpec:
 
 
 def test_enums() -> None:
-    assert [a.value for a in ArmKind] == ["opus", "mubit", "opus_bm", "optuna", "mock", "fast"]
+    assert [a.value for a in ArmKind] == ["opus", "mubit", "opus_bm", "optuna", "mock", "fast", "lean"]
     assert set(STEP_OUTPUT_SCHEMAS) == set(StepType)
 
 

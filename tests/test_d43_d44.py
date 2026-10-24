@@ -126,10 +126,14 @@ async def test_bm_planner_sees_exactly_what_the_opus_planner_sees(prompts: str, 
     kinds = [ArmKind.opus, ArmKind.opus_bm]
     deps = [ArmDeps(kind=k, researcher=StubResearcher(k, load_prompts() if prompts == "repo" else DefaultPrompts(),
                                                       verdicts), runner=CurveRunner(3)) for k in kinds]
+    # Backfill off (the backfill gate): with it, opus_bm's planner also sees the sampler's runs,
+    # so its digest differs from the Opus arm's by design. The judge-policy isolation (D44) is
+    # what this test pins; tests/test_backfill.py checks it with backfill on.
     cfg = RaceConfig(target="bm-curve", arms=kinds, budget_s=900, gpus_per_arm=3, llm="mock",
-                     accept_unsure=accept_unsure)
+                     accept_unsure=accept_unsure, engine_features={ArmKind.opus_bm: ["judge_policy"]})
     eng = RaceEngine(cfg, deps, spec=SPEC)
     assert eng.engine_states[ArmKind.opus_bm].judge_rule is not None
+    assert eng.engine_states[ArmKind.opus_bm].sampler is None
     assert eng.engine_states[ArmKind.opus].judge_rule is None
     opus, bm = _arm(eng, ArmKind.opus), _arm(eng, ArmKind.opus_bm)
     msgs_o, bests_o = await _replay(opus)
@@ -175,7 +179,8 @@ async def test_old_behaviour_would_have_leaked_the_rule_into_the_digest(sigma_ta
     for prompts, accept in ((DefaultPrompts(), True), (load_prompts(), False)):
         deps = [ArmDeps(kind=k, researcher=StubResearcher(k, prompts, verdicts), runner=CurveRunner(3)) for k in kinds]
         eng = RaceEngine(RaceConfig(target="bm-curve", arms=kinds, budget_s=900, gpus_per_arm=3, llm="mock",
-                                    accept_unsure=accept), deps, spec=SPEC)
+                                    accept_unsure=accept, engine_features={ArmKind.opus_bm: ["judge_policy"]}),
+                         deps, spec=SPEC)
         opus, bm = _arm(eng, ArmKind.opus), _arm(eng, ArmKind.opus_bm)
         msgs_o, bests_o = await _replay(opus)
         msgs_b, bests_b = await _replay(bm)

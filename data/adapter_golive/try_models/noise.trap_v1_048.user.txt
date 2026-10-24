@@ -1,0 +1,52 @@
+TARGET SPEC
+name: rl
+task: PPO (Gaussian actor-critic MLPs, JAX, CPU) on Pendulum-v1 swing-up with randomised physics levels (pole mass, pole length, max torque). It trains on a fixed set of levels for a wall-clock budget that includes JIT compile time; the score is the mean deterministic-policy return on held-out levels (200 steps; higher is better, about -1300 untrained, about -170 for a good controller).
+metric: mean_return (higher is better)
+goal: mean_return >= -300
+hardware per run: CPU
+training budget per run: 30 s wall-clock
+config space (every config must set every parameter):
+- lr: float in [1e-05, 0.01] log-scale; default 0.0001; Adam learning rate
+- anneal_lr: bool; default false; linearly decay lr to 0 over the wall-clock budget
+- num_envs: one of [4, 8, 16, 32, 64, 128]; default 8; parallel environments per rollout
+- num_steps: one of [16, 32, 64, 128, 256, 512]; default 128; rollout length per env per update
+- gamma: float in [0.9, 0.9999]; default 0.99; discount factor
+- gae_lambda: float in [0.8, 1]; default 0.95; GAE lambda
+- clip_eps: float in [0.05, 0.5]; default 0.2; PPO clip range (policy and value)
+- ent_coef: float in [0, 0.05]; default 0; entropy bonus coefficient
+- update_epochs: int in [1, 10]; default 4; PPO epochs per rollout
+- num_minibatches: one of [1, 2, 4, 8, 16, 32]; default 4; minibatches per epoch
+- hidden_size: one of [16, 32, 64, 128, 256]; default 64; width of each hidden layer (actor and critic)
+- reward_scale: float in [0.001, 1] log-scale; default 1; multiply rewards by this for training (value-target scale)
+- hidden_layers: int in [1, 3]; default 2; number of hidden layers in the actor and critic MLPs
+- activation: one of [tanh, relu]; default tanh; hidden-layer activation of the actor and critic
+- obs_norm: bool; default false; normalise observations by a running mean/std estimated from training rollouts (clipped to +-10); the statistics are frozen for evaluation
+- reward_norm: bool; default false; divide training rewards by a running std of the discounted return (clipped to +-10), before reward_scale
+- value_clip: bool; default true; clip the value update to clip_eps around the rollout's value predictions; off uses a plain squared-error value loss
+- eval_on_train_levels: bool; default false; run the final evaluation on the training levels
+default config: lr=0.0001 anneal_lr=false num_envs=8 num_steps=128 gamma=0.99 gae_lambda=0.95 clip_eps=0.2 ent_coef=0 update_epochs=4 num_minibatches=4 hidden_size=64 reward_scale=1 hidden_layers=2 activation=tanh obs_norm=false reward_norm=false value_clip=true eval_on_train_levels=false
+CLAIM
+previous best mean_return: -275.9
+previous best config: lr=0.0001 anneal_lr=false num_envs=32 num_steps=128 gamma=0.99 gae_lambda=0.95 clip_eps=0.2 ent_coef=0 update_epochs=4 num_minibatches=4 hidden_size=64 reward_scale=1 hidden_layers=2 activation=tanh obs_norm=false reward_norm=false value_clip=true eval_on_train_levels=false
+new mean_return: -268.4
+new config: lr=0.0001 anneal_lr=false num_envs=32 num_steps=128 gamma=0.99 gae_lambda=0.95 clip_eps=0.2 ent_coef=0.005 update_epochs=4 num_minibatches=4 hidden_size=64 reward_scale=1 hidden_layers=2 activation=tanh obs_norm=false reward_norm=false value_clip=true eval_on_train_levels=false
+claimed gain: 7.5 (higher is better)
+changed parameters: ent_coef 0 -> 0.005
+EVIDENCE
+  checkpoint_selection: final policy (no selection)
+  compile_s: 3.42
+  env_steps: 7970816
+  eval_episodes: 128
+  eval_level_seed: 2000
+  eval_levels_seen_in_training: 0
+  eval_reset_keys: fixed (seed 3000)
+  eval_reward: raw environment reward (reward_scale not applied)
+  final_train_return: -253.9
+  n_eval_levels: 64
+  n_train_levels: 16
+  prev_best_seed_std: 15.7
+  prev_eval_episodes: 128
+  score_from: seed 2 only
+  seed_scores: {"2": -268.4}
+  train_level_seed: 1000
+  updates: 1946

@@ -1,0 +1,2891 @@
+{
+  "source": "scripts/headline.py",
+  "min_seeds": 3,
+  "groups": [
+    {
+      "target": "rl",
+      "target_label": "Game-playing AI",
+      "direction": "max",
+      "goal": -170.0,
+      "goal_source": "race config (frozen)",
+      "budget_s": 900.0,
+      "gpus_per_arm": 30,
+      "run_budget_s": 15,
+      "runner": "modal",
+      "race_names": [
+        "RL wide 15 min (15 s runs), Busy Machines with Opus + planner cadence 60 s seed 2"
+      ],
+      "race_ids": [
+        "145c2a2dc55c4879943025a010b12de6"
+      ],
+      "seeds": [
+        2
+      ],
+      "start_quality": -1065.3391927083333,
+      "best_known": null,
+      "headline_ok": true,
+      "blockers": [],
+      "warnings": [
+        "Standard AI assistant (Opus 5.5): LLM $ of 74 call(s) is an estimate (cost_source=estimate@list), not a provider bill",
+        "Busy Machines with Opus: LLM $ of 159 call(s) is an estimate (cost_source=estimate@list), not a provider bill"
+      ],
+      "columns": [
+        {
+          "arm": "opus",
+          "label": "Standard AI assistant (Opus 5.5)"
+        },
+        {
+          "arm": "opus_bm",
+          "label": "Busy Machines with Opus"
+        },
+        {
+          "arm": "optuna",
+          "label": "Automatic search (no AI, Optuna)"
+        }
+      ],
+      "arms": {
+        "opus": {
+          "label": "Standard AI assistant (Opus 5.5)",
+          "seeds": [
+            2
+          ],
+          "race_ids": [
+            "145c2a2dc55c4879943025a010b12de6"
+          ],
+          "trap_runs": 4,
+          "stats": {
+            "cost_to_goal_usd": {
+              "mean": 0.08315356346068382,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "time_to_goal_s": {
+              "mean": 29.56224799156189,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "gpu_idle_pct": {
+              "mean": 68.40255575651646,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "best_quality": {
+              "mean": -154.6342315673828,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "cost_to_opus_quality_usd": {
+              "mean": 3.486861663382817,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "time_to_opus_quality_s": {
+              "mean": 865.134512424469,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "quality_at_opus_spend": {
+              "mean": -154.6342315673828,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "experiments_finished": {
+              "mean": 502.0,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "experiments_per_usd": {
+              "mean": 139.41864753624807,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "total_cost_usd": {
+              "mean": 3.6006661151226758,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "shipped_quality": {
+              "mean": -154.6342315673828,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "fake_best_accepted": {
+              "mean": 0.0,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            }
+          },
+          "evidence": {
+            "cost_to_goal_usd": {
+              "request_ids": 2,
+              "llm_calls": 2,
+              "modal_ids": 17,
+              "other_run_ids": 0,
+              "runs": 17,
+              "races": 1
+            },
+            "time_to_goal_s": {
+              "request_ids": 2,
+              "llm_calls": 2,
+              "modal_ids": 17,
+              "other_run_ids": 0,
+              "runs": 17,
+              "races": 1
+            },
+            "gpu_idle_pct": {
+              "request_ids": 74,
+              "llm_calls": 74,
+              "modal_ids": 502,
+              "other_run_ids": 0,
+              "runs": 510,
+              "races": 1
+            },
+            "best_quality": {
+              "request_ids": 74,
+              "llm_calls": 74,
+              "modal_ids": 502,
+              "other_run_ids": 0,
+              "runs": 510,
+              "races": 1
+            },
+            "cost_to_opus_quality_usd": {
+              "request_ids": 71,
+              "llm_calls": 71,
+              "modal_ids": 494,
+              "other_run_ids": 0,
+              "runs": 494,
+              "races": 1
+            },
+            "time_to_opus_quality_s": {
+              "request_ids": 71,
+              "llm_calls": 71,
+              "modal_ids": 494,
+              "other_run_ids": 0,
+              "runs": 494,
+              "races": 1
+            },
+            "quality_at_opus_spend": {
+              "request_ids": 74,
+              "llm_calls": 74,
+              "modal_ids": 502,
+              "other_run_ids": 0,
+              "runs": 502,
+              "races": 1
+            },
+            "experiments_finished": {
+              "request_ids": 74,
+              "llm_calls": 74,
+              "modal_ids": 502,
+              "other_run_ids": 0,
+              "runs": 510,
+              "races": 1
+            },
+            "experiments_per_usd": {
+              "request_ids": 74,
+              "llm_calls": 74,
+              "modal_ids": 502,
+              "other_run_ids": 0,
+              "runs": 510,
+              "races": 1
+            },
+            "total_cost_usd": {
+              "request_ids": 74,
+              "llm_calls": 74,
+              "modal_ids": 502,
+              "other_run_ids": 0,
+              "runs": 510,
+              "races": 1
+            },
+            "shipped_quality": {
+              "request_ids": 74,
+              "llm_calls": 74,
+              "modal_ids": 502,
+              "other_run_ids": 0,
+              "runs": 510,
+              "races": 1
+            },
+            "fake_best_accepted": {
+              "request_ids": 74,
+              "llm_calls": 74,
+              "modal_ids": 502,
+              "other_run_ids": 0,
+              "runs": 510,
+              "races": 1
+            }
+          }
+        },
+        "opus_bm": {
+          "label": "Busy Machines with Opus",
+          "seeds": [
+            2
+          ],
+          "race_ids": [
+            "145c2a2dc55c4879943025a010b12de6"
+          ],
+          "trap_runs": 759,
+          "stats": {
+            "cost_to_goal_usd": {
+              "mean": 0.018101033211708067,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "time_to_goal_s": {
+              "mean": 16.699830055236816,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "gpu_idle_pct": {
+              "mean": 1.7656379434041996,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "best_quality": {
+              "mean": -154.12802124023438,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "cost_to_opus_quality_usd": {
+              "mean": 0.29832762584137923,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "time_to_opus_quality_s": {
+              "mean": 202.27894616127014,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "quality_at_opus_spend": {
+              "mean": -154.12802124023438,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "experiments_finished": {
+              "mean": 1576.0,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "experiments_per_usd": {
+              "mean": 1087.2559054918254,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "total_cost_usd": {
+              "mean": 1.449520754074073,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "shipped_quality": {
+              "mean": -154.12802124023438,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "fake_best_accepted": {
+              "mean": 0.0,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            }
+          },
+          "evidence": {
+            "cost_to_goal_usd": {
+              "request_ids": 1,
+              "llm_calls": 1,
+              "modal_ids": 38,
+              "other_run_ids": 0,
+              "runs": 38,
+              "races": 1
+            },
+            "time_to_goal_s": {
+              "request_ids": 1,
+              "llm_calls": 1,
+              "modal_ids": 38,
+              "other_run_ids": 0,
+              "runs": 38,
+              "races": 1
+            },
+            "gpu_idle_pct": {
+              "request_ids": 159,
+              "llm_calls": 159,
+              "modal_ids": 1577,
+              "other_run_ids": 0,
+              "runs": 1579,
+              "races": 1
+            },
+            "best_quality": {
+              "request_ids": 159,
+              "llm_calls": 159,
+              "modal_ids": 1577,
+              "other_run_ids": 0,
+              "runs": 1579,
+              "races": 1
+            },
+            "cost_to_opus_quality_usd": {
+              "request_ids": 25,
+              "llm_calls": 25,
+              "modal_ids": 377,
+              "other_run_ids": 0,
+              "runs": 377,
+              "races": 1
+            },
+            "time_to_opus_quality_s": {
+              "request_ids": 25,
+              "llm_calls": 25,
+              "modal_ids": 377,
+              "other_run_ids": 0,
+              "runs": 377,
+              "races": 1
+            },
+            "quality_at_opus_spend": {
+              "request_ids": 159,
+              "llm_calls": 159,
+              "modal_ids": 1577,
+              "other_run_ids": 0,
+              "runs": 1577,
+              "races": 1
+            },
+            "experiments_finished": {
+              "request_ids": 159,
+              "llm_calls": 159,
+              "modal_ids": 1577,
+              "other_run_ids": 0,
+              "runs": 1579,
+              "races": 1
+            },
+            "experiments_per_usd": {
+              "request_ids": 159,
+              "llm_calls": 159,
+              "modal_ids": 1577,
+              "other_run_ids": 0,
+              "runs": 1579,
+              "races": 1
+            },
+            "total_cost_usd": {
+              "request_ids": 159,
+              "llm_calls": 159,
+              "modal_ids": 1577,
+              "other_run_ids": 0,
+              "runs": 1579,
+              "races": 1
+            },
+            "shipped_quality": {
+              "request_ids": 159,
+              "llm_calls": 159,
+              "modal_ids": 1577,
+              "other_run_ids": 0,
+              "runs": 1579,
+              "races": 1
+            },
+            "fake_best_accepted": {
+              "request_ids": 159,
+              "llm_calls": 159,
+              "modal_ids": 1577,
+              "other_run_ids": 0,
+              "runs": 1579,
+              "races": 1
+            }
+          }
+        },
+        "optuna": {
+          "label": "Automatic search (no AI, Optuna)",
+          "seeds": [
+            2
+          ],
+          "race_ids": [
+            "145c2a2dc55c4879943025a010b12de6"
+          ],
+          "trap_runs": 1529,
+          "stats": {
+            "cost_to_goal_usd": {
+              "mean": 0.006435979449033739,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "time_to_goal_s": {
+              "mean": 16.376538038253784,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "gpu_idle_pct": {
+              "mean": 2.2484110381293223,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "best_quality": {
+              "mean": -158.51318359375,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "cost_to_opus_quality_usd": {
+              "mean": null,
+              "std": null,
+              "n": 0,
+              "n_total": 1
+            },
+            "time_to_opus_quality_s": {
+              "mean": null,
+              "std": null,
+              "n": 0,
+              "n_total": 1
+            },
+            "quality_at_opus_spend": {
+              "mean": -158.51318359375,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "experiments_finished": {
+              "mean": 1565.0,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "experiments_per_usd": {
+              "mean": 4471.164704235499,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "total_cost_usd": {
+              "mean": 0.3500206553602214,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "shipped_quality": {
+              "mean": -158.64813232421875,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            },
+            "fake_best_accepted": {
+              "mean": 24.0,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 1
+            }
+          },
+          "evidence": {
+            "cost_to_goal_usd": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 33,
+              "other_run_ids": 0,
+              "runs": 33,
+              "races": 1
+            },
+            "time_to_goal_s": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 33,
+              "other_run_ids": 0,
+              "runs": 33,
+              "races": 1
+            },
+            "gpu_idle_pct": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 1566,
+              "other_run_ids": 0,
+              "runs": 1568,
+              "races": 1
+            },
+            "best_quality": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 1566,
+              "other_run_ids": 0,
+              "runs": 1568,
+              "races": 1
+            },
+            "cost_to_opus_quality_usd": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 0,
+              "other_run_ids": 0,
+              "runs": 0,
+              "races": 1
+            },
+            "time_to_opus_quality_s": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 0,
+              "other_run_ids": 0,
+              "runs": 0,
+              "races": 1
+            },
+            "quality_at_opus_spend": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 1496,
+              "other_run_ids": 0,
+              "runs": 1496,
+              "races": 1
+            },
+            "experiments_finished": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 1566,
+              "other_run_ids": 0,
+              "runs": 1568,
+              "races": 1
+            },
+            "experiments_per_usd": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 1566,
+              "other_run_ids": 0,
+              "runs": 1568,
+              "races": 1
+            },
+            "total_cost_usd": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 1566,
+              "other_run_ids": 0,
+              "runs": 1568,
+              "races": 1
+            },
+            "shipped_quality": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 1566,
+              "other_run_ids": 0,
+              "runs": 1568,
+              "races": 1
+            },
+            "fake_best_accepted": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 1566,
+              "other_run_ids": 0,
+              "runs": 1568,
+              "races": 1
+            }
+          }
+        }
+      },
+      "fingerprint_id": "7e42794ae2",
+      "fingerprint": {
+        "arms": {
+          "optuna": {
+            "researcher": "OptunaResearcher",
+            "model": null,
+            "llm_mode": "none",
+            "record_mode": null,
+            "engine_features": []
+          },
+          "opus": {
+            "researcher": "LLMResearcher",
+            "model": "claude-opus-5-5",
+            "llm_mode": "mubit",
+            "record_mode": "off",
+            "engine_features": [],
+            "llm_policy": {
+              "researcher": "LLMResearcher",
+              "max_retries": 1,
+              "has_fallback": true,
+              "fallback_model": "claude-opus-5-5",
+              "prompts": {
+                "diagnose_run": "v0:22ecb45368e3",
+                "judge_improvement": "v1:5c1d3cfd2941",
+                "propose_experiments": "v1:fdda8c5b0919"
+              }
+            }
+          },
+          "opus_bm": {
+            "researcher": "LLMResearcher",
+            "model": "claude-opus-5-5",
+            "llm_mode": "mubit",
+            "record_mode": "off",
+            "engine_features": [
+              "backfill",
+              "judge_policy",
+              "lean_planner",
+              "planner_cadence"
+            ],
+            "judge_policy": {
+              "k_sigma": 2.0,
+              "table": {
+                "degenerate": false,
+                "key": "rl@15s",
+                "points": [
+                  [
+                    -1028.584979248047,
+                    19.935168807730058
+                  ],
+                  [
+                    -163.9259796142578,
+                    6.358719685164435
+                  ]
+                ],
+                "source": "calibration_rl15_v1.json summary (default, best mean)"
+              }
+            },
+            "backfill": {
+              "sampler": "optuna-tpe",
+              "n_startup_trials": 10,
+              "constant_liar": true,
+              "feedback": "worst_on_rejected",
+              "llm_first": true
+            },
+            "planner_cadence": {
+              "min_propose_interval_s": 60.0,
+              "max_proposals_per_call": 8
+            },
+            "llm_policy": {
+              "researcher": "LLMResearcher",
+              "max_retries": 1,
+              "has_fallback": true,
+              "fallback_model": "claude-opus-5-5",
+              "prompts": {
+                "diagnose_run": "v0:22ecb45368e3",
+                "judge_improvement": "v1:5c1d3cfd2941",
+                "propose_experiments": "v2:cfd2e3dd9710"
+              },
+              "propose_effort": "low"
+            }
+          }
+        },
+        "race": {
+          "target": "rl",
+          "target_value": -170.0,
+          "budget_s": 900.0,
+          "run_budget_s": 15,
+          "n_slots": 30,
+          "runner": "modal",
+          "cost_cap_usd": 8.0,
+          "accept_unsure": true,
+          "pipelining": false,
+          "lookahead": 0,
+          "max_proposals_per_call": 8,
+          "run_baseline_first": true,
+          "launch_cutoff_s": 17.0,
+          "median_stop_rule": {
+            "fractions": [
+              0.25,
+              0.5
+            ],
+            "min_completed": 5
+          },
+          "runtime_multiplier": null,
+          "hardware": [
+            "CPU"
+          ],
+          "price_per_s": [
+            1.31e-05
+          ]
+        },
+        "mubit_projects": {
+          "config": {
+            "default": "A",
+            "keys": {
+              "A": "MUBIT_API_KEY",
+              "B": "MUBIT_API_KEY_B"
+            },
+            "routes": {
+              "mubit": {
+                "early_stop": "B",
+                "judge_improvement": "B"
+              }
+            },
+            "source": "data/mubit_projects.json"
+          },
+          "config_identical": true,
+          "note": "D38: project B holds the closed-output judge v1 / early_stop tasks; A everything else",
+          "per_arm": {
+            "opus": {
+              "diagnose_run": "A",
+              "early_stop": "A",
+              "judge_improvement": "A",
+              "propose_experiments": "A"
+            },
+            "opus_bm": {
+              "diagnose_run": "A",
+              "early_stop": "A",
+              "judge_improvement": "A",
+              "propose_experiments": "A"
+            }
+          }
+        },
+        "unused_prompts": {
+          "opus": [
+            "early_stop=v2:f1f3bf21aa79"
+          ],
+          "opus_bm": [
+            "early_stop=v2:f1f3bf21aa79"
+          ]
+        }
+      },
+      "unused_prompts": {
+        "opus": [
+          "early_stop=v2:f1f3bf21aa79"
+        ],
+        "opus_bm": [
+          "early_stop=v2:f1f3bf21aa79"
+        ]
+      },
+      "engine": {
+        "opus": {
+          "features": [],
+          "runs": 502,
+          "early_stopped": 0,
+          "early_stop_too_late": 0,
+          "slot_s_freed": 0.0,
+          "stops_unconfirmed": 0,
+          "judge_claims": 0,
+          "judge_llm_invalid": 0,
+          "judge_no_reply": 0,
+          "judge_rule_real": 0,
+          "judge_rule_noise": 0,
+          "judge_final": {},
+          "degenerate": false,
+          "degenerate_why": "",
+          "cost_sources": {
+            "estimate@list": 74
+          },
+          "races": 1,
+          "runs_by_source": {
+            "baseline": 1,
+            "llm": 501
+          },
+          "sampler_trap_runs": 0,
+          "sampler_claims": 0,
+          "sampler_trap_rejected": 0,
+          "sampler_fakes_shipped": 0,
+          "shipped_from": {
+            "llm": 1
+          },
+          "cadence_s": null,
+          "propose_calls": 64,
+          "slot_s_freed_note": "engine estimate; never converted to $",
+          "real_gain_stats_usable": true
+        },
+        "opus_bm": {
+          "features": [
+            "backfill",
+            "judge_policy",
+            "lean_planner",
+            "planner_cadence"
+          ],
+          "runs": 1577,
+          "early_stopped": 0,
+          "early_stop_too_late": 0,
+          "slot_s_freed": 0.0,
+          "stops_unconfirmed": 0,
+          "judge_claims": 143,
+          "judge_llm_invalid": 128,
+          "judge_no_reply": 0,
+          "judge_rule_real": 5,
+          "judge_rule_noise": 138,
+          "judge_final": {
+            "invalid": 128,
+            "valid": 3,
+            "unsure": 12
+          },
+          "degenerate": false,
+          "degenerate_why": "",
+          "cost_sources": {
+            "estimate@list": 159
+          },
+          "races": 1,
+          "runs_by_source": {
+            "sampler": 1456,
+            "baseline": 1,
+            "llm": 120
+          },
+          "sampler_trap_runs": 759,
+          "sampler_claims": 143,
+          "sampler_trap_rejected": 128,
+          "sampler_fakes_shipped": 0,
+          "shipped_from": {
+            "sampler": 1
+          },
+          "cadence_s": 60.0,
+          "propose_calls": 15,
+          "slot_s_freed_note": "engine estimate; never converted to $",
+          "real_gain_stats_usable": true
+        },
+        "optuna": {
+          "features": [],
+          "runs": 1566,
+          "early_stopped": 0,
+          "early_stop_too_late": 0,
+          "slot_s_freed": 0.0,
+          "stops_unconfirmed": 0,
+          "judge_claims": 0,
+          "judge_llm_invalid": 0,
+          "judge_no_reply": 0,
+          "judge_rule_real": 0,
+          "judge_rule_noise": 0,
+          "judge_final": {},
+          "degenerate": false,
+          "degenerate_why": "",
+          "cost_sources": {},
+          "races": 1,
+          "runs_by_source": {
+            "optuna": 1565,
+            "baseline": 1
+          },
+          "sampler_trap_runs": 0,
+          "sampler_claims": 0,
+          "sampler_trap_rejected": 0,
+          "sampler_fakes_shipped": 0,
+          "shipped_from": {
+            "optuna": 1
+          },
+          "cadence_s": null,
+          "propose_calls": 0,
+          "slot_s_freed_note": "engine estimate; never converted to $",
+          "real_gain_stats_usable": true
+        }
+      },
+      "adapter_evidence": {
+        "per_race": [],
+        "ok": false,
+        "reason": "no evidence an adapter served"
+      },
+      "framings": [
+        {
+          "id": "quality_vs_start:opus",
+          "title": "Model quality vs the starting code",
+          "arm": "opus",
+          "baseline": "start",
+          "formula": "start \u00f7 end (N\u00d7 lower), 1 \u2212 end/start (% lower)",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality vs the starting code, the Opus 5.5 agent vs start: not measured (the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "end_mean": -154.6342315673828,
+            "end_std": 0.0,
+            "n": 1,
+            "start": -1065.3391927083333
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "quality_vs_start:opus_bm",
+          "title": "Model quality vs the starting code",
+          "arm": "opus_bm",
+          "baseline": "start",
+          "formula": "start \u00f7 end (N\u00d7 lower), 1 \u2212 end/start (% lower)",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality vs the starting code, Busy Machines with Opus vs start: not measured (Busy Machines with Opus: 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "end_mean": -154.12802124023438,
+            "end_std": 0.0,
+            "n": 1,
+            "start": -1065.3391927083333
+          },
+          "reasons": [
+            "Busy Machines with Opus: 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "quality_vs_start:optuna",
+          "title": "Model quality vs the starting code",
+          "arm": "optuna",
+          "baseline": "start",
+          "formula": "start \u00f7 end (N\u00d7 lower), 1 \u2212 end/start (% lower)",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality vs the starting code, Optuna (no AI) vs start: not measured (Optuna (no AI): 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "end_mean": -158.51318359375,
+            "end_std": 0.0,
+            "n": 1,
+            "start": -1065.3391927083333
+          },
+          "reasons": [
+            "Optuna (no AI): 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "pair:mubit:opus",
+          "title": "Head-to-head",
+          "arm": "mubit",
+          "baseline": "opus",
+          "formula": "-",
+          "measured": false,
+          "value": null,
+          "sentence": "Head-to-head, Mubit + Busy Machines vs the Opus 5.5 agent: not measured: no evidence an adapter served (also: no Mubit + Busy Machines arm in these races)",
+          "inputs": {},
+          "reasons": [
+            "no evidence an adapter served",
+            "no Mubit + Busy Machines arm in these races"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "quality_same_budget:opus_bm:opus",
+          "title": "Model quality @ same budget",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "baseline \u00f7 arm on the framed quantity (N\u00d7 lower), 1 \u2212 arm/baseline",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality @ same budget, Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 1 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": -154.12802124023438,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "base_mean": -154.6342315673828,
+            "base_std": 0.0,
+            "base_n": 1,
+            "opus_spend_usd": null
+          },
+          "reasons": [
+            "Busy Machines with Opus: 1 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            1.003284349744291
+          ]
+        },
+        {
+          "id": "quality_same_money:opus_bm:opus",
+          "title": "Model quality @ the Opus agent's spend",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "baseline \u00f7 arm on the framed quantity (N\u00d7 lower), 1 \u2212 arm/baseline",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality @ the Opus agent's spend, Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 1 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": -154.12802124023438,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "base_mean": -154.6342315673828,
+            "base_std": 0.0,
+            "base_n": 1,
+            "opus_spend_usd": 3.6006661151226758
+          },
+          "reasons": [
+            "Busy Machines with Opus: 1 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            1.003284349744291
+          ]
+        },
+        {
+          "id": "cost_to_goal:opus_bm:opus",
+          "title": "Cost to reach the goal (held-out score \u2265 -170)",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "1 \u2212 arm$ \u00f7 baseline$",
+          "measured": false,
+          "value": null,
+          "sentence": "Cost to reach the goal (held-out score \u2265 -170), Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 1 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 0.018101033211708067,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "arm_n_total": 1,
+            "base_mean": 0.08315356346068382,
+            "base_std": 0.0,
+            "base_n": 1,
+            "base_n_total": 1
+          },
+          "reasons": [
+            "Busy Machines with Opus: 1 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            0.782318009494969
+          ]
+        },
+        {
+          "id": "time_to_goal:opus_bm:opus",
+          "title": "Time to reach the goal (held-out score \u2265 -170)",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "1 \u2212 arm_t \u00f7 baseline_t",
+          "measured": false,
+          "value": null,
+          "sentence": "Time to reach the goal (held-out score \u2265 -170), Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 1 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 16.699830055236816,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "arm_n_total": 1,
+            "base_mean": 29.56224799156189,
+            "base_std": 0.0,
+            "base_n": 1,
+            "base_n_total": 1
+          },
+          "reasons": [
+            "Busy Machines with Opus: 1 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            0.43509607050169063
+          ]
+        },
+        {
+          "id": "cost_to_opus_quality:opus_bm:opus",
+          "title": "Cost to reach the Opus 5.5 agent's final model quality",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "1 \u2212 arm$ \u00f7 baseline$",
+          "measured": false,
+          "value": null,
+          "sentence": "Cost to reach the Opus 5.5 agent's final model quality, Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 1 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 0.29832762584137923,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "arm_n_total": 1,
+            "base_mean": 3.486861663382817,
+            "base_std": 0.0,
+            "base_n": 1,
+            "base_n_total": 1
+          },
+          "reasons": [
+            "Busy Machines with Opus: 1 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            0.9144423683410619
+          ]
+        },
+        {
+          "id": "time_to_opus_quality:opus_bm:opus",
+          "title": "Time to reach the Opus 5.5 agent's final model quality",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "1 \u2212 arm_t \u00f7 baseline_t",
+          "measured": false,
+          "value": null,
+          "sentence": "Time to reach the Opus 5.5 agent's final model quality, Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 1 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 202.27894616127014,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "arm_n_total": 1,
+            "base_mean": 865.134512424469,
+            "base_std": 0.0,
+            "base_n": 1,
+            "base_n_total": 1
+          },
+          "reasons": [
+            "Busy Machines with Opus: 1 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            0.766187866445878
+          ]
+        },
+        {
+          "id": "throughput:opus_bm:opus",
+          "title": "Experiments per dollar",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "(arm experiments/$) \u00f7 (baseline experiments/$)",
+          "measured": false,
+          "value": null,
+          "sentence": "Experiments per dollar, Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 1 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 1087.2559054918254,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "base_mean": 139.41864753624807,
+            "base_std": 0.0,
+            "base_n": 1
+          },
+          "reasons": [
+            "Busy Machines with Opus: 1 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            7.798497006716013
+          ]
+        },
+        {
+          "id": "pair:mubit:opus_bm",
+          "title": "Head-to-head",
+          "arm": "mubit",
+          "baseline": "opus_bm",
+          "formula": "-",
+          "measured": false,
+          "value": null,
+          "sentence": "Head-to-head, Mubit + Busy Machines vs Busy Machines with Opus: not measured: no evidence an adapter served (also: no Mubit + Busy Machines arm in these races)",
+          "inputs": {},
+          "reasons": [
+            "no evidence an adapter served",
+            "no Mubit + Busy Machines arm in these races"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "pair:mubit:optuna",
+          "title": "Head-to-head",
+          "arm": "mubit",
+          "baseline": "optuna",
+          "formula": "-",
+          "measured": false,
+          "value": null,
+          "sentence": "Head-to-head, Mubit + Busy Machines vs Optuna (no AI): not measured: no evidence an adapter served (also: no Mubit + Busy Machines arm in these races)",
+          "inputs": {},
+          "reasons": [
+            "no evidence an adapter served",
+            "no Mubit + Busy Machines arm in these races"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "quality_same_budget:opus:optuna",
+          "title": "Model quality @ same budget",
+          "arm": "opus",
+          "baseline": "optuna",
+          "formula": "baseline \u00f7 arm on the framed quantity (N\u00d7 lower), 1 \u2212 arm/baseline",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality @ same budget, the Opus 5.5 agent vs Optuna (no AI): not measured (the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3); Optuna (no AI): 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": -154.6342315673828,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "base_mean": -158.51318359375,
+            "base_std": 0.0,
+            "base_n": 1,
+            "opus_spend_usd": null
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)",
+            "Optuna (no AI): 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            1.0250846917079734
+          ]
+        },
+        {
+          "id": "quality_same_money:opus:optuna",
+          "title": "Model quality @ the Opus agent's spend",
+          "arm": "opus",
+          "baseline": "optuna",
+          "formula": "baseline \u00f7 arm on the framed quantity (N\u00d7 lower), 1 \u2212 arm/baseline",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality @ the Opus agent's spend, the Opus 5.5 agent vs Optuna (no AI): not measured (the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3); Optuna (no AI): 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": -154.6342315673828,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "base_mean": -158.51318359375,
+            "base_std": 0.0,
+            "base_n": 1,
+            "opus_spend_usd": 3.6006661151226758
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)",
+            "Optuna (no AI): 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            1.0250846917079734
+          ]
+        },
+        {
+          "id": "cost_to_goal:opus:optuna",
+          "title": "Cost to reach the goal (held-out score \u2265 -170)",
+          "arm": "opus",
+          "baseline": "optuna",
+          "formula": "1 \u2212 arm$ \u00f7 baseline$",
+          "measured": false,
+          "value": null,
+          "sentence": "Cost to reach the goal (held-out score \u2265 -170), the Opus 5.5 agent vs Optuna (no AI): not measured (the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3); Optuna (no AI): 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 0.08315356346068382,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "arm_n_total": 1,
+            "base_mean": 0.006435979449033739,
+            "base_std": 0.0,
+            "base_n": 1,
+            "base_n_total": 1
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)",
+            "Optuna (no AI): 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            -11.920110158705995
+          ]
+        },
+        {
+          "id": "time_to_goal:opus:optuna",
+          "title": "Time to reach the goal (held-out score \u2265 -170)",
+          "arm": "opus",
+          "baseline": "optuna",
+          "formula": "1 \u2212 arm_t \u00f7 baseline_t",
+          "measured": false,
+          "value": null,
+          "sentence": "Time to reach the goal (held-out score \u2265 -170), the Opus 5.5 agent vs Optuna (no AI): not measured (the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3); Optuna (no AI): 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 29.56224799156189,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "arm_n_total": 1,
+            "base_mean": 16.376538038253784,
+            "base_std": 0.0,
+            "base_n": 1,
+            "base_n_total": 1
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)",
+            "Optuna (no AI): 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            -0.8051585702978092
+          ]
+        },
+        {
+          "id": "throughput:opus:optuna",
+          "title": "Experiments per dollar",
+          "arm": "opus",
+          "baseline": "optuna",
+          "formula": "(arm experiments/$) \u00f7 (baseline experiments/$)",
+          "measured": false,
+          "value": null,
+          "sentence": "Experiments per dollar, the Opus 5.5 agent vs Optuna (no AI): not measured (the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3); Optuna (no AI): 1 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 139.41864753624807,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "base_mean": 4471.164704235499,
+            "base_std": 0.0,
+            "base_n": 1
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 1 distinct seed(s) (needs >= 3)",
+            "Optuna (no AI): 1 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            0.03118172931634075
+          ]
+        },
+        {
+          "id": "fake_improvements",
+          "title": "Fake improvements let through",
+          "arm": "mubit",
+          "baseline": "opus",
+          "formula": "judge v2 vs Opus (and v1) on the 50-case trap set, test split",
+          "measured": false,
+          "value": null,
+          "sentence": "Fake improvements let through: not measured here (trap-set result, scripts/eval_trap_set.py; the in-race trap counts are in the table). The Mubit adapter's version is not measured: no evidence an adapter served.",
+          "inputs": {},
+          "reasons": [
+            "measured on the trap set, not in races",
+            "no evidence an adapter served"
+          ],
+          "per_seed": []
+        }
+      ],
+      "preregistered": null,
+      "per_race": [
+        {
+          "race_id": "145c2a2dc55c4879943025a010b12de6",
+          "seed": 2,
+          "arm": "opus",
+          "raw_kind": "opus",
+          "cost_to_goal_usd": 0.08315356346068382,
+          "time_to_goal_s": 29.56224799156189,
+          "gpu_idle_pct": 68.40255575651646,
+          "best_quality": -154.6342315673828,
+          "shipped_quality": -154.6342315673828,
+          "start_quality": -1064.37158203125,
+          "experiments_finished": 502,
+          "total_cost_usd": 3.6006661151226758,
+          "gpu_cost_usd": 0.34786491512267587,
+          "llm_cost_usd": 3.2528012,
+          "experiments_per_usd": 139.41864753624807,
+          "trap_runs": 4,
+          "fake_best_accepted": 0,
+          "cost_to_opus_quality_usd": 3.486861663382817,
+          "time_to_opus_quality_s": 865.134512424469,
+          "quality_at_opus_spend": -154.6342315673828,
+          "quality_line": null,
+          "cost_to_line_usd": null,
+          "time_to_line_s": null
+        },
+        {
+          "race_id": "145c2a2dc55c4879943025a010b12de6",
+          "seed": 2,
+          "arm": "opus_bm",
+          "raw_kind": "opus_bm",
+          "cost_to_goal_usd": 0.018101033211708067,
+          "time_to_goal_s": 16.699830055236816,
+          "gpu_idle_pct": 1.7656379434041996,
+          "best_quality": -154.12802124023438,
+          "shipped_quality": -154.12802124023438,
+          "start_quality": -1117.222412109375,
+          "experiments_finished": 1576,
+          "total_cost_usd": 1.449520754074073,
+          "gpu_cost_usd": 0.3504333540740731,
+          "llm_cost_usd": 1.0990874,
+          "experiments_per_usd": 1087.2559054918254,
+          "trap_runs": 759,
+          "fake_best_accepted": 0,
+          "cost_to_opus_quality_usd": 0.29832762584137923,
+          "time_to_opus_quality_s": 202.27894616127014,
+          "quality_at_opus_spend": -154.12802124023438,
+          "quality_line": null,
+          "cost_to_line_usd": null,
+          "time_to_line_s": null
+        },
+        {
+          "race_id": "145c2a2dc55c4879943025a010b12de6",
+          "seed": 2,
+          "arm": "optuna",
+          "raw_kind": "optuna",
+          "cost_to_goal_usd": 0.006435979449033739,
+          "time_to_goal_s": 16.376538038253784,
+          "gpu_idle_pct": 2.2484110381293223,
+          "best_quality": -158.51318359375,
+          "shipped_quality": -158.64813232421875,
+          "start_quality": -1014.423583984375,
+          "experiments_finished": 1565,
+          "total_cost_usd": 0.3500206553602214,
+          "gpu_cost_usd": 0.3500206553602214,
+          "llm_cost_usd": 0.0,
+          "experiments_per_usd": 4471.164704235499,
+          "trap_runs": 1529,
+          "fake_best_accepted": 24,
+          "cost_to_opus_quality_usd": null,
+          "time_to_opus_quality_s": null,
+          "quality_at_opus_spend": -158.51318359375,
+          "quality_line": null,
+          "cost_to_line_usd": null,
+          "time_to_line_s": null
+        }
+      ]
+    },
+    {
+      "target": "rl",
+      "target_label": "Game-playing AI",
+      "direction": "max",
+      "goal": -170.0,
+      "goal_source": "race config (frozen)",
+      "budget_s": 900.0,
+      "gpus_per_arm": 30,
+      "run_budget_s": 15,
+      "runner": "modal",
+      "race_names": [
+        "RL wide 15 min (15 s runs), Busy Machines with Opus + planner cadence 60 s seed 0",
+        "RL wide 15 min (15 s runs), Busy Machines with Opus + planner cadence 60 s seed 1"
+      ],
+      "race_ids": [
+        "4ca4ed2709854a34bd6427ca2992e006",
+        "d4913e95393b40fa830a3772d923fbf7"
+      ],
+      "seeds": [
+        0,
+        1
+      ],
+      "start_quality": -1035.0519104003906,
+      "best_known": null,
+      "headline_ok": true,
+      "blockers": [],
+      "warnings": [
+        "Standard AI assistant (Opus 5.5): LLM $ of 157 call(s) is an estimate (cost_source=estimate@list), not a provider bill",
+        "Busy Machines with Opus: LLM $ of 114 call(s) is an estimate (cost_source=estimate@list), not a provider bill"
+      ],
+      "columns": [
+        {
+          "arm": "opus",
+          "label": "Standard AI assistant (Opus 5.5)"
+        },
+        {
+          "arm": "opus_bm",
+          "label": "Busy Machines with Opus"
+        },
+        {
+          "arm": "optuna",
+          "label": "Automatic search (no AI, Optuna)"
+        }
+      ],
+      "arms": {
+        "opus": {
+          "label": "Standard AI assistant (Opus 5.5)",
+          "seeds": [
+            0,
+            1
+          ],
+          "race_ids": [
+            "4ca4ed2709854a34bd6427ca2992e006",
+            "d4913e95393b40fa830a3772d923fbf7"
+          ],
+          "trap_runs": 6,
+          "stats": {
+            "cost_to_goal_usd": {
+              "mean": 0.25895422430484294,
+              "std": 0.007789639896313582,
+              "n": 2,
+              "n_total": 2
+            },
+            "time_to_goal_s": {
+              "mean": 75.40057075023651,
+              "std": 1.1712883998629742,
+              "n": 2,
+              "n_total": 2
+            },
+            "gpu_idle_pct": {
+              "mean": 68.97433558868929,
+              "std": 0.09813289512300827,
+              "n": 2,
+              "n_total": 2
+            },
+            "best_quality": {
+              "mean": -154.3889923095703,
+              "std": 0.8764818155350952,
+              "n": 2,
+              "n_total": 2
+            },
+            "cost_to_opus_quality_usd": {
+              "mean": 2.903722943654895,
+              "std": 0.6502788731975577,
+              "n": 2,
+              "n_total": 2
+            },
+            "time_to_opus_quality_s": {
+              "mean": 713.6385334730148,
+              "std": 158.74745479554647,
+              "n": 2,
+              "n_total": 2
+            },
+            "quality_at_opus_spend": {
+              "mean": -154.3889923095703,
+              "std": 0.8764818155350952,
+              "n": 2,
+              "n_total": 2
+            },
+            "experiments_finished": {
+              "mean": 499.5,
+              "std": 3.5355339059327378,
+              "n": 2,
+              "n_total": 2
+            },
+            "experiments_per_usd": {
+              "mean": 136.05498250764265,
+              "std": 0.19515668710219627,
+              "n": 2,
+              "n_total": 2
+            },
+            "total_cost_usd": {
+              "mean": 3.67133228296783,
+              "std": 0.031252210489897,
+              "n": 2,
+              "n_total": 2
+            },
+            "shipped_quality": {
+              "mean": -154.3889923095703,
+              "std": 0.8764818155350952,
+              "n": 2,
+              "n_total": 2
+            },
+            "fake_best_accepted": {
+              "mean": 0.0,
+              "std": 0.0,
+              "n": 2,
+              "n_total": 2
+            }
+          },
+          "evidence": {
+            "cost_to_goal_usd": {
+              "request_ids": 18,
+              "llm_calls": 18,
+              "modal_ids": 82,
+              "other_run_ids": 0,
+              "runs": 82,
+              "races": 2
+            },
+            "time_to_goal_s": {
+              "request_ids": 18,
+              "llm_calls": 18,
+              "modal_ids": 82,
+              "other_run_ids": 0,
+              "runs": 82,
+              "races": 2
+            },
+            "gpu_idle_pct": {
+              "request_ids": 157,
+              "llm_calls": 157,
+              "modal_ids": 999,
+              "other_run_ids": 0,
+              "runs": 1015,
+              "races": 2
+            },
+            "best_quality": {
+              "request_ids": 157,
+              "llm_calls": 157,
+              "modal_ids": 999,
+              "other_run_ids": 0,
+              "runs": 1015,
+              "races": 2
+            },
+            "cost_to_opus_quality_usd": {
+              "request_ids": 126,
+              "llm_calls": 126,
+              "modal_ids": 802,
+              "other_run_ids": 0,
+              "runs": 802,
+              "races": 2
+            },
+            "time_to_opus_quality_s": {
+              "request_ids": 126,
+              "llm_calls": 126,
+              "modal_ids": 802,
+              "other_run_ids": 0,
+              "runs": 802,
+              "races": 2
+            },
+            "quality_at_opus_spend": {
+              "request_ids": 156,
+              "llm_calls": 156,
+              "modal_ids": 999,
+              "other_run_ids": 0,
+              "runs": 999,
+              "races": 2
+            },
+            "experiments_finished": {
+              "request_ids": 157,
+              "llm_calls": 157,
+              "modal_ids": 999,
+              "other_run_ids": 0,
+              "runs": 1015,
+              "races": 2
+            },
+            "experiments_per_usd": {
+              "request_ids": 157,
+              "llm_calls": 157,
+              "modal_ids": 999,
+              "other_run_ids": 0,
+              "runs": 1015,
+              "races": 2
+            },
+            "total_cost_usd": {
+              "request_ids": 157,
+              "llm_calls": 157,
+              "modal_ids": 999,
+              "other_run_ids": 0,
+              "runs": 1015,
+              "races": 2
+            },
+            "shipped_quality": {
+              "request_ids": 157,
+              "llm_calls": 157,
+              "modal_ids": 999,
+              "other_run_ids": 0,
+              "runs": 1015,
+              "races": 2
+            },
+            "fake_best_accepted": {
+              "request_ids": 157,
+              "llm_calls": 157,
+              "modal_ids": 999,
+              "other_run_ids": 0,
+              "runs": 1015,
+              "races": 2
+            }
+          }
+        },
+        "opus_bm": {
+          "label": "Busy Machines with Opus",
+          "seeds": [
+            0,
+            1
+          ],
+          "race_ids": [
+            "4ca4ed2709854a34bd6427ca2992e006",
+            "d4913e95393b40fa830a3772d923fbf7"
+          ],
+          "trap_runs": 88,
+          "stats": {
+            "cost_to_goal_usd": {
+              "mean": 0.024444258454203605,
+              "std": 0.009259540112296249,
+              "n": 2,
+              "n_total": 2
+            },
+            "time_to_goal_s": {
+              "mean": 16.621522784233093,
+              "std": 0.33640147771067436,
+              "n": 2,
+              "n_total": 2
+            },
+            "gpu_idle_pct": {
+              "mean": 1.4292125289534914,
+              "std": 0.08884096379036958,
+              "n": 2,
+              "n_total": 2
+            },
+            "best_quality": {
+              "mean": -154.41197204589844,
+              "std": 0.6429087015347538,
+              "n": 2,
+              "n_total": 2
+            },
+            "cost_to_opus_quality_usd": {
+              "mean": 0.6163080616615771,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 2
+            },
+            "time_to_opus_quality_s": {
+              "mean": 484.6449406147003,
+              "std": 0.0,
+              "n": 1,
+              "n_total": 2
+            },
+            "quality_at_opus_spend": {
+              "mean": -154.41197204589844,
+              "std": 0.6429087015347538,
+              "n": 2,
+              "n_total": 2
+            },
+            "experiments_finished": {
+              "mean": 1592.5,
+              "std": 2.1213203435596424,
+              "n": 2,
+              "n_total": 2
+            },
+            "experiments_per_usd": {
+              "mean": 1520.0333068311847,
+              "std": 8.183759787262499,
+              "n": 2,
+              "n_total": 2
+            },
+            "total_cost_usd": {
+              "mean": 1.047693352826941,
+              "std": 0.0070362873140613,
+              "n": 2,
+              "n_total": 2
+            },
+            "shipped_quality": {
+              "mean": -154.41197204589844,
+              "std": 0.6429087015347538,
+              "n": 2,
+              "n_total": 2
+            },
+            "fake_best_accepted": {
+              "mean": 0.0,
+              "std": 0.0,
+              "n": 2,
+              "n_total": 2
+            }
+          },
+          "evidence": {
+            "cost_to_goal_usd": {
+              "request_ids": 2,
+              "llm_calls": 2,
+              "modal_ids": 70,
+              "other_run_ids": 0,
+              "runs": 70,
+              "races": 2
+            },
+            "time_to_goal_s": {
+              "request_ids": 2,
+              "llm_calls": 2,
+              "modal_ids": 70,
+              "other_run_ids": 0,
+              "runs": 70,
+              "races": 2
+            },
+            "gpu_idle_pct": {
+              "request_ids": 114,
+              "llm_calls": 114,
+              "modal_ids": 3185,
+              "other_run_ids": 0,
+              "runs": 3185,
+              "races": 2
+            },
+            "best_quality": {
+              "request_ids": 114,
+              "llm_calls": 114,
+              "modal_ids": 3185,
+              "other_run_ids": 0,
+              "runs": 3185,
+              "races": 2
+            },
+            "cost_to_opus_quality_usd": {
+              "request_ids": 41,
+              "llm_calls": 41,
+              "modal_ids": 879,
+              "other_run_ids": 0,
+              "runs": 879,
+              "races": 2
+            },
+            "time_to_opus_quality_s": {
+              "request_ids": 41,
+              "llm_calls": 41,
+              "modal_ids": 879,
+              "other_run_ids": 0,
+              "runs": 879,
+              "races": 2
+            },
+            "quality_at_opus_spend": {
+              "request_ids": 114,
+              "llm_calls": 114,
+              "modal_ids": 3185,
+              "other_run_ids": 0,
+              "runs": 3185,
+              "races": 2
+            },
+            "experiments_finished": {
+              "request_ids": 114,
+              "llm_calls": 114,
+              "modal_ids": 3185,
+              "other_run_ids": 0,
+              "runs": 3185,
+              "races": 2
+            },
+            "experiments_per_usd": {
+              "request_ids": 114,
+              "llm_calls": 114,
+              "modal_ids": 3185,
+              "other_run_ids": 0,
+              "runs": 3185,
+              "races": 2
+            },
+            "total_cost_usd": {
+              "request_ids": 114,
+              "llm_calls": 114,
+              "modal_ids": 3185,
+              "other_run_ids": 0,
+              "runs": 3185,
+              "races": 2
+            },
+            "shipped_quality": {
+              "request_ids": 114,
+              "llm_calls": 114,
+              "modal_ids": 3185,
+              "other_run_ids": 0,
+              "runs": 3185,
+              "races": 2
+            },
+            "fake_best_accepted": {
+              "request_ids": 114,
+              "llm_calls": 114,
+              "modal_ids": 3185,
+              "other_run_ids": 0,
+              "runs": 3185,
+              "races": 2
+            }
+          }
+        },
+        "optuna": {
+          "label": "Automatic search (no AI, Optuna)",
+          "seeds": [
+            0,
+            1
+          ],
+          "race_ids": [
+            "4ca4ed2709854a34bd6427ca2992e006",
+            "d4913e95393b40fa830a3772d923fbf7"
+          ],
+          "trap_runs": 3119,
+          "stats": {
+            "cost_to_goal_usd": {
+              "mean": 0.009647264858365057,
+              "std": 0.004495588532217779,
+              "n": 2,
+              "n_total": 2
+            },
+            "time_to_goal_s": {
+              "mean": 24.5477477312088,
+              "std": 11.439156570528707,
+              "n": 2,
+              "n_total": 2
+            },
+            "gpu_idle_pct": {
+              "mean": 1.751138891778158,
+              "std": 0.054953719686823395,
+              "n": 2,
+              "n_total": 2
+            },
+            "best_quality": {
+              "mean": -156.7202377319336,
+              "std": 1.4123685419326821,
+              "n": 2,
+              "n_total": 2
+            },
+            "cost_to_opus_quality_usd": {
+              "mean": null,
+              "std": null,
+              "n": 0,
+              "n_total": 2
+            },
+            "time_to_opus_quality_s": {
+              "mean": null,
+              "std": null,
+              "n": 0,
+              "n_total": 2
+            },
+            "quality_at_opus_spend": {
+              "mean": -156.7202377319336,
+              "std": 1.4123685419326821,
+              "n": 2,
+              "n_total": 2
+            },
+            "experiments_finished": {
+              "mean": 1587.0,
+              "std": 1.4142135623730951,
+              "n": 2,
+              "n_total": 2
+            },
+            "experiments_per_usd": {
+              "mean": 4530.405204039121,
+              "std": 4.916140555418267,
+              "n": 2,
+              "n_total": 2
+            },
+            "total_cost_usd": {
+              "mean": 0.3502998287323597,
+              "std": 6.796514182429855e-05,
+              "n": 2,
+              "n_total": 2
+            },
+            "shipped_quality": {
+              "mean": -157.19573211669922,
+              "std": 0.6947526969510343,
+              "n": 2,
+              "n_total": 2
+            },
+            "fake_best_accepted": {
+              "mean": 14.5,
+              "std": 0.7071067811865476,
+              "n": 2,
+              "n_total": 2
+            }
+          },
+          "evidence": {
+            "cost_to_goal_usd": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 93,
+              "other_run_ids": 0,
+              "runs": 93,
+              "races": 2
+            },
+            "time_to_goal_s": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 93,
+              "other_run_ids": 0,
+              "runs": 93,
+              "races": 2
+            },
+            "gpu_idle_pct": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 3174,
+              "other_run_ids": 0,
+              "runs": 3176,
+              "races": 2
+            },
+            "best_quality": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 3174,
+              "other_run_ids": 0,
+              "runs": 3176,
+              "races": 2
+            },
+            "cost_to_opus_quality_usd": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 0,
+              "other_run_ids": 0,
+              "runs": 0,
+              "races": 2
+            },
+            "time_to_opus_quality_s": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 0,
+              "other_run_ids": 0,
+              "runs": 0,
+              "races": 2
+            },
+            "quality_at_opus_spend": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 3088,
+              "other_run_ids": 0,
+              "runs": 3088,
+              "races": 2
+            },
+            "experiments_finished": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 3174,
+              "other_run_ids": 0,
+              "runs": 3176,
+              "races": 2
+            },
+            "experiments_per_usd": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 3174,
+              "other_run_ids": 0,
+              "runs": 3176,
+              "races": 2
+            },
+            "total_cost_usd": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 3174,
+              "other_run_ids": 0,
+              "runs": 3176,
+              "races": 2
+            },
+            "shipped_quality": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 3174,
+              "other_run_ids": 0,
+              "runs": 3176,
+              "races": 2
+            },
+            "fake_best_accepted": {
+              "request_ids": 0,
+              "llm_calls": 0,
+              "modal_ids": 3174,
+              "other_run_ids": 0,
+              "runs": 3176,
+              "races": 2
+            }
+          }
+        }
+      },
+      "fingerprint_id": "e0d1cc7906",
+      "fingerprint": {
+        "arms": {
+          "optuna": {
+            "researcher": "OptunaResearcher",
+            "model": null,
+            "llm_mode": "none",
+            "record_mode": null,
+            "engine_features": []
+          },
+          "opus": {
+            "researcher": "LLMResearcher",
+            "model": "claude-opus-5-5",
+            "llm_mode": "mubit",
+            "record_mode": "off",
+            "engine_features": [],
+            "llm_policy": {
+              "researcher": "LLMResearcher",
+              "max_retries": 1,
+              "has_fallback": true,
+              "fallback_model": "claude-opus-5-5",
+              "prompts": {
+                "judge_improvement": "v1:5c1d3cfd2941",
+                "propose_experiments": "v1:fdda8c5b0919"
+              }
+            }
+          },
+          "opus_bm": {
+            "researcher": "LLMResearcher",
+            "model": "claude-opus-5-5",
+            "llm_mode": "mubit",
+            "record_mode": "off",
+            "engine_features": [
+              "backfill",
+              "judge_policy",
+              "lean_planner",
+              "planner_cadence"
+            ],
+            "judge_policy": {
+              "k_sigma": 2.0,
+              "table": {
+                "degenerate": false,
+                "key": "rl@15s",
+                "points": [
+                  [
+                    -1028.584979248047,
+                    19.935168807730058
+                  ],
+                  [
+                    -163.9259796142578,
+                    6.358719685164435
+                  ]
+                ],
+                "source": "calibration_rl15_v1.json summary (default, best mean)"
+              }
+            },
+            "backfill": {
+              "sampler": "optuna-tpe",
+              "n_startup_trials": 10,
+              "constant_liar": true,
+              "feedback": "worst_on_rejected",
+              "llm_first": true
+            },
+            "planner_cadence": {
+              "min_propose_interval_s": 60.0,
+              "max_proposals_per_call": 8
+            },
+            "llm_policy": {
+              "researcher": "LLMResearcher",
+              "max_retries": 1,
+              "has_fallback": true,
+              "fallback_model": "claude-opus-5-5",
+              "prompts": {
+                "judge_improvement": "v1:5c1d3cfd2941",
+                "propose_experiments": "v2:cfd2e3dd9710"
+              },
+              "propose_effort": "low"
+            }
+          }
+        },
+        "race": {
+          "target": "rl",
+          "target_value": -170.0,
+          "budget_s": 900.0,
+          "run_budget_s": 15,
+          "n_slots": 30,
+          "runner": "modal",
+          "cost_cap_usd": 8.0,
+          "accept_unsure": true,
+          "pipelining": false,
+          "lookahead": 0,
+          "max_proposals_per_call": 8,
+          "run_baseline_first": true,
+          "launch_cutoff_s": 17.0,
+          "median_stop_rule": {
+            "fractions": [
+              0.25,
+              0.5
+            ],
+            "min_completed": 5
+          },
+          "runtime_multiplier": null,
+          "hardware": [
+            "CPU"
+          ],
+          "price_per_s": [
+            1.31e-05
+          ]
+        },
+        "mubit_projects": {
+          "config": {
+            "default": "A",
+            "keys": {
+              "A": "MUBIT_API_KEY",
+              "B": "MUBIT_API_KEY_B"
+            },
+            "routes": {
+              "mubit": {
+                "early_stop": "B",
+                "judge_improvement": "B"
+              }
+            },
+            "source": "data/mubit_projects.json"
+          },
+          "config_identical": true,
+          "note": "D38: project B holds the closed-output judge v1 / early_stop tasks; A everything else",
+          "per_arm": {
+            "opus": {
+              "diagnose_run": "A",
+              "early_stop": "A",
+              "judge_improvement": "A",
+              "propose_experiments": "A"
+            },
+            "opus_bm": {
+              "diagnose_run": "A",
+              "early_stop": "A",
+              "judge_improvement": "A",
+              "propose_experiments": "A"
+            }
+          }
+        },
+        "unused_prompts": {
+          "opus": [
+            "diagnose_run=v0:22ecb45368e3",
+            "early_stop=v2:f1f3bf21aa79"
+          ],
+          "opus_bm": [
+            "diagnose_run=v0:22ecb45368e3",
+            "early_stop=v2:f1f3bf21aa79"
+          ]
+        }
+      },
+      "unused_prompts": {
+        "opus": [
+          "diagnose_run=v0:22ecb45368e3",
+          "early_stop=v2:f1f3bf21aa79"
+        ],
+        "opus_bm": [
+          "diagnose_run=v0:22ecb45368e3",
+          "early_stop=v2:f1f3bf21aa79"
+        ]
+      },
+      "engine": {
+        "opus": {
+          "features": [],
+          "runs": 999,
+          "early_stopped": 0,
+          "early_stop_too_late": 0,
+          "slot_s_freed": 0.0,
+          "stops_unconfirmed": 0,
+          "judge_claims": 0,
+          "judge_llm_invalid": 0,
+          "judge_no_reply": 0,
+          "judge_rule_real": 0,
+          "judge_rule_noise": 0,
+          "judge_final": {},
+          "degenerate": false,
+          "degenerate_why": "",
+          "cost_sources": {
+            "estimate@list": 157
+          },
+          "races": 2,
+          "runs_by_source": {
+            "baseline": 2,
+            "llm": 997
+          },
+          "sampler_trap_runs": 0,
+          "sampler_claims": 0,
+          "sampler_trap_rejected": 0,
+          "sampler_fakes_shipped": 0,
+          "shipped_from": {
+            "llm": 2
+          },
+          "cadence_s": null,
+          "propose_calls": 127,
+          "slot_s_freed_note": "engine estimate; never converted to $",
+          "real_gain_stats_usable": true
+        },
+        "opus_bm": {
+          "features": [
+            "backfill",
+            "judge_policy",
+            "lean_planner",
+            "planner_cadence"
+          ],
+          "runs": 3185,
+          "early_stopped": 0,
+          "early_stop_too_late": 0,
+          "slot_s_freed": 0.0,
+          "stops_unconfirmed": 0,
+          "judge_claims": 84,
+          "judge_llm_invalid": 38,
+          "judge_no_reply": 0,
+          "judge_rule_real": 22,
+          "judge_rule_noise": 62,
+          "judge_final": {
+            "valid": 5,
+            "invalid": 38,
+            "unsure": 41
+          },
+          "degenerate": false,
+          "degenerate_why": "",
+          "cost_sources": {
+            "estimate@list": 114
+          },
+          "races": 2,
+          "runs_by_source": {
+            "sampler": 2943,
+            "baseline": 2,
+            "llm": 240
+          },
+          "sampler_trap_runs": 88,
+          "sampler_claims": 77,
+          "sampler_trap_rejected": 38,
+          "sampler_fakes_shipped": 0,
+          "shipped_from": {
+            "sampler": 2
+          },
+          "cadence_s": 60.0,
+          "propose_calls": 30,
+          "slot_s_freed_note": "engine estimate; never converted to $",
+          "real_gain_stats_usable": true
+        },
+        "optuna": {
+          "features": [],
+          "runs": 3174,
+          "early_stopped": 0,
+          "early_stop_too_late": 0,
+          "slot_s_freed": 0.0,
+          "stops_unconfirmed": 0,
+          "judge_claims": 0,
+          "judge_llm_invalid": 0,
+          "judge_no_reply": 0,
+          "judge_rule_real": 0,
+          "judge_rule_noise": 0,
+          "judge_final": {},
+          "degenerate": false,
+          "degenerate_why": "",
+          "cost_sources": {},
+          "races": 2,
+          "runs_by_source": {
+            "optuna": 3172,
+            "baseline": 2
+          },
+          "sampler_trap_runs": 0,
+          "sampler_claims": 0,
+          "sampler_trap_rejected": 0,
+          "sampler_fakes_shipped": 0,
+          "shipped_from": {
+            "optuna": 2
+          },
+          "cadence_s": null,
+          "propose_calls": 0,
+          "slot_s_freed_note": "engine estimate; never converted to $",
+          "real_gain_stats_usable": true
+        }
+      },
+      "adapter_evidence": {
+        "per_race": [],
+        "ok": false,
+        "reason": "no evidence an adapter served"
+      },
+      "framings": [
+        {
+          "id": "quality_vs_start:opus",
+          "title": "Model quality vs the starting code",
+          "arm": "opus",
+          "baseline": "start",
+          "formula": "start \u00f7 end (N\u00d7 lower), 1 \u2212 end/start (% lower)",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality vs the starting code, the Opus 5.5 agent vs start: not measured (the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "end_mean": -154.3889923095703,
+            "end_std": 0.8764818155350952,
+            "n": 2,
+            "start": -1035.0519104003906
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "quality_vs_start:opus_bm",
+          "title": "Model quality vs the starting code",
+          "arm": "opus_bm",
+          "baseline": "start",
+          "formula": "start \u00f7 end (N\u00d7 lower), 1 \u2212 end/start (% lower)",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality vs the starting code, Busy Machines with Opus vs start: not measured (Busy Machines with Opus: 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "end_mean": -154.41197204589844,
+            "end_std": 0.6429087015347538,
+            "n": 2,
+            "start": -1035.0519104003906
+          },
+          "reasons": [
+            "Busy Machines with Opus: 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "quality_vs_start:optuna",
+          "title": "Model quality vs the starting code",
+          "arm": "optuna",
+          "baseline": "start",
+          "formula": "start \u00f7 end (N\u00d7 lower), 1 \u2212 end/start (% lower)",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality vs the starting code, Optuna (no AI) vs start: not measured (Optuna (no AI): 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "end_mean": -156.7202377319336,
+            "end_std": 1.4123685419326821,
+            "n": 2,
+            "start": -1035.0519104003906
+          },
+          "reasons": [
+            "Optuna (no AI): 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "pair:mubit:opus",
+          "title": "Head-to-head",
+          "arm": "mubit",
+          "baseline": "opus",
+          "formula": "-",
+          "measured": false,
+          "value": null,
+          "sentence": "Head-to-head, Mubit + Busy Machines vs the Opus 5.5 agent: not measured: no evidence an adapter served (also: no Mubit + Busy Machines arm in these races)",
+          "inputs": {},
+          "reasons": [
+            "no evidence an adapter served",
+            "no Mubit + Busy Machines arm in these races"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "quality_same_budget:opus_bm:opus",
+          "title": "Model quality @ same budget",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "baseline \u00f7 arm on the framed quantity (N\u00d7 lower), 1 \u2212 arm/baseline",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality @ same budget, Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 2 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": -154.41197204589844,
+            "arm_std": 0.6429087015347538,
+            "arm_n": 2,
+            "base_mean": -154.3889923095703,
+            "base_std": 0.8764818155350952,
+            "base_n": 2,
+            "opus_spend_usd": null
+          },
+          "reasons": [
+            "Busy Machines with Opus: 2 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            1.0009180896168972,
+            0.9987779677395376
+          ]
+        },
+        {
+          "id": "quality_same_money:opus_bm:opus",
+          "title": "Model quality @ the Opus agent's spend",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "baseline \u00f7 arm on the framed quantity (N\u00d7 lower), 1 \u2212 arm/baseline",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality @ the Opus agent's spend, Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 2 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": -154.41197204589844,
+            "arm_std": 0.6429087015347538,
+            "arm_n": 2,
+            "base_mean": -154.3889923095703,
+            "base_std": 0.8764818155350952,
+            "base_n": 2,
+            "opus_spend_usd": 3.67133228296783
+          },
+          "reasons": [
+            "Busy Machines with Opus: 2 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            1.0009180896168972,
+            0.9987779677395376
+          ]
+        },
+        {
+          "id": "cost_to_goal:opus_bm:opus",
+          "title": "Cost to reach the goal (held-out score \u2265 -170)",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "1 \u2212 arm$ \u00f7 baseline$",
+          "measured": false,
+          "value": null,
+          "sentence": "Cost to reach the goal (held-out score \u2265 -170), Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 2 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 0.024444258454203605,
+            "arm_std": 0.009259540112296249,
+            "arm_n": 2,
+            "arm_n_total": 2,
+            "base_mean": 0.25895422430484294,
+            "base_std": 0.007789639896313582,
+            "base_n": 2,
+            "base_n_total": 2
+          },
+          "reasons": [
+            "Busy Machines with Opus: 2 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            0.8828122633470404,
+            0.9293862732871114
+          ]
+        },
+        {
+          "id": "time_to_goal:opus_bm:opus",
+          "title": "Time to reach the goal (held-out score \u2265 -170)",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "1 \u2212 arm_t \u00f7 baseline_t",
+          "measured": false,
+          "value": null,
+          "sentence": "Time to reach the goal (held-out score \u2265 -170), Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 2 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 16.621522784233093,
+            "arm_std": 0.33640147771067436,
+            "arm_n": 2,
+            "arm_n_total": 2,
+            "base_mean": 75.40057075023651,
+            "base_std": 1.1712883998629742,
+            "base_n": 2,
+            "base_n_total": 2
+          },
+          "reasons": [
+            "Busy Machines with Opus: 2 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            0.7739189427385113,
+            0.7850726795778522
+          ]
+        },
+        {
+          "id": "cost_to_opus_quality:opus_bm:opus",
+          "title": "Cost to reach the Opus 5.5 agent's final model quality",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "1 \u2212 arm$ \u00f7 baseline$",
+          "measured": false,
+          "value": null,
+          "sentence": "Cost to reach the Opus 5.5 agent's final model quality, Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 2 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 0.6163080616615771,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "arm_n_total": 2,
+            "base_mean": 2.903722943654895,
+            "base_std": 0.6502788731975577,
+            "base_n": 2,
+            "base_n_total": 2
+          },
+          "reasons": [
+            "Busy Machines with Opus: 2 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            0.8167680048063557
+          ]
+        },
+        {
+          "id": "time_to_opus_quality:opus_bm:opus",
+          "title": "Time to reach the Opus 5.5 agent's final model quality",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "1 \u2212 arm_t \u00f7 baseline_t",
+          "measured": false,
+          "value": null,
+          "sentence": "Time to reach the Opus 5.5 agent's final model quality, Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 2 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 484.6449406147003,
+            "arm_std": 0.0,
+            "arm_n": 1,
+            "arm_n_total": 2,
+            "base_mean": 713.6385334730148,
+            "base_std": 158.74745479554647,
+            "base_n": 2,
+            "base_n_total": 2
+          },
+          "reasons": [
+            "Busy Machines with Opus: 2 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            0.4131845904320983
+          ]
+        },
+        {
+          "id": "throughput:opus_bm:opus",
+          "title": "Experiments per dollar",
+          "arm": "opus_bm",
+          "baseline": "opus",
+          "formula": "(arm experiments/$) \u00f7 (baseline experiments/$)",
+          "measured": false,
+          "value": null,
+          "sentence": "Experiments per dollar, Busy Machines with Opus vs the Opus 5.5 agent: not measured (Busy Machines with Opus: 2 distinct seed(s) (needs >= 3); the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 1520.0333068311847,
+            "arm_std": 8.183759787262499,
+            "arm_n": 2,
+            "base_mean": 136.05498250764265,
+            "base_std": 0.19515668710219627,
+            "base_n": 2
+          },
+          "reasons": [
+            "Busy Machines with Opus: 2 distinct seed(s) (needs >= 3)",
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            11.118388954587152,
+            11.226117831205183
+          ]
+        },
+        {
+          "id": "pair:mubit:opus_bm",
+          "title": "Head-to-head",
+          "arm": "mubit",
+          "baseline": "opus_bm",
+          "formula": "-",
+          "measured": false,
+          "value": null,
+          "sentence": "Head-to-head, Mubit + Busy Machines vs Busy Machines with Opus: not measured: no evidence an adapter served (also: no Mubit + Busy Machines arm in these races)",
+          "inputs": {},
+          "reasons": [
+            "no evidence an adapter served",
+            "no Mubit + Busy Machines arm in these races"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "pair:mubit:optuna",
+          "title": "Head-to-head",
+          "arm": "mubit",
+          "baseline": "optuna",
+          "formula": "-",
+          "measured": false,
+          "value": null,
+          "sentence": "Head-to-head, Mubit + Busy Machines vs Optuna (no AI): not measured: no evidence an adapter served (also: no Mubit + Busy Machines arm in these races)",
+          "inputs": {},
+          "reasons": [
+            "no evidence an adapter served",
+            "no Mubit + Busy Machines arm in these races"
+          ],
+          "per_seed": []
+        },
+        {
+          "id": "quality_same_budget:opus:optuna",
+          "title": "Model quality @ same budget",
+          "arm": "opus",
+          "baseline": "optuna",
+          "formula": "baseline \u00f7 arm on the framed quantity (N\u00d7 lower), 1 \u2212 arm/baseline",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality @ same budget, the Opus 5.5 agent vs Optuna (no AI): not measured (the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3); Optuna (no AI): 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": -154.3889923095703,
+            "arm_std": 0.8764818155350952,
+            "arm_n": 2,
+            "base_mean": -156.7202377319336,
+            "base_std": 1.4123685419326821,
+            "base_n": 2,
+            "opus_spend_usd": null
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)",
+            "Optuna (no AI): 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            1.0045983454107208,
+            1.025685939456726
+          ]
+        },
+        {
+          "id": "quality_same_money:opus:optuna",
+          "title": "Model quality @ the Opus agent's spend",
+          "arm": "opus",
+          "baseline": "optuna",
+          "formula": "baseline \u00f7 arm on the framed quantity (N\u00d7 lower), 1 \u2212 arm/baseline",
+          "measured": false,
+          "value": null,
+          "sentence": "Model quality @ the Opus agent's spend, the Opus 5.5 agent vs Optuna (no AI): not measured (the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3); Optuna (no AI): 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": -154.3889923095703,
+            "arm_std": 0.8764818155350952,
+            "arm_n": 2,
+            "base_mean": -156.7202377319336,
+            "base_std": 1.4123685419326821,
+            "base_n": 2,
+            "opus_spend_usd": 3.67133228296783
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)",
+            "Optuna (no AI): 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            1.0045983454107208,
+            1.025685939456726
+          ]
+        },
+        {
+          "id": "cost_to_goal:opus:optuna",
+          "title": "Cost to reach the goal (held-out score \u2265 -170)",
+          "arm": "opus",
+          "baseline": "optuna",
+          "formula": "1 \u2212 arm$ \u00f7 baseline$",
+          "measured": false,
+          "value": null,
+          "sentence": "Cost to reach the goal (held-out score \u2265 -170), the Opus 5.5 agent vs Optuna (no AI): not measured (the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3); Optuna (no AI): 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 0.25895422430484294,
+            "arm_std": 0.007789639896313582,
+            "arm_n": 2,
+            "arm_n_total": 2,
+            "base_mean": 0.009647264858365057,
+            "base_std": 0.004495588532217779,
+            "base_n": 2,
+            "base_n_total": 2
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)",
+            "Optuna (no AI): 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            -39.88525436451118,
+            -18.76014559747234
+          ]
+        },
+        {
+          "id": "time_to_goal:opus:optuna",
+          "title": "Time to reach the goal (held-out score \u2265 -170)",
+          "arm": "opus",
+          "baseline": "optuna",
+          "formula": "1 \u2212 arm_t \u00f7 baseline_t",
+          "measured": false,
+          "value": null,
+          "sentence": "Time to reach the goal (held-out score \u2265 -170), the Opus 5.5 agent vs Optuna (no AI): not measured (the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3); Optuna (no AI): 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 75.40057075023651,
+            "arm_std": 1.1712883998629742,
+            "arm_n": 2,
+            "arm_n_total": 2,
+            "base_mean": 24.5477477312088,
+            "base_std": 11.439156570528707,
+            "base_n": 2,
+            "base_n_total": 2
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)",
+            "Optuna (no AI): 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            -3.5307826720391517,
+            -1.335694902967739
+          ]
+        },
+        {
+          "id": "throughput:opus:optuna",
+          "title": "Experiments per dollar",
+          "arm": "opus",
+          "baseline": "optuna",
+          "formula": "(arm experiments/$) \u00f7 (baseline experiments/$)",
+          "measured": false,
+          "value": null,
+          "sentence": "Experiments per dollar, the Opus 5.5 agent vs Optuna (no AI): not measured (the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3); Optuna (no AI): 2 distinct seed(s) (needs >= 3))",
+          "inputs": {
+            "arm_mean": 136.05498250764265,
+            "arm_std": 0.19515668710219627,
+            "arm_n": 2,
+            "base_mean": 4530.405204039121,
+            "base_std": 4.916140555418267,
+            "base_n": 2
+          },
+          "reasons": [
+            "the Opus 5.5 agent: 2 distinct seed(s) (needs >= 3)",
+            "Optuna (no AI): 2 distinct seed(s) (needs >= 3)"
+          ],
+          "per_seed": [
+            0.030038937037925432,
+            0.030024103947758722
+          ]
+        },
+        {
+          "id": "fake_improvements",
+          "title": "Fake improvements let through",
+          "arm": "mubit",
+          "baseline": "opus",
+          "formula": "judge v2 vs Opus (and v1) on the 50-case trap set, test split",
+          "measured": false,
+          "value": null,
+          "sentence": "Fake improvements let through: not measured here (trap-set result, scripts/eval_trap_set.py; the in-race trap counts are in the table). The Mubit adapter's version is not measured: no evidence an adapter served.",
+          "inputs": {},
+          "reasons": [
+            "measured on the trap set, not in races",
+            "no evidence an adapter served"
+          ],
+          "per_seed": []
+        }
+      ],
+      "preregistered": null,
+      "per_race": [
+        {
+          "race_id": "4ca4ed2709854a34bd6427ca2992e006",
+          "seed": 0,
+          "arm": "opus",
+          "raw_kind": "opus",
+          "cost_to_goal_usd": 0.26446233149852755,
+          "time_to_goal_s": 74.57234477996826,
+          "gpu_idle_pct": 69.04372602428823,
+          "best_quality": -155.00875854492188,
+          "shipped_quality": -155.00875854492188,
+          "start_quality": -1068.680419921875,
+          "experiments_finished": 497,
+          "total_cost_usd": 3.6492336330033543,
+          "gpu_cost_usd": 0.34806603300335415,
+          "llm_cost_usd": 3.3011676000000003,
+          "experiments_per_usd": 136.19297912448653,
+          "trap_runs": 0,
+          "fake_best_accepted": 0,
+          "cost_to_opus_quality_usd": 3.363539544555235,
+          "time_to_opus_quality_s": 825.8899352550507,
+          "quality_at_opus_spend": -155.00875854492188,
+          "quality_line": null,
+          "cost_to_line_usd": null,
+          "time_to_line_s": null
+        },
+        {
+          "race_id": "4ca4ed2709854a34bd6427ca2992e006",
+          "seed": 0,
+          "arm": "opus_bm",
+          "raw_kind": "opus_bm",
+          "cost_to_goal_usd": 0.03099174205827713,
+          "time_to_goal_s": 16.859394550323486,
+          "gpu_idle_pct": 1.3663924810101726,
+          "best_quality": -154.8665771484375,
+          "shipped_quality": -154.8665771484375,
+          "start_quality": -1050.0225830078125,
+          "experiments_finished": 1594,
+          "total_cost_usd": 1.0526687593010906,
+          "gpu_cost_usd": 0.35008755930109065,
+          "llm_cost_usd": 0.7025812,
+          "experiments_per_usd": 1514.2465147900095,
+          "trap_runs": 41,
+          "fake_best_accepted": 0,
+          "cost_to_opus_quality_usd": 0.6163080616615771,
+          "time_to_opus_quality_s": 484.6449406147003,
+          "quality_at_opus_spend": -154.8665771484375,
+          "quality_line": null,
+          "cost_to_line_usd": null,
+          "time_to_line_s": null
+        },
+        {
+          "race_id": "4ca4ed2709854a34bd6427ca2992e006",
+          "seed": 0,
+          "arm": "optuna",
+          "raw_kind": "optuna",
+          "cost_to_goal_usd": 0.006468403721809387,
+          "time_to_goal_s": 16.4590425491333,
+          "gpu_idle_pct": 1.7122807439361805,
+          "best_quality": -155.72154235839844,
+          "shipped_quality": -156.7044677734375,
+          "start_quality": -1037.6253662109375,
+          "experiments_finished": 1588,
+          "total_cost_usd": 0.35025177011969144,
+          "gpu_cost_usd": 0.35025177011969144,
+          "llm_cost_usd": 0.0,
+          "experiments_per_usd": 4533.881440363123,
+          "trap_runs": 1552,
+          "fake_best_accepted": 14,
+          "cost_to_opus_quality_usd": null,
+          "time_to_opus_quality_s": null,
+          "quality_at_opus_spend": -155.72154235839844,
+          "quality_line": null,
+          "cost_to_line_usd": null,
+          "time_to_line_s": null
+        },
+        {
+          "race_id": "d4913e95393b40fa830a3772d923fbf7",
+          "seed": 1,
+          "arm": "opus",
+          "raw_kind": "opus",
+          "cost_to_goal_usd": 0.25344611711115833,
+          "time_to_goal_s": 76.22879672050476,
+          "gpu_idle_pct": 68.90494515309034,
+          "best_quality": -153.76922607421875,
+          "shipped_quality": -153.76922607421875,
+          "start_quality": -1005.2913208007812,
+          "experiments_finished": 502,
+          "total_cost_usd": 3.6934309329323054,
+          "gpu_cost_usd": 0.34820073293230536,
+          "llm_cost_usd": 3.3452302,
+          "experiments_per_usd": 135.9169858907988,
+          "trap_runs": 6,
+          "fake_best_accepted": 0,
+          "cost_to_opus_quality_usd": 2.4439063427545547,
+          "time_to_opus_quality_s": 601.387131690979,
+          "quality_at_opus_spend": -153.76922607421875,
+          "quality_line": null,
+          "cost_to_line_usd": null,
+          "time_to_line_s": null
+        },
+        {
+          "race_id": "d4913e95393b40fa830a3772d923fbf7",
+          "seed": 1,
+          "arm": "opus_bm",
+          "raw_kind": "opus_bm",
+          "cost_to_goal_usd": 0.01789677485013008,
+          "time_to_goal_s": 16.3836510181427,
+          "gpu_idle_pct": 1.4920325768968103,
+          "best_quality": -153.95736694335938,
+          "shipped_quality": -153.95736694335938,
+          "start_quality": -975.7498779296875,
+          "experiments_finished": 1591,
+          "total_cost_usd": 1.0427179463527914,
+          "gpu_cost_usd": 0.3505007463527913,
+          "llm_cost_usd": 0.6922172,
+          "experiments_per_usd": 1525.8200988723597,
+          "trap_runs": 47,
+          "fake_best_accepted": 0,
+          "cost_to_opus_quality_usd": null,
+          "time_to_opus_quality_s": null,
+          "quality_at_opus_spend": -153.95736694335938,
+          "quality_line": null,
+          "cost_to_line_usd": null,
+          "time_to_line_s": null
+        },
+        {
+          "race_id": "d4913e95393b40fa830a3772d923fbf7",
+          "seed": 1,
+          "arm": "optuna",
+          "raw_kind": "optuna",
+          "cost_to_goal_usd": 0.012826125994920726,
+          "time_to_goal_s": 32.6364529132843,
+          "gpu_idle_pct": 1.7899970396201355,
+          "best_quality": -157.71893310546875,
+          "shipped_quality": -157.68699645996094,
+          "start_quality": -1072.94189453125,
+          "experiments_finished": 1586,
+          "total_cost_usd": 0.350347887345028,
+          "gpu_cost_usd": 0.350347887345028,
+          "llm_cost_usd": 0.0,
+          "experiments_per_usd": 4526.928967715118,
+          "trap_runs": 1567,
+          "fake_best_accepted": 15,
+          "cost_to_opus_quality_usd": null,
+          "time_to_opus_quality_s": null,
+          "quality_at_opus_spend": -157.71893310546875,
+          "quality_line": null,
+          "cost_to_line_usd": null,
+          "time_to_line_s": null
+        }
+      ]
+    }
+  ],
+  "excluded": {
+    "races": [],
+    "llm_calls": {},
+    "experiments": {},
+    "duplicates": []
+  },
+  "notes": [
+    "rl races with the same budget/slots/goal were NOT pooled because their fairness fingerprints differ: fingerprint `7e42794ae2` (`145c2a2d`) | fingerprint `e0d1cc7906` (`4ca4ed27`, `d4913e95`) \u2014 differs from `7e42794ae2` in: arms.opus.llm_policy.prompts.diagnose_run: v0:22ecb45368e3 vs absent; arms.opus_bm.llm_policy.prompts.diagnose_run: v0:22ecb45368e3 vs absent"
+  ]
+}

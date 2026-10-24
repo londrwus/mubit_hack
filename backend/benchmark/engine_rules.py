@@ -266,6 +266,13 @@ class EngineState:
     curve_metric: str | None = None
     time_scale: float = 1.0
     notes: list[str] = field(default_factory=list)
+    # backfill: the arm's no-AI sampler (backend.agent.optuna_arm.BackfillSampler, built by
+    # scheduler.resolve_engine_state; typed Any to keep this module free of optuna).
+    sampler: Any = None
+    # Declared feature parameters ({feature: {name: value}}, RaceConfig.params_for).
+    params: dict[str, dict[str, float]] = field(default_factory=dict)
+    # planner_cadence: seconds between the starts of the arm's propose calls (None = off).
+    min_propose_interval_s: float | None = None
 
 
 __all__ = [

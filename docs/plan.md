@@ -3,7 +3,15 @@
 Available time: Fri 19:30 → Sun 10:00 ≈ **39 hours** (clocks go back, +1 h). Realistically ~26–30 working hours per person after sleep and food.
 Estimates are **person-hours** for someone fluent in Python/React and new to Modal/Mubit. With Claude Code writing much of the boilerplate (API, schemas, UI components), expect the low end.
 
-## 0. Next session: start here (morning brief, Sat 24 Oct ~06:50 BST)
+## 0. Next session: start here (afternoon brief, Sat 24 Oct ~15:30 BST)
+
+**Since the morning brief:** headline sets done for image recognition (R53: 22% fewer errors than Optuna, Optuna never reached the goal) and game-playing (R48); cross-race fakes (R54: Optuna shipped a fake in 6/9 races, the AI agent 0/9). Busy Machines engine built: lean planner (R62/R63: better model 0.866 vs 0.849), backfill (R64/R65), adapter-header support. RL race without a cadence limit gave a better model but a 2.1x LLM bill (R67), so it was stopped. Mubit: judge v1 adapter in B trained after ~7 h and scored 11.4% (R70); C stuck (R68); v2 batch recorded into B (R71). sapling-research v2 packaged for Hugging Face and verified on CPU (R69). Modal switched to account `emeraldshuorbit` (R73). Decisions D45–D48 (D46: race = standard Opus vs Busy Machines; D47: pre-registered LCBench wide race; D48: lead with quality and cost).
+
+**Running (workflows):** `bm-cost-cut` (cadence build → LCBench wide race, pre-registration in `docs/preregistration_lcbench_wide.md` → RL cadence gate → RL race on Modal); `sapling-v3-and-gpu-check` (H100 end-to-end check, gated v3, hard stop 18:00); `demo-and-pitch-pack` (demo script primary/fallback, correction beat, Mubit Q&A, slides outline, evidence pack).
+
+**Needs the user:** HF name + `hf auth login` + "go" to publish; Discord replies (stuck jobs, adapter header); B's page when v2 appears; "commit" when wanted. Deadline: everything except frontend by Sun 09:00 UTC.
+
+## 0b. Earlier: morning brief (Sat 24 Oct ~06:50 BST)
 **Read first:** `docs/results_log.md` R30–R43 and `docs/decisions.md` D36–D43. Everything below is logged there.
 
 **What we can say today (measured, with the worse side):**

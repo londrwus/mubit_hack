@@ -72,3 +72,15 @@ Routing is per task, and both arms send the same `propose_experiments` calls. On
 | Q13 | Review finished in one batch in R6. No review limit is documented | The daily review limit |
 | Q4 | Toy base: Qwen3-4B-Instruct-2507. Docs: *"Not in Try models: its base model isn't served here"* implies several bases | Can we pick a bigger base for propose? |
 | Q5 | Not covered | Is running Sapling ourselves OK under "every LLM call through Mubit"? |
+
+## Docs re-check (2026-10-24 ~09:20, docs.mubit.ai/llms-full.txt)
+- **"Prompt only"** is a test result: *"The base model, the open model the adapter is built on, did as well as the adapter when given the task's prompt."* Troubleshooting: *"Not in Try models: prompt only."* So for propose v1, training added nothing over the base Qwen3-4B plus our prompt.
+- **No way to use an adapter without a route from the API:** *"There is no Mubit model ID: you can't send a call to an adapter by naming it as the model."* No header changes who answers: *"A header can lower what Mubit keeps of a call, never raise it."*
+- **Try models is the only documented way to get an adapter's answer:** console only, *"not stored · trains nothing"*, *"The first start of an adapter can take a few minutes"*, 3 adapter starts per org per UTC day. *"A `Passed` result makes that version available for comparison"* (but in R8/R9 we did use Try models on the below-target toy v1).
+- Still undocumented: routes/pathways, shadow, live serving, exporting adapter weights.
+
+## Mubit answer on Discord (2026-10-24 11:51, Mubit tech support, to another team)
+- *"Currently our auto router handles which reqs go where. We will push an update later which allows you to put adapter id in header to specify which adapter the req should go to."*
+- So today serving is automatic (pass → silent test → partial rollout, Settings → Going live, R56). Once the header ships, the Mubit arm can pin its adapter per call, and no route can leak into the Opus baseline.
+- Ready on our side: `data/mubit_projects.json` takes an optional `adapter_headers` block (`{"mubit": {"judge_improvement": {"<header>": "<adapter id>"}}}`). `backend/agent/mubit_client.py` sends it only on the mubit arm, refuses it on any other arm, and refuses record/auth header names. The header name and adapter-id format are still unknown.
+- **Follow-ups to ask:** header name and ETA; whether a pinned adapter must have passed its exam (or a below-target version can be pinned); whether pinned calls are still recorded and shown as "Served by"; adapter latency and price per call.

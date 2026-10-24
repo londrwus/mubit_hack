@@ -25,6 +25,18 @@ FAST_ARM_LABEL = "smaller faster model in the same loop, not a Mubit adapter"
 ARM_FIXED_MODELS: dict[ArmKind, str] = {ArmKind.fast: FAST_MODEL}
 # Arms that may only race in an ablation (or dev) race, never in a benchmark / headline race.
 ABLATION_ONLY_ARMS: frozenset[ArmKind] = frozenset({ArmKind.fast})
+# Prompt-ablation arms (dev mode only, never a benchmark): the SAME model as the Opus arm with a
+# different propose prompt version and effort, so the strict "identical LLM policy" check would
+# (rightly) refuse them in an ablation/benchmark race. Applied by scripts/bench.py (run_race).
+LEAN_ARM_LABEL = "Opus 5.5 with the lean planner prompt"
+# (propose prompt version, propose effort). STANDARD_PROPOSE mirrors the frozen default
+# (backend.agent.prompts.CURRENT_VERSION + mubit_client.DEFAULT_STEP_CONFIGS; kept import-light,
+# a test checks the mirror). LEAN_PLANNER_PROPOSE is the lean planner (R62 probe, R63 quality
+# check): draft prompt v2 "changes only" (fingerprint cfd2e3dd9710) + effort low.
+STANDARD_PROPOSE: tuple[str, str] = ("v1", "medium")
+LEAN_PLANNER_PROPOSE: tuple[str, str] = ("v2", "low")
+ARM_PROPOSE_VARIANTS: dict[ArmKind, tuple[str, str]] = {ArmKind.lean: LEAN_PLANNER_PROPOSE}  # (prompt version, effort)
+PROMPT_ABLATION_ARMS: frozenset[ArmKind] = frozenset(ARM_PROPOSE_VARIANTS)
 
 # x-middleware-record values (mirrors backend.agent.mubit_client.RecordMode, kept import-light).
 #   full     = Mubit's default: the call is recorded and can become a kept example.
@@ -54,20 +66,81 @@ BENCH_RECORD_MODES: dict[ArmKind, RecordMode] = {ArmKind.opus: "off", ArmKind.mu
 #                 OFF by default for every arm and target (D43: no rule passes the D42 offline
 #                 gate, R43); kept behind this flag (RaceConfig.engine_features, dev races only:
 #                 benchmark races run each arm's defaults).
-EngineFeature = Literal["judge_policy", "median_stop"]
-ENGINE_FEATURES: tuple[str, ...] = ("judge_policy", "median_stop")
+#   backfill      keeps GPUs busy with a no-AI sampler while the AI thinks (backfill gate,
+#                 data/backfill/): every slot the LLM's own proposals do not fill gets an Optuna
+#                 TPE config at once. The LLM's proposals always launch first (its demand counts
+#                 only its own runs), the sampler is told every finished run of the arm (LLM's
+#                 and its own) and, for a claim the LLM judge rejected, the WORST score seen so
+#                 far ("checker-gated feedback"; told the raw inflated score TPE finds the trap).
+#                 The sampler is never told which option is the trap: fakes are caught only by
+#                 the arm's checker (LLM judge + judge policy). Sampler runs render in the
+#                 planner digest exactly like LLM runs. Not for the optuna arm.
+#   lean_planner  shorter planner replies (D46, R62/R63): the arm's propose call uses the lean
+#                 prompt v2 ("changes only": each experiment lists only the settings that differ
+#                 from the current best config, expanded to a full config in code) at effort low
+#                 (LEAN_PLANNER_PROPOSE). The ONE prompt difference a strict race allows between
+#                 LLM arms (scheduler.check_llm_policies): only the propose prompt version and
+#                 its effort, only on arms with this feature; the judge / diagnose prompts and
+#                 the user message (what the planner sees) stay identical. Unlike the others it
+#                 changes a prompt (a new Mubit task fingerprint for propose), which is why it
+#                 is declared per arm and disclosed in the fairness manifest. Not for optuna.
+#   planner_cadence  (D47) the arm's AI planner is called at most every N seconds; the no-AI
+#                 sampler (backfill) keeps GPUs busy in between. Parameter
+#                 ``min_propose_interval_s`` (RaceConfig.feature_params), measured between the
+#                 STARTS of the arm's propose calls (a call's retries are part of that call). When a
+#                 call is due, K = min(max_proposals_per_call, LLM demand) at that moment, where LLM
+#                 demand counts only the LLM's own runs and buffered proposals (scheduler._demand
+#                 with backfill). Judge and diagnose calls are never throttled. Needs backfill on the
+#                 same arm (without it the slots would starve between planner calls). OFF by default
+#                 for every arm; a preset turns it on per arm (PRESET_DECLARED_FEATURES), and the
+#                 parameter is recorded in the fairness manifest (per_arm.feature_params, engine).
+EngineFeature = Literal["judge_policy", "median_stop", "backfill", "lean_planner", "planner_cadence"]
+ENGINE_FEATURES: tuple[str, ...] = ("judge_policy", "median_stop", "backfill", "lean_planner", "planner_cadence")
+# Plain-language labels (UI copy, docs/demo.md): what each feature does, no jargon.
+ENGINE_FEATURE_LABELS: dict[str, str] = {
+    "judge_policy": "checks every claimed improvement (AI for leaks, seed-spread rule for noise)",
+    "median_stop": "stops runs that are clearly worse than the median (off by default)",
+    "backfill": "keeps GPUs busy with a no-AI sampler while the AI thinks",
+    "lean_planner": "shorter planner replies: only the settings it changes",
+    "planner_cadence": "calls the AI planner at most every N seconds; the no-AI sampler keeps GPUs busy in between",
+}
+# Features that take parameters (RaceConfig.feature_params[arm][feature]): name -> required params.
+FEATURE_PARAMS: dict[str, tuple[str, ...]] = {"planner_cadence": ("min_propose_interval_s",)}
+# Features a strict (benchmark / ablation) race may switch on per arm ON TOP of the arm's
+# defaults, because a preset declares them with their parameters (manifest + fingerprint carry
+# them, so headline.py never pools such a race with one that ran without them). Every other
+# feature in a strict race must be exactly the arm kind's default.
+PRESET_DECLARED_FEATURES: frozenset[str] = frozenset({"planner_cadence"})
+# Features that only make sense together with another feature on the same arm.
+FEATURE_REQUIRES: dict[str, str] = {"planner_cadence": "backfill"}
+
+
+def cadence_label(min_propose_interval_s: float | None) -> str:
+    """Plain-language label of the planner cadence with its parameter (UI copy, reports)."""
+    if min_propose_interval_s is None:
+        return ENGINE_FEATURE_LABELS["planner_cadence"]
+    return (f"calls the AI planner at most every {min_propose_interval_s:g} s; the no-AI sampler keeps GPUs "
+            "busy in between")
+# Backfill sampler settings (the same on every arm that has the feature; manifest "engine").
+# n_startup_trials matches the Optuna arm's TPE (OptunaResearcher default), as gated.
+BACKFILL_SAMPLER = "optuna-tpe"
+BACKFILL_N_STARTUP_TRIALS = 10
+BACKFILL_FEEDBACK = "worst_on_rejected"   # checker-gated: a rejected claim is told the worst score so far
 # Per arm kind, unless RaceConfig.engine_features overrides it. The Opus arm is the standard
-# agent (no features). "Busy Machines with Opus" and "Mubit + Busy Machines" get the SAME
-# features (only the LLM behind the calls differs): the judge policy only (D43, D44: it decides
-# the SHIPPED model, never what the planner sees). Optuna gets none (D43: it dropped the median
-# rule to stay matched with the BM arms). The ablation arm "fast" is the standard agent too.
+# agent (no features: the plain v1 loop at effort medium, D46). "Busy Machines with Opus" and
+# "Mubit + Busy Machines" get the SAME features (only the LLM behind the calls differs): the
+# judge policy (D43, D44: it decides the SHIPPED model, never what the planner sees), backfill
+# (the backfill gate) and the lean planner (D46). Optuna gets none (D43: it dropped the median
+# rule to stay matched with the BM arms). The ablation arms "fast" and "lean" are the standard
+# agent too ("lean" gets its prompt from ARM_PROPOSE_VARIANTS, not from a feature).
 DEFAULT_ENGINE_FEATURES: dict[ArmKind, tuple[str, ...]] = {
     ArmKind.opus: (),
-    ArmKind.opus_bm: ("judge_policy",),
-    ArmKind.mubit: ("judge_policy",),
+    ArmKind.opus_bm: ("backfill", "judge_policy", "lean_planner"),
+    ArmKind.mubit: ("backfill", "judge_policy", "lean_planner"),
     ArmKind.optuna: (),
     ArmKind.mock: (),
     ArmKind.fast: (),
+    ArmKind.lean: (),
 }
 # Arms that must get identical engine features when they meet in one race.
 BUSY_MACHINES_ARMS: frozenset[ArmKind] = frozenset({ArmKind.opus_bm, ArmKind.mubit})
@@ -125,6 +198,15 @@ class RaceConfig(BaseModel):
     mock_trap_rate: float | None = Field(default=None, ge=0, le=1)
     # Engine features per arm (see DEFAULT_ENGINE_FEATURES); an entry overrides that arm's default.
     engine_features: dict[ArmKind, list[EngineFeature]] = Field(default_factory=dict)
+    # Per-arm feature parameters, e.g. {opus_bm: {"planner_cadence": {"min_propose_interval_s": 90}}}
+    # (FEATURE_PARAMS lists the required names). Only for features the arm runs; recorded in the
+    # fairness manifest (per_arm.feature_params, differs_only_in, engine.per_arm).
+    feature_params: dict[ArmKind, dict[EngineFeature, dict[str, float]]] = Field(default_factory=dict)
+    # Surrogate pacing for the WHOLE process (BUSY_SURROGATE_RUNTIME_MULT, workers/runners/surrogate.py):
+    # None = leave the environment alone (multiplier 1.0 unless the env var is set). A value is
+    # applied process-wide before any runner is built (apply_surrogate_runtime_mult), so every arm
+    # gets it, and every run_ref shows it ("surrogate:<id>:x0.1"). Surrogate runner only.
+    surrogate_runtime_mult: float | None = Field(default=None, gt=0)
     # Median stopping (engine rule, D40), the same for every arm that has it: checkpoints as
     # fractions of the per-run budget, and how many completed runs must exist before a run can
     # be stopped.
@@ -152,6 +234,13 @@ class RaceConfig(BaseModel):
             bad = sorted(a.value for a in self.arms if a in ABLATION_ONLY_ARMS)
             if bad:
                 raise ValueError(f"arm(s) {bad} are ablation-only ({FAST_ARM_LABEL}); never in a benchmark race")
+        prompt_arms = [a for a in self.arms if a in PROMPT_ABLATION_ARMS]
+        if prompt_arms and self.mode != "dev":
+            raise ValueError(f"arm(s) {sorted(a.value for a in prompt_arms)} ({LEAN_ARM_LABEL}) use a draft propose "
+                             "prompt: dev-mode prompt ablations only")
+        for a in prompt_arms:
+            if a in self.arms and self.record_mode_for(a) != "off":
+                raise ValueError(f"arm {a.value!r} uses a draft propose prompt: its record mode must be 'off'")
         if (self.mock_latency_s or self.mock_trap_rate is not None) and self.llm != "mock":
             raise ValueError("mock_latency_s / mock_trap_rate only apply to llm='mock'")
         if any(v < 0 for v in self.mock_latency_s.values()):
@@ -172,6 +261,44 @@ class RaceConfig(BaseModel):
                 raise ValueError(f"engine_features for {kind.value!r} has duplicates")
             if kind == ArmKind.optuna and "judge_policy" in feats:
                 raise ValueError("the optuna arm has no judge; judge_policy does not apply")
+            if kind == ArmKind.optuna and "backfill" in feats:
+                raise ValueError("the optuna arm is the sampler; backfill does not apply")
+            if kind == ArmKind.optuna and "lean_planner" in feats:
+                raise ValueError("the optuna arm has no planner prompt; lean_planner does not apply")
+            if kind in PROMPT_ABLATION_ARMS and "lean_planner" in feats:
+                raise ValueError(f"arm {kind.value!r} already has its own propose prompt variant; "
+                                 "lean_planner does not apply")
+            if kind == ArmKind.optuna and "planner_cadence" in feats:
+                raise ValueError("the optuna arm has no AI planner; planner_cadence does not apply")
+        for kind in self.arms:
+            feats = set(self.features_for(kind))
+            for f, needs in FEATURE_REQUIRES.items():
+                if f in feats and needs not in feats:
+                    raise ValueError(f"arm {kind.value!r}: {f} needs {needs} on the same arm (without the no-AI "
+                                     "sampler the slots would starve between planner calls)")
+            for f, names in FEATURE_PARAMS.items():
+                if f in feats:
+                    got = (self.feature_params.get(kind) or {}).get(f)  # type: ignore[call-overload]
+                    missing = [n for n in names if got is None or n not in got]
+                    if missing:
+                        raise ValueError(f"arm {kind.value!r}: {f} needs feature_params {missing}")
+        for kind, per in self.feature_params.items():
+            if kind not in self.arms:
+                raise ValueError(f"feature_params names arm {kind.value!r}, which is not in the race")
+            feats = set(self.features_for(kind))
+            for f, params in per.items():
+                if f not in feats:
+                    raise ValueError(f"feature_params for arm {kind.value!r} sets {f!r}, which that arm does not run")
+                allowed = FEATURE_PARAMS.get(f, ())
+                bad = sorted(set(params) - set(allowed))
+                if bad:
+                    raise ValueError(f"feature_params[{kind.value!r}][{f!r}]: unknown parameter(s) {bad} "
+                                     f"(allowed: {list(allowed)})")
+                for n, v in params.items():
+                    if not math.isfinite(float(v)) or float(v) <= 0:
+                        raise ValueError(f"feature_params[{kind.value!r}][{f!r}][{n!r}] must be a finite number > 0")
+        if self.surrogate_runtime_mult is not None and self.runner != "surrogate":
+            raise ValueError("surrogate_runtime_mult only applies to runner='surrogate'")
         if not self.median_stop_fractions or any(not (0.0 < f < 1.0) for f in self.median_stop_fractions):
             raise ValueError("median_stop_fractions must be non-empty, each in (0, 1)")
         if sorted(self.median_stop_fractions) != list(self.median_stop_fractions):
@@ -186,6 +313,49 @@ class RaceConfig(BaseModel):
 
     def engine_features_map(self) -> dict[str, list[str]]:
         return {k.value: list(self.features_for(k)) for k in self.arms}
+
+    def params_for(self, kind: ArmKind | str) -> dict[str, dict[str, float]]:
+        """This arm's declared feature parameters ({feature: {name: value}}), sorted."""
+        per = self.feature_params.get(ArmKind(kind)) or {}
+        return {str(f): {n: float(v) for n, v in sorted(p.items())} for f, p in sorted(per.items())}
+
+    def feature_params_map(self) -> dict[str, dict[str, dict[str, float]]]:
+        """arm -> declared feature parameters, for every arm (empty when none): race-wide."""
+        return {k.value: self.params_for(k) for k in self.arms}
+
+    def min_propose_interval_for(self, kind: ArmKind | str) -> float | None:
+        """planner_cadence: seconds between the starts of this arm's propose calls; None = off."""
+        if "planner_cadence" not in self.features_for(kind):
+            return None
+        return float(self.params_for(kind)["planner_cadence"]["min_propose_interval_s"])
+
+    def propose_variant_for(self, kind: ArmKind | str) -> tuple[str, str] | None:
+        """(propose prompt version, effort) this LLM arm DECLARES instead of the standard
+        (``STANDARD_PROPOSE``), or None for the standard planner. Sources: the prompt-ablation
+        arms (``ARM_PROPOSE_VARIANTS``, dev only) and the ``lean_planner`` engine feature (D46).
+        The only prompt difference a strict race accepts between LLM arms."""
+        kind = ArmKind(kind)
+        if kind == ArmKind.optuna:
+            return None
+        if kind in ARM_PROPOSE_VARIANTS:
+            return ARM_PROPOSE_VARIANTS[kind]
+        if "lean_planner" in self.features_for(kind):
+            return LEAN_PLANNER_PROPOSE
+        return None
+
+    def propose_setup_for(self, kind: ArmKind | str) -> dict[str, str]:
+        """The planner setup this LLM arm must run: ``{"prompt_version", "effort", "source"}``
+        (source: standard | lean_planner | ablation arm)."""
+        kind = ArmKind(kind)
+        v = self.propose_variant_for(kind)
+        if v is None:
+            return {"prompt_version": STANDARD_PROPOSE[0], "effort": STANDARD_PROPOSE[1], "source": "standard"}
+        src = "ablation arm" if kind in ARM_PROPOSE_VARIANTS else "lean_planner"
+        return {"prompt_version": v[0], "effort": v[1], "source": src}
+
+    def propose_setups(self) -> dict[str, dict[str, str]]:
+        """arm -> declared planner setup, for every LLM arm (Optuna has no planner prompt)."""
+        return {k.value: self.propose_setup_for(k) for k in self.llm_arms}
 
     def record_mode_for(self, kind: ArmKind | str) -> RecordMode:
         """The x-middleware-record mode this arm's calls send (fallback calls included)."""
@@ -223,6 +393,25 @@ class RaceConfig(BaseModel):
     @property
     def llm_arms(self) -> list[ArmKind]:
         return [a for a in self.arms if a != ArmKind.optuna]
+
+
+def apply_surrogate_runtime_mult(cfg: RaceConfig) -> float | None:
+    """Set ``BUSY_SURROGATE_RUNTIME_MULT`` for the whole process from the race config (so every
+    arm's SurrogateRunner, and every run_ref, gets it). Refuses (ValueError) if the environment
+    already holds a different value: one process, one pacing. Returns the multiplier applied,
+    or None when the config declares none."""
+    import os
+
+    if cfg.surrogate_runtime_mult is None:
+        return None
+    from workers.runners.surrogate import ENV_MULTIPLIER
+
+    want = float(cfg.surrogate_runtime_mult)
+    raw = os.environ.get(ENV_MULTIPLIER)
+    if raw and not math.isclose(float(raw), want, rel_tol=0, abs_tol=1e-12):
+        raise ValueError(f"{ENV_MULTIPLIER}={raw} is set in the environment, but the race declares x{want:g}")
+    os.environ[ENV_MULTIPLIER] = f"{want:g}"
+    return want
 
 
 def estimate_gpu_cost_usd(cfg: RaceConfig, price_per_s: float) -> float:
@@ -308,6 +497,19 @@ PRESETS: dict[str, RaceConfig] = {
         cost_cap_usd=8.0, max_estimated_gpu_usd=1.25,
         record_mode={ArmKind.opus: "off", ArmKind.fast: "off"},
     ),
+    # PROMPT ABLATION, NEVER A HEADLINE RACE (dev mode: is_dev=1; bench.py stores it in
+    # data/bench/ablation.db; scripts/headline.py refuses it). Same as lcbench-15m except the arms:
+    # "opus" (frozen v1 planner prompt, effort medium) vs "lean" (LEAN_ARM_LABEL: the same
+    # claude-opus-5-5 with the draft propose_experiments v2 prompt, diff-form reply, effort low).
+    # Both through Mubit project A with record off. Dev mode because the prompts differ on purpose
+    # (the strict identical-LLM-policy check would refuse it); everything else is identical.
+    "lcbench-lean-15m": RaceConfig(
+        name=f"LCBench lean-planner ablation 15 min (lean = {LEAN_ARM_LABEL})", target="lcbench",
+        arms=[ArmKind.opus, ArmKind.lean],
+        budget_s=900, gpus_per_arm=16, max_proposals_per_call=8, mode="dev", llm="mubit", runner="surrogate",
+        cost_cap_usd=7.2, max_estimated_gpu_usd=10.0,
+        record_mode={ArmKind.opus: "off", ArmKind.lean: "off"},
+    ),
     # Surrogate search race (YAHPO LCBench, task 167168): 16 virtual L4 slots per arm, 15 min.
     # Runs are paced by the surrogate's predicted training time (SurrogateRunner, multiplier 1.0
     # unless BUSY_SURROGATE_RUNTIME_MULT is set) and priced at the L4 rate: GPU $ is VIRTUAL
@@ -317,11 +519,109 @@ PRESETS: dict[str, RaceConfig] = {
     # Arms (D43): Opus vs Busy Machines with Opus vs Optuna; opus_bm stays here as a run-to-run
     # noise control (judge policy only, no early stopping on any arm). The seed-spread rule has
     # sigma 0 here (the surrogate is deterministic per config), so the judge policy is degenerate.
+    # NOTE (backfill gate): strict races run each arm's DEFAULT features, and opus_bm's defaults
+    # now include backfill, so a new lcbench-15m race's opus_bm is no longer a noise control
+    # (its fairness fingerprint differs from the old races, so headline.py never pools them).
+    # lcbench-bm-15m is the same race under its own name.
     "lcbench-15m": RaceConfig(
         name="LCBench surrogate 15 min", target="lcbench", arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna],
         budget_s=900, gpus_per_arm=16, max_proposals_per_call=8, mode="benchmark", llm="mubit", runner="surrogate",
         cost_cap_usd=7.2, max_estimated_gpu_usd=10.0,
         record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+    ),
+    # ---- Busy Machines with Opus (lean planner + backfill + judge policy, D46) vs the standard
+    # Opus agent (plain v1 loop, effort medium) vs Optuna. Same settings as the matching headline
+    # preset; only opus_bm is added (record off, Opus on every step, project A). Per-arm caps
+    # unchanged; the GPU $ guard covers the third arm. opus_bm sends propose v2 at effort low
+    # (lean_planner, declared per arm in the fairness manifest); judge v1 is the same on both.
+    # RL wide: 30 slots per arm. Containers at once: 3 arms x 30 + 2 spare = 92 (+ Sapling's
+    # H100 if it is up = 93) of Modal Starter's 100. GPU $ <= 3 x 30 x 900 s x $0.0000131 = $1.06.
+    "rl-wide-bm-15m": RaceConfig(
+        name="RL wide 15 min (15 s runs), Busy Machines with Opus", target="rl",
+        arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna],
+        budget_s=900, gpus_per_arm=30, run_budget_s=15, max_proposals_per_call=8,
+        launch_cutoff_s=17.0, prewarm=True, prewarm_spare=2,
+        mode="benchmark", llm="mubit", runner="modal",
+        cost_cap_usd=8.0, max_estimated_gpu_usd=1.25,
+        record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+    ),
+    # RL wide + PLANNER CADENCE 60 s on Busy Machines (offline gate scripts/sim_cadence_rl.py,
+    # data/backfill/cadence_rl.json: 60 s is the shortest interval that projects BM's LLM $ at
+    # <= 0.3x the standard Opus agent's in every main projection; a PROJECTION until raced).
+    # Identical to rl-wide-bm-15m (30 CPU slots/arm, 15 s runs, 15 min, goal rl@15s = -170 frozen,
+    # arms opus / opus_bm / optuna, same caps, pre-warm, deadline rule, record off) except that
+    # opus_bm also runs planner_cadence: a propose call at most every 60 s between call starts,
+    # K = min(8, LLM demand), judge calls not throttled (D47's feature, preset-declared, disclosed
+    # in the fairness manifest). Its fingerprint differs from R67's (cadence): never pooled.
+    "rl-wide-bm-cadence-15m": RaceConfig(
+        name="RL wide 15 min (15 s runs), Busy Machines with Opus + planner cadence 60 s", target="rl",
+        arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna],
+        budget_s=900, gpus_per_arm=30, run_budget_s=15, max_proposals_per_call=8,
+        launch_cutoff_s=17.0, prewarm=True, prewarm_spare=2,
+        mode="benchmark", llm="mubit", runner="modal",
+        cost_cap_usd=8.0, max_estimated_gpu_usd=1.25,
+        record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+        engine_features={ArmKind.opus_bm: ["backfill", "judge_policy", "lean_planner", "planner_cadence"]},
+        feature_params={ArmKind.opus_bm: {"planner_cadence": {"min_propose_interval_s": 60.0}}},
+    ),
+    # CIFAR: 3 L4 per arm x 3 arms = 9 of Starter's 10 GPUs (no spare). GPU $ <= 3 x 3 x 900 s x
+    # $0.000222 = $1.80 per seed (guard $2.00); per-arm cap unchanged ($5).
+    "cifar-bm-15m": RaceConfig(
+        name="CIFAR speedrun 15 min, Busy Machines with Opus", target="cifar",
+        arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna],
+        budget_s=900, gpus_per_arm=3, max_proposals_per_call=8, prewarm=True, prewarm_spare=0,
+        mode="benchmark", llm="mubit", runner="modal",
+        cost_cap_usd=5.0, max_estimated_gpu_usd=2.0,
+        record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+    ),
+    # LCBench surrogate: identical to lcbench-15m (opus, opus_bm, optuna; 16 virtual L4 slots).
+    "lcbench-bm-15m": RaceConfig(
+        name="LCBench surrogate 15 min, Busy Machines with Opus", target="lcbench",
+        arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna],
+        budget_s=900, gpus_per_arm=16, max_proposals_per_call=8, mode="benchmark", llm="mubit", runner="surrogate",
+        cost_cap_usd=7.2, max_estimated_gpu_usd=10.0,
+        record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+    ),
+    # ---- PRE-REGISTERED 'LCBench wide setup' (D47; docs/preregistration_lcbench_wide.md, frozen
+    # before any race, implemented exactly as written; gate R66). The standard Opus agent (plain v1
+    # loop, effort medium, no engine features) vs Busy Machines with Opus (lean planner v2 / effort
+    # low + backfill (Optuna TPE seeded by the race seed, n_startup 10, constant_liar, LLM proposals
+    # first, checker-gated 'worst_on_rejected') + judge v1 with the judge policy + PLANNER CADENCE: a
+    # propose call at most every 90 s, K = min(8, LLM demand), judge calls not throttled) vs Optuna
+    # (the required no-AI baseline, unchanged). 16 virtual L4 per arm, 15 min, all arms start
+    # together; runs hold their slot for 0.1 x the surrogate's predicted training time
+    # (BUSY_SURROGATE_RUNTIME_MULT=0.1 for the whole process, shown in every run_ref as ":x0.1").
+    # K <= 8 per call, baseline first, no deadline rule (late runs are cancelled at the deadline),
+    # pipelining off, accept_unsure on. Per-arm cap $9.20 = virtual GPU 16 x 900 x $0.000222 = $3.20
+    # + $6 LLM headroom. GPU $ guard 10.0 >= 3 x 3.20 = 9.6 (virtual). Benchmark mode, LLM through
+    # Mubit project A, record off on every LLM arm. Seeds 0, 1, 2. Goal 0.78 (frozen, lcbench).
+    # Its fingerprint differs from R38/R44/R65 (x0.1 pacing, planner cadence): never pooled.
+    "lcbench-wide-bm-15m": RaceConfig(
+        name="LCBench wide 15 min (16 slots, runs x0.1), Busy Machines with Opus + planner cadence 90 s",
+        target="lcbench", arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna],
+        budget_s=900, gpus_per_arm=16, max_proposals_per_call=8, run_baseline_first=True,
+        launch_cutoff_s=None, pipelining=False, accept_unsure=True,
+        mode="benchmark", llm="mubit", runner="surrogate", surrogate_runtime_mult=0.1,
+        cost_cap_usd=9.2, max_estimated_gpu_usd=10.0,
+        record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+        engine_features={ArmKind.opus_bm: ["backfill", "judge_policy", "lean_planner", "planner_cadence"]},
+        feature_params={ArmKind.opus_bm: {"planner_cadence": {"min_propose_interval_s": 90.0}}},
+    ),
+    # ---- PRE-REGISTERED follow-up 'LCBench wide, planner every >= 30 s' (D49;
+    # docs/preregistration_lcbench_wide_c30.md, frozen ~16:45 BST before any race, chosen AFTER R75
+    # failed). Identical to lcbench-wide-bm-15m except ONE parameter: opus_bm's planner_cadence
+    # min_propose_interval_s = 30 (was 90). Seeds 0, 1, 2. Its fingerprint differs from R75's
+    # (cadence 30 vs 90): never pooled. The last cadence setting tried (D49).
+    "lcbench-wide-bm-c30-15m": RaceConfig(
+        name="LCBench wide 15 min (16 slots, runs x0.1), Busy Machines with Opus + planner cadence 30 s",
+        target="lcbench", arms=[ArmKind.opus, ArmKind.opus_bm, ArmKind.optuna],
+        budget_s=900, gpus_per_arm=16, max_proposals_per_call=8, run_baseline_first=True,
+        launch_cutoff_s=None, pipelining=False, accept_unsure=True,
+        mode="benchmark", llm="mubit", runner="surrogate", surrogate_runtime_mult=0.1,
+        cost_cap_usd=9.2, max_estimated_gpu_usd=10.0,
+        record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+        engine_features={ArmKind.opus_bm: ["backfill", "judge_policy", "lean_planner", "planner_cadence"]},
+        feature_params={ArmKind.opus_bm: {"planner_cadence": {"min_propose_interval_s": 30.0}}},
     ),
     # Live demo: 2 L4s per arm x 3 min (~$0.20).
     # Corrections are recorded (the demo shows one), so this race never feeds headline numbers.
