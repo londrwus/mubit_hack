@@ -1,0 +1,52 @@
+--- a/backend/core/events.py
++++ b/backend/core/events.py
+@@ -101,6 +101,33 @@
+     reason: str = ""
+ 
+ 
++class ModalStatsEvent(_EventBase):
++    """Live Modal stats for one arm (DEMO RACES with per-arm Modal apps only; never sent for a
++    benchmark or ablation race, never stored in the race DB). One per arm per poll (~2 s), from
++    ``modal.Function.get_current_stats`` on the arm's own app plus the latest in-container GPU
++    samples of its runs in flight (docs/dashboard_modal.md has units and the 'idle' definition)."""
++
++    type: Literal["modal_stats"] = "modal_stats"
++    arm: ArmKind
++    app: str                                  # the arm's deployed Modal app
++    function: str                             # run_l4 / run_cpu
++    ok: bool = True                           # False: the stats call failed (see error)
++    error: str | None = None
++    containers: int | None = None             # Modal num_total_runners: containers alive (warm or busy)
++    calls_in_flight: int | None = None        # Modal num_running_inputs: runs executing now
++    backlog: int | None = None                # Modal backlog: inputs waiting for a container
++    input_headroom: int | None = None         # Modal input_headroom
++    idle_containers: int | None = None        # containers - calls_in_flight: warm, no call in flight
++    gpu_util_pct: float | None = None         # mean over known containers, idle ones at 0 (0-100)
++    gpu_util_active_pct: float | None = None  # mean over sampled runs in flight (0-100)
++    gpu_mem_mb: float | None = None           # GPU memory used, summed over sampled runs (MiB)
++    runs_sampled: int = 0                     # runs in flight with a live in-container sample
++    runs_unsampled: int = 0                   # runs in flight with no sample yet (left out of gpu_util_pct)
++    call_ids: list[str] = Field(default_factory=list)  # Modal call ids of this arm's runs in flight
++    latest_call_id: str | None = None         # Modal call id of the arm's most recently started run
++    poll_latency_s: float | None = None
++
++
+ class RaceFinishedEvent(_EventBase):
+     type: Literal["race_finished"] = "race_finished"
+     summaries: list[ArmSummary]
+@@ -115,6 +142,7 @@
+     | NewBestEvent
+     | LLMCallEvent
+     | CorrectionEvent
++    | ModalStatsEvent
+     | RaceFinishedEvent,
+     Field(discriminator="type"),
+ ]
+@@ -129,6 +157,7 @@
+     "new_best",
+     "llm_call",
+     "correction",
++    "modal_stats",
+     "race_finished",
+ )
+ 

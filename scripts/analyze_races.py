@@ -560,6 +560,11 @@ def fairness_fingerprint(rows: Rows) -> dict[str, Any] | None:
             # the sampler's settings; its seed follows the race seed, so it is not a pooling key
             entry["backfill"] = {x: eng["backfill"].get(x) for x in
                                  ("sampler", "n_startup_trials", "constant_liar", "feedback", "llm_first")}
+        if eng.get("proposer_isolation") not in (None, "thread"):
+            # Where the arm's CPU-bound TPE study ran (backend.agent.study_worker): its own process
+            # takes it off the race process's GIL, which changes the Optuna arm's waiting and
+            # experiment counts. Absent on races from before (all ran it in a thread): unchanged.
+            entry["proposer_isolation"] = eng["proposer_isolation"]
         if eng.get("planner_cadence"):
             # D47: a preset-declared feature parameter; part of the pooling key (absent on every
             # race from before the feature existed, so their fingerprints are unchanged).
@@ -583,6 +588,12 @@ def fairness_fingerprint(rows: Rows) -> dict[str, Any] | None:
             eff = p.get("propose_effort")
             if eff is not None and eff != STANDARD_PROPOSE_EFFORT and "propose_experiments" in steps_used:
                 entry["llm_policy"]["propose_effort"] = eff
+            # A fallback sent with record off (never routable to an adapter) differs from one sent
+            # with the arm's own record mode only when that mode is not "off" (the mubit arm with
+            # metadata / full). Absent on races from before the rule; an "off" arm keeps pooling.
+            fb_rec = p.get("fallback_record")
+            if fb_rec is not None and entry["record_mode"] not in (None, "off"):
+                entry["llm_policy"]["fallback_record"] = fb_rec
             gone = [f"{s}={v}" for s, v in sorted(prompts.items()) if s not in steps_used]
             if gone:
                 unused[k] = gone

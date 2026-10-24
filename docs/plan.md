@@ -1,9 +1,65 @@
 # Build plan: effort, order, cuts
 
-Available time: Fri 19:30 → Sun 10:00 ≈ **39 hours** (clocks go back, +1 h). Realistically ~26–30 working hours per person after sleep and food.
+Available time: Fri 19:30 → Sun 10:00 ≈ **39 hours** (clocks go back, +1 h). Realistically ~26–30 working hours per person after sleep and food. **Superseded by D53: code freeze and submission are Sun 06:00 London (= 06:00 UTC).**
 Estimates are **person-hours** for someone fluent in Python/React and new to Modal/Mubit. With Claude Code writing much of the boilerplate (API, schemas, UI components), expect the low end.
 
-## 0. Next session: start here (afternoon brief, Sat 24 Oct ~15:30 BST)
+## 0. Night brief (Sat 24 Oct ~23:30 BST): start here
+
+**Deadline (D53):** code freeze and submission **Sun 06:00 London** (clocks go back at 02:00, so that is 06:00 UTC). Demo version decision at **05:00** (`demo_script.md` §0, written as a new R-row). Final push by ~05:30, only on the user's word.
+
+**Positioning (D54):** "Busy Machines: compute intelligence for training sweeps". It is the compute layer under the AI planner. It decides when the planner is worth calling, keeps every machine busy with a no-AI sampler, and blocks fake improvements. Mubit is the cheap-AI layer next to it ("Runs on Mubit"). Say "machines" or "compute", never "GPUs" alone. Never say "AI research agent", "powered by Mubit's models" or "Mubit cut our bill".
+
+**Done (all logged):**
+- **Headline, two tasks, 3 runs each, before any Mubit model served:**
+  - **R78, game-playing (cloud CPU workers):** the model quality is a tie (−154.3 vs −154.5). AI bill $0.83 vs $3.30 per race (0.25×), total $1.18 vs $3.65. Machines waiting 1.5% vs 68.8%. 0 of 847 trap runs accepted. The shipped model came from the sampler in 3 of 3 runs (R84).
+  - **R82, tabular (simulated GPU time), pre-registered, success line met:** model 0.8884 vs 0.8897, with the standard agent ahead in every run. AI bill $0.698 vs $2.774 (0.25×). Machines waiting 1.1% vs 30.3%. 0 of 85 trap runs accepted. This setting was **chosen after R75 failed**.
+  - **R87:** R78 reached the −170 goal 89% cheaper and 72% faster. Quote it only with its caveat: the goal is easy, and the no-AI tool was cheaper still.
+- **Limits (always shown with the headline):**
+  - **R75, FAILED:** planning every 90 s gave an 8.2× lower AI bill but 7% more errors.
+  - **R85, image recognition on real L4 GPUs, quality line FAILED:** AI bill 0.22× ($0.233 vs $1.056), but 5% more errors (0.9424 vs 0.9451). It was also slower and dearer to the 0.94 goal, and its shipped model (0.9395) missed the goal.
+- **Sapling, R83:** v4 **failed its gate**, so v2 stays the release (not published). At its strict setting v4 caught 97 of 109 fakes in real race claims, approved none and confirmed 5 of 7 real gains. It regressed on general claims, ContractNLI and trap50.
+- **Backend and demo:**
+  - **R86:** the API, live events and replay smoke test passed. Open item: `GET /api/races/{id}` returned null fields for the TestClient id.
+  - **R88:** review patches 06–09 applied. Samplers run in their own processes: Optuna's contention fell from 2.52× / 2.49× to 1.40× / 1.46× slower, which is less but not zero. Dashboard API added. Full suite **817 passed, 3 skipped, 0 failed**, and the scans are clean. Verdict: **go for the freeze**.
+  - **R89:** the 60-second live demo **works as a tool, not a result**. At 60 s the standard agent was slightly ahead on quality (0.8090 vs 0.8064) and on AI bill ($0.133 vs $0.142). So the video uses the R78 replay, not the live demo.
+  - **R90:** the per-run values shown on the design frames.
+- **Designs** are in `C:/Users/Lenovo/Documents/mubit.pen`. Open it only through the pencil MCP. PNG exports and the number check are in `design/exports/final/README.md`.
+  - **Landing `pOKAY`** ("Landing v2 · Compute intelligence (A+)"), 5 screens: hero `KekD1`, engine `QYavo`, our model `MgmgS`, benchmarks `oT6Ad`, call to action `c50WCZ`.
+  - **Platform:** "Platform · Overview" `bxWh3` and "Platform · Sweep detail (live compare)" `eGVso`.
+  - **Fix before showing** (changes in Pen, on the user's go):
+    - `KekD1` says "Your GPUs should never wait" and "Same GPUs, more science", which is "GPUs" alone (against D54).
+    - `MgmgS` cites "99.9% vs 88.7% on fresh data" (labelled R54). That figure is **not in `results_log.md`**: remove it, or log it first.
+    - `oT6Ad` shows R87's time to the goal and has no R75 or R85 on the frame. Show it only with those added in the caption.
+- **Mubit:** no adapter serves. The best is workspace C judge v1 at 58.3% against a 95% bar (R79); diagnose scored 8.3% (R80). The D52 bar change in C (55%) is not logged as done or live.
+
+**Left before 06:00:**
+1. **Frontend build** (Vite + React, the `bxWh3` / `eGVso` layouts on the dashboard API): **only on the user's go**. Without it, the video uses the Pen exports as stills and `scripts/replay_tui.py` for the moving race (`video_script.md`).
+2. **Hugging Face publish of sapling-research v2:** needs the user's HF name, `hf auth login` and "go". Until then every doc says "not published", and no link is shown.
+3. **Commit and push:** only on the user's word, by ~05:30. Many files are untracked (`backend/dashboard.py`, `backend/demo.py`, `backend/agent/study_worker.py`, `design/`, `data/frontend/`, `data/dashboard_*`, new tests and scripts). Check `git status` before committing.
+4. **Record the video** (`video_script.md`, ≤ 3:00): the console stills first, the 05:00 console re-check, then export.
+5. Fill in the team names (`submission.md`).
+6. At 05:00: the console check and the demo version decision, logged as an R-row by the main session.
+
+**Exact commands** (PowerShell, from the repo root; all $0):
+```powershell
+# 1. Backend server (API + dashboard WebSockets; logged races are read-only from bench.db)
+$env:PYTHONUTF8="1"; $env:PYTHONIOENCODING="utf-8"
+$env:BUSY_MACHINES_DB="data/busy_machines.db"
+$env:BUSY_MACHINES_REPLAY_SOURCES="data/bench/bench.db"
+python -m uv run --extra ml --with onnxruntime==1.29.0 uvicorn --factory backend.app:create_app --port 8765
+
+# 2. R78 run 1 (race 4ca4ed27) replayed at 90x: a 15-minute race in 10 s (second terminal)
+Invoke-RestMethod -Method Post "http://127.0.0.1:8765/api/races/4ca4ed27/replay?speed=90&metric_stride=0"
+python -m uv run python scripts/dashboard_client.py replay 4ca4ed27 --speed 90 --seconds 12 --raw false
+#    header reads "Replay of logged race R78, run 1 of 3 · 90× speed"; for the video use speed=30 (video_script.md)
+
+# 3. Demo endpoint, $0 rehearsal (mock AI, no Mubit call, no Modal)
+Invoke-RestMethod "http://127.0.0.1:8765/api/demo/presets"
+Invoke-RestMethod -Method Post "http://127.0.0.1:8765/api/demo/start?preset=demo-live-60s&dry_run=true"
+#    without dry_run it spends real Opus money (R89: $0.275 for one run) and is a demo run, never a result
+```
+
+## 0a. Earlier: afternoon brief (Sat 24 Oct ~15:30 BST)
 
 **Since the morning brief:** headline sets done for image recognition (R53: 22% fewer errors than Optuna, Optuna never reached the goal) and game-playing (R48); cross-race fakes (R54: Optuna shipped a fake in 6/9 races, the AI agent 0/9). Busy Machines engine built: lean planner (R62/R63: better model 0.866 vs 0.849), backfill (R64/R65), adapter-header support. RL race without a cadence limit gave a better model but a 2.1x LLM bill (R67), so it was stopped. Mubit: judge v1 adapter in B trained after ~7 h and scored 11.4% (R70); C stuck (R68); v2 batch recorded into B (R71). sapling-research v2 packaged for Hugging Face and verified on CPU (R69). Modal switched to account `emeraldshuorbit` (R73). Decisions D45–D48 (D46: race = standard Opus vs Busy Machines; D47: pre-registered LCBench wide race; D48: lead with quality and cost).
 
@@ -11,7 +67,7 @@ Estimates are **person-hours** for someone fluent in Python/React and new to Mod
 
 **DEADLINE (D53): code freeze and submission Sun 06:00 London (06:00 UTC).** Races done ~00:30 → patches 06–09 + full tests ~02:30 → final numbers/docs ~04:30 → demo decision 05:00 → final push ~05:30.
 
-**Needs the user:** HF name + `hf auth login` + "go" to publish; Discord replies (stuck jobs, adapter header); B's page when v2 appears; "commit" when wanted. Deadline: everything except frontend by Sun 09:00 UTC.
+**Needs the user:** HF name + `hf auth login` + "go" to publish; Discord replies (stuck jobs, adapter header); B's page when v2 appears; "commit" when wanted. Deadline: everything except frontend by Sun 09:00 UTC (superseded by D53: everything by Sun 06:00 London).
 
 ## 0b. Earlier: morning brief (Sat 24 Oct ~06:50 BST)
 **Read first:** `docs/results_log.md` R30–R43 and `docs/decisions.md` D36–D43. Everything below is logged there.
@@ -97,7 +153,7 @@ Estimates are **person-hours** for someone fluent in Python/React and new to Mod
 3. **Fri 01:00 → Sat morning:** **run Opus races overnight** (collects Mubit examples and gives the baseline); RL target on CPU.
 4. **Sat:** dashboard; language-model target; Mubit arm; corrections → v2; (optional) Sapling, with go/no-go at 14:00 and a hard stop at 18:00.
 5. **Sat night:** the full benchmark; results charts; record the fallback video.
-6. **Sun 06:00–10:00:** freeze, rehearse ×5. **Code freeze 10:00.**
+6. **Sun 06:00–10:00:** freeze, rehearse ×5. **Code freeze 10:00.** (Superseded by D53: freeze and submission Sun 06:00.)
 
 ## 5. Cut ladder (if behind, cut in this order)
 1. Sapling fine-tune → keep only the baseline eval, or drop it

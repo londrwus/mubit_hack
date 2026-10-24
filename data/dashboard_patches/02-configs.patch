@@ -1,0 +1,43 @@
+--- a/backend/benchmark/configs.py
++++ b/backend/benchmark/configs.py
+@@ -231,7 +231,7 @@
+     # live demo uses this to show a correction turning into a model update). Dev races always
+     # apply them.
+     benchmark_corrections: Literal["refuse", "record"] = "refuse"
+-    # DEMO ONLY (dev mode, never a headline race). Both fields are left out of every dump while
++    # DEMO ONLY (dev mode, never a headline race). These fields are left out of every dump while
+     # unset (exclude_if), so the stored config of every benchmark / ablation race, and of every
+     # earlier race, is byte-for-byte what it was before they existed.
+     #   modal_apps  arm -> deployed Modal app that arm's ModalRunner looks its functions up in
+@@ -240,6 +240,10 @@
+     #               written into the fairness manifest ("demo"), refused by scripts/headline.py.
+     modal_apps: dict[ArmKind, str] = Field(default_factory=dict, exclude_if=lambda v: not v)
+     demo_label: str | None = Field(default=None, exclude_if=lambda v: v is None)
++    #   gpu_telemetry_s  seconds between in-container GPU samples (gpu_util_pct, gpu_mem_mb metric
++    #               points, workers/runners/modal_stats.py); needs per-arm Modal apps. Both arms get
++    #               the same value. None (every other race): jobs are exactly as before.
++    gpu_telemetry_s: float | None = Field(default=None, gt=0, le=60, exclude_if=lambda v: v is None)
+ 
+     @model_validator(mode="after")
+     def _check(self) -> RaceConfig:
+@@ -346,6 +350,12 @@
+             for n in names:
+                 if not n or set(n) - _MODAL_APP_NAME_CHARS:
+                     raise ValueError(f"invalid Modal app name {n!r} (lowercase letters, digits, - _ .)")
++        if self.gpu_telemetry_s is not None:
++            if self.strict or self.demo_label is None:
++                raise ValueError("gpu_telemetry_s (in-container GPU sampling) is a demo feature: demo races only, "
++                                 "never a benchmark or ablation race")
++            if not self.modal_apps:
++                raise ValueError("gpu_telemetry_s needs per-arm Modal apps (modal_apps)")
+         return self
+ 
+     @property
+@@ -720,6 +730,7 @@
+         cost_cap_usd=3.0, max_estimated_gpu_usd=0.5,
+         record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+         modal_apps=dict(PER_ARM_MODAL_APPS), demo_label=DEMO_LABEL,
++        gpu_telemetry_s=1.0,   # live GPU % / memory per run for our dashboard (docs/dashboard_modal.md)
+     ),
+ }
+ 

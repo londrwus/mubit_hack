@@ -61,6 +61,14 @@ Per-arm apps (DEMO ONLY, ``RaceConfig.modal_apps``; e.g. the ``demo-cifar-modal-
   ``BUSY_MODAL_APP=<name> modal deploy --name <name> workers/runners/modal_runner.py``).
 - Tear down both: ``python -m workers.runners.modal_runner arm-apps stop`` (``modal app stop -y <name>``).
 - ``arm-apps print`` only prints the commands and the dashboard pages (no Modal call).
+
+In-container GPU telemetry (DEMO ONLY, ``RaceConfig.gpu_telemetry_s``; docs/dashboard_modal.md)
+- ``ModalRunner(gpu_telemetry_s=1.0)`` adds ``"gpu_telemetry": {"interval_s": 1.0}`` to each job;
+  the container then runs ``modal_stats.GpuSampler`` beside the training loop and streams
+  ``gpu_util_pct`` / ``gpu_mem_mb`` (+ ``gpu_mem_total_mb`` once) through the run's metric queue.
+  Without it (every benchmark / ablation race) the job dict and the container path are unchanged.
+- ``calls_in_flight()`` lists the Modal call id of every run this runner has in flight (local
+  bookkeeping, no Modal call).
 """
 
 from __future__ import annotations
@@ -303,12 +311,29 @@ def _remote_execute(job: dict[str, Any]) -> dict[str, Any]:
     q = _container_queue(job.get("queue_name") or QUEUE_NAME)
     pusher = _QueuePusher(q, job["run_id"])
     pusher.put({"type": "started", "ts": started})
+    sampler = _gpu_sampler(job, pusher) if job.get("gpu_telemetry") else None  # demo races only
     try:
         payload = execute_job(job, pusher.emit)
     finally:
+        if sampler is not None:
+            with contextlib.suppress(Exception):
+                sampler.stop(final_sample=False)
         pusher.close()
     payload["container_started_at"] = started
     return payload
+
+
+def _gpu_sampler(job: dict[str, Any], pusher: _QueuePusher) -> Any:
+    """Background GPU sampler for this run (only for jobs with ``gpu_telemetry``). Its points go
+    into the run's metric stream only, never into the run's result metrics (those reach the judge
+    prompt). Any failure leaves the run untouched."""
+    try:
+        from workers.runners.modal_stats import sampler_for_job
+
+        return sampler_for_job(job, pusher.emit)
+    except Exception as exc:  # noqa: BLE001 (telemetry must never cost a run)
+        print(f"[modal_runner] gpu telemetry off: {exc!r}", file=sys.stderr)
+        return None
 
 
 _COMMON_FN_KW: dict[str, Any] = dict(
@@ -384,6 +409,10 @@ class ModalRunner:
     cancel_terminates: ``cancel()`` also terminates the container (default False: the input
         is cancelled and the warm container is reused; see ``_wait_call`` for the measurement).
     startup_timeout_s: max wait for a container to start (cold start / scheduling).
+    gpu_telemetry_s: DEMO ONLY (``RaceConfig.gpu_telemetry_s``). When set, every job carries
+        ``gpu_telemetry`` and the container samples GPU utilisation / memory every that many
+        seconds into the run's metric stream. None (default, every benchmark race): the job dict
+        is exactly what it was before this option existed.
     function_resolver / queue: injection points for tests (no network).
     """
 
@@ -411,6 +440,7 @@ class ModalRunner:
         hardware_for: dict[str, str] | None = None,
         extra_imports: list[str] | None = None,
         queue_name: str = QUEUE_NAME,
+        gpu_telemetry_s: float | None = None,
         function_resolver: Callable[[str], Any] | None = None,
         queue: Any | None = None,
     ) -> None:
@@ -439,6 +469,9 @@ class ModalRunner:
         self.hardware_for = dict(hardware_for or {})
         self.extra_imports = list(extra_imports or [])
         self.queue_name = queue_name
+        if gpu_telemetry_s is not None and not gpu_telemetry_s > 0:
+            raise ValueError("gpu_telemetry_s must be > 0")
+        self.gpu_telemetry_s = gpu_telemetry_s
         self._resolver = function_resolver
         self._queue = queue
         self._fn_cache: dict[str, Any] = {}
@@ -502,6 +535,8 @@ class ModalRunner:
             "budget_s": int(budget_s), "started_at": handle.started_at,
             "extra_imports": self.extra_imports, "queue_name": self.queue_name,
         }
+        if self.gpu_telemetry_s is not None:  # demo races only; absent otherwise (job unchanged)
+            job["gpu_telemetry"] = {"interval_s": float(self.gpu_telemetry_s)}
         self._reserve(hw, handle.run_id)
         try:
             fn = self._function(hw)
@@ -840,6 +875,13 @@ class ModalRunner:
     async def _clear_partition(self, run_id: str) -> None:
         with contextlib.suppress(Exception):
             await _bounded(self._q().clear.aio(partition=run_id), RPC_TIMEOUT_S, self._abandoned)
+
+    def calls_in_flight(self) -> list[dict[str, Any]]:
+        """Modal call id (``FunctionCall.object_id``, also ``RunHandle.run_ref``) of every run
+        this runner has launched and not finished yet. Local bookkeeping only (no Modal call)."""
+        return [{"run_id": rid, "modal_call_id": r.handle.run_ref, "hardware": r.handle.hardware,
+                 "container_started_at": r.started_ts, "cancelled": r.cancelled}
+                for rid, r in self._runs.items() if r.call is not None and r.result is None]
 
     async def drain_background(self) -> None:
         """Wait for background housekeeping (queue partition clears)."""

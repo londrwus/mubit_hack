@@ -27,6 +27,7 @@ ModalRunner = modal_runner.ModalRunner
 
 ROOT = Path(__file__).resolve().parents[1]
 DEMO = "demo-cifar-modal-5m"
+LIVE_DEMO = "demo-live-60s"   # demo label, no per-arm apps (tests/test_demo_live.py)
 
 
 def _load(name: str, rel: str) -> Any:
@@ -90,8 +91,9 @@ def test_per_arm_runner_routes_to_its_own_app(monkeypatch: pytest.MonkeyPatch, f
     spec = get_target(cfg.target).spec
     calls = _recording_construct(monkeypatch)
     runners = {k: app_mod._make_runner(cfg, spec, k) for k in cfg.arms}
-    assert calls == [{"slots": {"L4": 3}, "app_name": "busy-machines-opus"},
-                     {"slots": {"L4": 3}, "app_name": "busy-machines-bm"}]
+    assert calls == [{"slots": {"L4": 3}, "app_name": "busy-machines-opus", "gpu_telemetry_s": 1.0},
+                     {"slots": {"L4": 3}, "app_name": "busy-machines-bm", "gpu_telemetry_s": 1.0}]
+    assert runners[ArmKind.opus].gpu_telemetry_s == runners[ArmKind.opus_bm].gpu_telemetry_s == 1.0
     assert runners[ArmKind.opus].app_name == "busy-machines-opus"
     assert runners[ArmKind.opus_bm].app_name == "busy-machines-bm"
     runners[ArmKind.opus]._function("L4")
@@ -193,7 +195,7 @@ def test_prewarm_default_path_unchanged() -> None:
 
 def test_benchmark_presets_cannot_enable_per_arm_apps() -> None:
     for name, p in PRESETS.items():
-        if name == DEMO:
+        if name in (DEMO, LIVE_DEMO):
             continue
         assert not p.modal_apps and p.demo_label is None, name
         if not p.strict:
@@ -218,9 +220,14 @@ def test_stored_config_of_other_presets_has_no_new_keys() -> None:
             assert dumped["modal_apps"] == {"opus": "busy-machines-opus", "opus_bm": "busy-machines-bm"}
             assert dumped["demo_label"] == DEMO_LABEL
             continue
+        if name == LIVE_DEMO:  # a demo label, no per-arm apps
+            assert "modal_apps" not in dumped and dumped["demo_label"] == p.demo_label, name
+            assert "gpu_telemetry_s" not in dumped, name
+            continue
         assert "modal_apps" not in dumped and "demo_label" not in dumped, name
         assert "modal_apps" not in p.model_dump_json() and "demo_label" not in p.model_dump_json(), name
-        assert set(dumped) == set(RaceConfig.model_fields) - {"modal_apps", "demo_label"}, name
+        assert "gpu_telemetry_s" not in dumped and "gpu_telemetry_s" not in p.model_dump_json(), name
+        assert set(dumped) == set(RaceConfig.model_fields) - {"modal_apps", "demo_label", "gpu_telemetry_s"}, name
         for c in bench.build_races(name, seeds=[0]):
             assert "modal_apps" not in c.model_dump(mode="json") and not c.is_demo, name
 

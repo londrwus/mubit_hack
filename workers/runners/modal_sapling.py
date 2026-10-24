@@ -642,14 +642,15 @@ def cmd_extract(rows_paths: str | list[str], run_name: str, *, chunk: int = DEFA
     """
     if ephemeral:
         with modal.enable_output(), app.run():
-            return _extract(rows_paths, run_name, h100_batch, chunk=chunk, max_usd=max_usd, out_dir=out_dir,
-                            s_per_case=s_per_case, load_s=load_s, deadline_s=deadline_s)
-    return _extract(rows_paths, run_name, _fn("h100_batch"), chunk=chunk, max_usd=max_usd, out_dir=out_dir,
+            return _extract(rows_paths, run_name, lambda: h100_batch, chunk=chunk, max_usd=max_usd,
+                            out_dir=out_dir, s_per_case=s_per_case, load_s=load_s, deadline_s=deadline_s)
+    return _extract(rows_paths, run_name, lambda: _fn("h100_batch"), chunk=chunk, max_usd=max_usd, out_dir=out_dir,
                     s_per_case=s_per_case, load_s=load_s, deadline_s=deadline_s)
 
 
-def _extract(rows_paths: str | list[str], run_name: str, fn: Any, *, chunk: int, max_usd: float,
+def _extract(rows_paths: str | list[str], run_name: str, get_fn: Any, *, chunk: int, max_usd: float,
              out_dir: str | None, s_per_case: float, load_s: float, deadline_s: float) -> dict[str, Any]:
+    """``get_fn`` returns the Modal function; it is resolved only after the budget check passes."""
     paths = [rows_paths] if isinstance(rows_paths, str) else list(rows_paths)
     rows = validate_rows(project_rows([r for p in paths for r in read_jsonl(p)]))
     est = estimate_extraction(len(rows), s_per_case=s_per_case, load_s=load_s, cpu_cores=H100_CPU,
@@ -658,6 +659,7 @@ def _extract(rows_paths: str | list[str], run_name: str, fn: Any, *, chunk: int,
           file=sys.stderr)
     if est["usd"] > max_usd:
         raise SystemExit(f"estimated ${est['usd']:.2f} exceeds --max-usd {max_usd:.2f}")
+    fn = get_fn()
     local = Path(out_dir or f"data/sapling/{run_name}")
     local.mkdir(parents=True, exist_ok=True)
     t0 = time.time()

@@ -14,7 +14,7 @@ The values were computed from those files with the replay's own rules (`backend/
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐ 0
-│ HEADER (96 px)  Task · Budget · [mode tag]                              Race clock 07:30  │
+│ HEADER  Busy Machines · compute intelligence for training sweeps  Task · Budget · [tag]   │
 ├────────────────────────────────────────────┬─────────────────────────────────────────────┤ 96
 │ Standard AI assistant                      │ Busy Machines                               │
 │ Opus 5.5                                   │ Opus 5.5                                    │
@@ -38,13 +38,16 @@ The values were computed from those files with the replay's own rules (`backend/
 
 | Element | Exact label / text | Source | Update | Sample: game-playing (R78 s0) | Sample: tabular (R82 s0) |
 |---|---|---|---|---|---|
+| Product title (top left, every mode) | **"Busy Machines"** with the subtitle **"compute intelligence for training sweeps"** (D54). Never "AI research agent" or "research assistant" | static text | static | Busy Machines · compute intelligence for training sweeps | Busy Machines · compute intelligence for training sweeps |
 | Task | "Game-playing AI" / "Tabular model tuning" / "Image recognition" | race `config.target` mapped as in `demo.md` §1 (`rl` / `lcbench` / `cifar`) | static | Game-playing AI | Tabular model tuning |
 | Budget | "15 min · up to $8.00 per side · 30 machines each" | `config.budget_s`, `cost_cap_usd` (per side), `gpus_per_arm` | static | 15 min · up to $8.00 per side · 30 machines each | 15 min · up to $9.20 per side · 16 machines each |
 | Goal | "Goal: −170" (small, next to the budget) | `config.target_value` | static | Goal: −170 | Goal: 0.78 |
-| Mode tag (top right, always visible) | Replay: **"Replay of logged race R78 seed 0 · 30× speed"**. Demo: **"Demo run, not a benchmark result"** | replay CLI args / `config.demo_label` (code constant `DEMO_LABEL`: "demo run for the video, not a benchmark result") | static | Replay of logged race R78 seed 0 · 30× speed | Replay of logged race R82 seed 0 · 30× speed |
+| Mode tag (top right, always visible) | Replay: **"Replay of logged race R78, run 1 of 3 · 30× speed"**. Demo: **"Demo run, not a benchmark result"** | replay CLI args / `config.demo_label` (code constant `DEMO_LABEL`: "demo run for the video, not a benchmark result") | static | Replay of logged race R78, run 1 of 3 · 30× speed | Replay of logged race R82, run 1 of 3 · 30× speed |
 | Race clock | "07:30 / 15:00" (race time, not wall time) | event `ts` minus race start | 1 Hz in race time | 07:30 / 15:00 | 07:30 / 15:00 |
 
-Demo race header (preset `demo-cifar-modal-5m`): "Image recognition · 5 min · up to $3.00 per side · 3 GPUs each" + "Demo run, not a benchmark result". The word "Live" may appear only in the demo run, never over a replay.
+Header order, left to right: product title, task · budget · goal, mode tag, race clock (the diagram in §1 leaves the clock out for width). The title is the only positioning copy on screen; it never claims a result.
+
+Demo race header (preset `demo-cifar-modal-5m`): "Image recognition · 5 min · up to $3.00 per side · 3 L4 GPUs each" + "Demo run, not a benchmark result". The word "Live" may appear only in the demo run, never over a replay.
 
 ## 3. Per-column elements
 
@@ -122,8 +125,8 @@ Don't normalise to a 0–100 bar unless the backend supplies that number: the sh
 This counts Busy Machines' own checker in the race (D40), not our Sapling fine-tune, which runs offline only (D28, R81).
 
 ## 4. Footer (one line, 18 px)
-Replay R78: "Game-playing: logged race R78, seed 0 of 3 · 3-run result: a tie, for a quarter of the AI bill (R78) · AI $ at list price · every number: docs/results_log.md"
-Replay R82: "Tabular: logged race R82, seed 0 of 3 · standard assistant ahead in every run (R82) · R82's pace was chosen after the first pre-registered setting FAILED (R75) · AI $ at list price · simulated machine time"
+Replay R78: "Game-playing: logged race R78, run 1 of 3 · 3-run result: a tie, for a quarter of the AI bill (R78) · AI $ at list price · every number: docs/results_log.md"
+Replay R82: "Tabular: logged race R82, run 1 of 3 · standard assistant ahead in every run (R82) · R82's pace was chosen after the first pre-registered setting FAILED (R75) · AI $ at list price · simulated machine time"
 Demo: "Demo run, not a benchmark result · benchmark numbers: R78, R82, R75 in docs/results_log.md"
 
 R75 always sits beside R82. R84's corrections apply to R75, R78 and R82 cells (e.g. the shipped model came from the tuner in 3 of 3 R78 races).
@@ -138,7 +141,7 @@ R75 always sits beside R82. R84's corrections apply to R75, R78 and R82 cells (e
 Mock frames to draw: Empty, Running at 5:00 (R78 s0 values), Finished (R78 s0), plus one Finished frame with R82 s0 values (footer with R75).
 
 ## 6. Never show
-- **Jargon as a label:** adapter, val_bpb, held-out, RL, PPO, idle %, utilisation, sampler, trap, surrogate, fingerprint, judge, propose, Optuna, seed spread, arm. (Raw metric names only on hover.)
+- **Jargon as a label:** adapter, val_bpb, held-out, RL, PPO, idle %, utilisation, sampler, trap, surrogate, fingerprint, judge, propose, Optuna, seed, seed spread, arm. (Raw metric names only on hover.)
 - **Unlogged numbers:** no projections, ratios, "x× cheaper", time-to-goal estimates or GPU use % without a real source. Numbers from the demo run are never presented as a result.
 - **Mubit claims:** no "Served by Mubit", "Mubit's model answering" or any Mubit-arm number (no adapter has served a call, R70, R79). No "Learned from your correction".
 - **Over a replay:** "Live", "right now", or the Modal panel.

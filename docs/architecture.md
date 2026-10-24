@@ -256,6 +256,7 @@ adapter_versions  id, step_type, version, status, trained_at, notes, created_at 
 | GET | `/api/races` | list races; `?replayable=true` lists finished races from every replay source |
 | GET | `/api/races/{id}` | state and summary stats |
 | GET | `/api/races/{id}/export.jsonl` | the verification dump |
+| GET | `/api/races/{id}/modal` | live Modal view per arm (demo races on per-arm apps only, else `enabled: false`; `?history=N`): containers, calls in flight, backlog, GPU % / memory, Modal call ids (`docs/dashboard_modal.md`) |
 | POST | `/api/races/{id}/replay` | build a replay (`speed` up to 1000×, `max_gap_s`, `metric_stride`) |
 | GET | `/api/replays`, `/api/replays/{id}` | replay sessions |
 | POST | `/api/experiments/{id}/flag` | human correction (fake improvement) |
@@ -265,7 +266,7 @@ adapter_versions  id, step_type, version, status, trained_at, notes, created_at 
 | WS | `/ws/races/{id}` | live event stream |
 | WS | `/ws/replays/{id}` | replayed event stream |
 
-**WebSocket events:** `gpu_state`, `experiment_started`, `metric`, `experiment_finished`, `new_best`, `llm_call`, `correction`, `race_finished`. A late subscriber gets the race's history replayed.
+**WebSocket events:** `gpu_state`, `experiment_started`, `metric`, `experiment_finished`, `new_best`, `llm_call`, `correction`, `race_finished`. A late subscriber gets the race's history replayed. Demo races on per-arm Modal apps also get `modal_stats` (one per arm every ~2 s, published by the app, not by the engine; not stored in the DB or the bus history, so never replayed), and with `gpu_telemetry_s` they stream `gpu_util_pct` / `gpu_mem_mb` metric points sampled inside the Modal containers.
 
 **Replay** (`backend/replay.py`, the demo fallback): rebuilds a finished race's event stream from stored rows (app DB, read-only `.db` files or JSONL exports; extra sources in `BUSY_MACHINES_REPLAY_SOURCES`) and plays it at N× real time. Each event is the live JSON plus `is_replay: true`, `replay_id` and `race_elapsed_s`, so the screen can say it's a replay (`demo.md` §4). Stored rows are only read. Metric and new-best timestamps are approximate; corrections made after the race aren't included. CLI: `python -m backend.replay <race_id> --speed 10 --db data/bench/bench.db`.
 

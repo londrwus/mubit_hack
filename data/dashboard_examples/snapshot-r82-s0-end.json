@@ -1,0 +1,1364 @@
+{
+ "schema": "busy-machines.dashboard/1",
+ "race_id": "c1f4b1d9fc324deeae52ed34beba9e42",
+ "ts": 1792861252.219872,
+ "race_elapsed_s": 900.0,
+ "clock": "15:00 / 15:00",
+ "status": "finished",
+ "finish_reason": "budget",
+ "finished_text": "Finished \u00b7 15:00",
+ "header": {
+  "race_id": "c1f4b1d9fc324deeae52ed34beba9e42",
+  "race_name": "LCBench wide 15 min (16 slots, runs x0.1), Busy Machines with Opus + planner cadence 30 s seed 0",
+  "title": "Busy Machines",
+  "subtitle": "compute intelligence for training sweeps",
+  "task": "Tabular model tuning",
+  "target": "lcbench",
+  "budget_s": 900.0,
+  "cost_cap_usd": 9.2,
+  "gpus_per_arm": 16,
+  "budget_text": "15 min \u00b7 up to $9.20 per side \u00b7 16 machines each",
+  "goal": 0.78,
+  "goal_text": "Goal: 0.78",
+  "direction": "max",
+  "higher_is_better": true,
+  "score_decimals": 4,
+  "machines": {
+   "label": "Machines",
+   "caption": "16 GPUs, simulated machine time",
+   "count": 16,
+   "hardware": "L4",
+   "simulated": true,
+   "waiting_label": "Machines waiting"
+  },
+  "arms": [
+   {
+    "kind": "opus",
+    "label": "Standard AI assistant",
+    "sublabel": "Opus 5.5",
+    "side": "left",
+    "uses_ai": true,
+    "n_slots": 16,
+    "hardware": "L4",
+    "price_per_slot_s": 0.000222,
+    "model": "claude-opus-5-5",
+    "features": [],
+    "feature_labels": []
+   },
+   {
+    "kind": "opus_bm",
+    "label": "Busy Machines",
+    "sublabel": "Opus 5.5",
+    "side": "right",
+    "uses_ai": true,
+    "n_slots": 16,
+    "hardware": "L4",
+    "price_per_slot_s": 0.000222,
+    "model": "claude-opus-5-5",
+    "features": [
+     "backfill",
+     "judge_policy",
+     "lean_planner",
+     "planner_cadence"
+    ],
+    "feature_labels": [
+     "keeps GPUs busy with a no-AI sampler while the AI thinks",
+     "checks every claimed improvement (AI for leaks, seed-spread rule for noise)",
+     "shorter planner replies: only the settings it changes",
+     "calls the AI planner at most every N seconds; the no-AI sampler keeps GPUs busy in between"
+    ]
+   },
+   {
+    "kind": "optuna",
+    "label": "No-AI tuner",
+    "sublabel": "no AI",
+    "side": "secondary",
+    "uses_ai": false,
+    "n_slots": 16,
+    "hardware": "L4",
+    "price_per_slot_s": 0.000222,
+    "model": null,
+    "features": [],
+    "feature_labels": []
+   }
+  ],
+  "mode": "replay",
+  "is_replay": true,
+  "replay": null,
+  "race_mode": "benchmark",
+  "llm": "mubit",
+  "runner": "surrogate",
+  "preset": "lcbench-wide-bm-c30-15m",
+  "demo_run": false,
+  "demo_label": null,
+  "mode_tag": "Replay of logged race R82, run 1 of 3",
+  "logged_race": {
+   "ref": "R82",
+   "run": 1,
+   "runs": 3
+  },
+  "seed": 0,
+  "started_at": 1792860352.219872,
+  "stored_status": "finished",
+  "ai_cost_note": "AI $ at list price (estimate)",
+  "gpu_cost_note": "simulated machine time"
+ },
+ "arms": [
+  {
+   "kind": "opus",
+   "label": "Standard AI assistant",
+   "sublabel": "Opus 5.5",
+   "side": "left",
+   "uses_ai": true,
+   "n_slots": 16,
+   "slots": [
+    {
+     "slot_id": "surrogate-l4-0",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-1",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-2",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-3",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-4",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-5",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-6",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-7",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-8",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-9",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-10",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-11",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-12",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-13",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-14",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-15",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    }
+   ],
+   "slot_counts": {
+    "busy": 0,
+    "waiting": 0,
+    "cancelled": 0,
+    "off": 16
+   },
+   "working_now": 0,
+   "open_now": 0,
+   "waiting_now_pct": null,
+   "waiting_so_far_pct": 26.247592439254124,
+   "busy_s": 10620.347,
+   "idle_s": 3779.653,
+   "ai_bill_usd": 3.0091246000000003,
+   "gpu_bill_usd": 3.1968000000000005,
+   "total_usd": 6.205924600000001,
+   "llm_calls": 205,
+   "llm_invalid_calls": 1,
+   "experiments_started": 435,
+   "started_by_source": {
+    "baseline": 1,
+    "llm": 434
+   },
+   "experiments_finished": 420,
+   "finished_by_source": {
+    "baseline": 1,
+    "llm": 419
+   },
+   "experiments_failed": 0,
+   "experiments_cancelled": 0,
+   "model_quality": {
+    "best": 0.890462338924408,
+    "best_text": "0.8905",
+    "experiment_id": "d1bab9f3c66140b28803346a919ccf46",
+    "at_s": 897.05,
+    "source": "llm",
+    "baseline": 0.4369393289089203,
+    "series": [
+     [
+      6.545,
+      0.4369393289089203
+     ],
+     [
+      13.325,
+      0.6692701578140259
+     ],
+     [
+      16.181,
+      0.7059524059295654
+     ],
+     [
+      17.419,
+      0.7627227902412415
+     ],
+     [
+      24.421,
+      0.8248981833457947
+     ],
+     [
+      56.107,
+      0.8408550024032593
+     ],
+     [
+      79.55,
+      0.8436357975006104
+     ],
+     [
+      79.844,
+      0.8487391471862793
+     ],
+     [
+      91.779,
+      0.8521260619163513
+     ],
+     [
+      108.929,
+      0.8533751964569092
+     ],
+     [
+      120.698,
+      0.8575358986854553
+     ],
+     [
+      134.925,
+      0.8672868609428406
+     ],
+     [
+      169.248,
+      0.8701418042182922
+     ],
+     [
+      171.73,
+      0.8746944665908813
+     ],
+     [
+      197.928,
+      0.8775168657302856
+     ],
+     [
+      207.347,
+      0.8775386214256287
+     ],
+     [
+      220.381,
+      0.8806153535842896
+     ],
+     [
+      226.416,
+      0.8848565816879272
+     ],
+     [
+      268.943,
+      0.8853630423545837
+     ],
+     [
+      269.246,
+      0.8864123225212097
+     ],
+     [
+      305.009,
+      0.8869907259941101
+     ],
+     [
+      305.855,
+      0.8871379494667053
+     ],
+     [
+      310.808,
+      0.8873291611671448
+     ],
+     [
+      341.21,
+      0.8875153660774231
+     ],
+     [
+      343.854,
+      0.8881148099899292
+     ],
+     [
+      415.904,
+      0.8884519934654236
+     ],
+     [
+      432.815,
+      0.8886858820915222
+     ],
+     [
+      456.165,
+      0.888726532459259
+     ],
+     [
+      466.158,
+      0.8887349963188171
+     ],
+     [
+      476.157,
+      0.889001190662384
+     ],
+     [
+      476.878,
+      0.8895066380500793
+     ],
+     [
+      521.531,
+      0.8899189829826355
+     ],
+     [
+      561.592,
+      0.8903111815452576
+     ],
+     [
+      646.967,
+      0.8904215693473816
+     ],
+     [
+      687.308,
+      0.8904249668121338
+     ],
+     [
+      705.302,
+      0.890428364276886
+     ],
+     [
+      897.05,
+      0.890462338924408
+     ]
+    ],
+    "goal_reached_at_s": 24.421,
+    "goal_reached_text": "Goal reached at 0:24"
+   },
+   "checks": {
+    "valid": 0,
+    "invalid": 2,
+    "unsure": 31,
+    "none": 0,
+    "claims_rejected_not_fake": 2
+   },
+   "fakes_caught": 0,
+   "fakes": [],
+   "planner": {
+    "thinking": false,
+    "since_s": null,
+    "calls": 171,
+    "last_k": 1,
+    "thinking_s": 752.459
+   },
+   "reported_best": {
+    "experiment_id": "9c8c6db158504fcda49047cc02f9e4e2",
+    "score": 0.8913986682891846,
+    "at_s": 707.423,
+    "source": "llm"
+   },
+   "final": {
+    "arm": "opus",
+    "best_score": 0.890462338924408,
+    "best_experiment_id": "d1bab9f3c66140b28803346a919ccf46",
+    "experiments_finished": 420,
+    "experiments_failed": 0,
+    "gpu_cost_usd": 3.1968000000000005,
+    "llm_cost_usd": 3.0091246000000003,
+    "gpu_idle_pct": 26.247592439254124,
+    "time_to_target_s": 24.421173572540283,
+    "cost_to_target_usd": 0.14216840852966306,
+    "llm_calls": 205,
+    "llm_invalid_calls": 1,
+    "llm_p50_latency_ms": 3605.7119000470266,
+    "total_cost_usd": 6.205924600000001
+   }
+  },
+  {
+   "kind": "opus_bm",
+   "label": "Busy Machines",
+   "sublabel": "Opus 5.5",
+   "side": "right",
+   "uses_ai": true,
+   "n_slots": 16,
+   "slots": [
+    {
+     "slot_id": "surrogate-l4-0",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-1",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-2",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-3",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-4",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-5",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-6",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-7",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-8",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-9",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-10",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-11",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-12",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-13",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-14",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-15",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    }
+   ],
+   "slot_counts": {
+    "busy": 0,
+    "waiting": 0,
+    "cancelled": 0,
+    "off": 16
+   },
+   "working_now": 0,
+   "open_now": 0,
+   "waiting_now_pct": null,
+   "waiting_so_far_pct": 0.4968946592675315,
+   "busy_s": 14328.447,
+   "idle_s": 71.553,
+   "ai_bill_usd": 0.6739372,
+   "gpu_bill_usd": 3.1968000000000014,
+   "total_usd": 3.8707372000000015,
+   "llm_calls": 68,
+   "llm_invalid_calls": 0,
+   "experiments_started": 777,
+   "started_by_source": {
+    "baseline": 1,
+    "sampler": 536,
+    "llm": 240
+   },
+   "experiments_finished": 761,
+   "finished_by_source": {
+    "sampler": 528,
+    "baseline": 1,
+    "llm": 232
+   },
+   "experiments_failed": 0,
+   "experiments_cancelled": 0,
+   "model_quality": {
+    "best": 0.8903366327285767,
+    "best_text": "0.8903",
+    "experiment_id": "83632680d8f24f28bc8ca81e196446f5",
+    "at_s": 826.21,
+    "source": "llm",
+    "baseline": 0.4369393289089203,
+    "series": [
+     [
+      1.683,
+      0.3721562623977661
+     ],
+     [
+      2.425,
+      0.4734914004802704
+     ],
+     [
+      4.407,
+      0.6713516116142273
+     ],
+     [
+      7.431,
+      0.6829026341438293
+     ],
+     [
+      11.796,
+      0.7052189111709595
+     ],
+     [
+      17.678,
+      0.749339759349823
+     ],
+     [
+      18.862,
+      0.7600231170654297
+     ],
+     [
+      31.575,
+      0.7745994329452515
+     ],
+     [
+      33.781,
+      0.799323558807373
+     ],
+     [
+      35.081,
+      0.8063352108001709
+     ],
+     [
+      46.981,
+      0.8089956641197205
+     ],
+     [
+      48.867,
+      0.8193581104278564
+     ],
+     [
+      53.932,
+      0.8275614380836487
+     ],
+     [
+      77.85,
+      0.8326215744018555
+     ],
+     [
+      78.617,
+      0.8387758731842041
+     ],
+     [
+      81.671,
+      0.8522170782089233
+     ],
+     [
+      113.789,
+      0.8533638119697571
+     ],
+     [
+      115.747,
+      0.8669792413711548
+     ],
+     [
+      146.508,
+      0.8716933131217957
+     ],
+     [
+      180.322,
+      0.878416121006012
+     ],
+     [
+      235.541,
+      0.8790245056152344
+     ],
+     [
+      236.292,
+      0.8811530470848083
+     ],
+     [
+      244.4,
+      0.884490430355072
+     ],
+     [
+      307.252,
+      0.8866541385650635
+     ],
+     [
+      340.496,
+      0.887738823890686
+     ],
+     [
+      394.71,
+      0.8881673216819763
+     ],
+     [
+      455.649,
+      0.8894913792610168
+     ],
+     [
+      515.791,
+      0.8899189829826355
+     ],
+     [
+      584.227,
+      0.890334963798523
+     ],
+     [
+      826.21,
+      0.8903366327285767
+     ]
+    ],
+    "goal_reached_at_s": 33.781,
+    "goal_reached_text": "Goal reached at 0:33"
+   },
+   "checks": {
+    "valid": 34,
+    "invalid": 4,
+    "unsure": 0,
+    "none": 0,
+    "claims_rejected_not_fake": 0
+   },
+   "fakes_caught": 4,
+   "fakes": [
+    {
+     "experiment_id": "341046b5347f41f79c667a3ce5a2e02a",
+     "at_s": 8.749,
+     "ts": 1792860360.9688916,
+     "claimed": 0.23188018798828125,
+     "real": null,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "0:08 \u00b7 claimed 0.2319 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "f684b88254f84213befc4e490dcab6d3",
+     "at_s": 10.453,
+     "ts": 1792860362.6730702,
+     "claimed": 0.36810123920440674,
+     "real": null,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "0:10 \u00b7 claimed 0.3681 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "8d4a642fcf984cbea398678abbc501b8",
+     "at_s": 13.848,
+     "ts": 1792860366.0679836,
+     "claimed": 0.5354431867599487,
+     "real": null,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "0:13 \u00b7 claimed 0.5354 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "66f1116e40634128bccfa3ac759df15c",
+     "at_s": 20.094,
+     "ts": 1792860372.3139565,
+     "claimed": 0.7028313875198364,
+     "real": null,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "0:20 \u00b7 claimed 0.7028 (tested on data it had already seen)"
+    }
+   ],
+   "planner": {
+    "thinking": false,
+    "since_s": null,
+    "calls": 30,
+    "last_k": 8,
+    "thinking_s": 154.314
+   },
+   "reported_best": {
+    "experiment_id": "83632680d8f24f28bc8ca81e196446f5",
+    "score": 0.8913374543190002,
+    "at_s": 828.26,
+    "source": "llm"
+   },
+   "final": {
+    "arm": "opus_bm",
+    "best_score": 0.8903366327285767,
+    "best_experiment_id": "83632680d8f24f28bc8ca81e196446f5",
+    "experiments_finished": 761,
+    "experiments_failed": 0,
+    "gpu_cost_usd": 3.1968000000000014,
+    "llm_cost_usd": 0.6739372,
+    "gpu_idle_pct": 0.4968946592675315,
+    "time_to_target_s": 33.780964851379395,
+    "cost_to_target_usd": 0.1899843871520996,
+    "llm_calls": 68,
+    "llm_invalid_calls": 0,
+    "llm_p50_latency_ms": 2314.4931499264203,
+    "total_cost_usd": 3.8707372000000015
+   }
+  },
+  {
+   "kind": "optuna",
+   "label": "No-AI tuner",
+   "sublabel": "no AI",
+   "side": "secondary",
+   "uses_ai": false,
+   "n_slots": 16,
+   "slots": [
+    {
+     "slot_id": "surrogate-l4-0",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-1",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-2",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-3",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-4",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-5",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-6",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-7",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-8",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-9",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-10",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-11",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-12",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-13",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-14",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "surrogate-l4-15",
+     "state": "off",
+     "since_s": 900.0,
+     "experiment_id": null,
+     "source": null
+    }
+   ],
+   "slot_counts": {
+    "busy": 0,
+    "waiting": 0,
+    "cancelled": 0,
+    "off": 16
+   },
+   "working_now": 0,
+   "open_now": 0,
+   "waiting_now_pct": null,
+   "waiting_so_far_pct": 2.4781488180160522,
+   "busy_s": 14043.147,
+   "idle_s": 356.853,
+   "ai_bill_usd": 0.0,
+   "gpu_bill_usd": 3.1968000000000028,
+   "total_usd": 3.1968000000000028,
+   "llm_calls": 0,
+   "llm_invalid_calls": 0,
+   "experiments_started": 1521,
+   "started_by_source": {
+    "baseline": 1,
+    "optuna": 1520
+   },
+   "experiments_finished": 1506,
+   "finished_by_source": {
+    "optuna": 1505,
+    "baseline": 1
+   },
+   "experiments_failed": 0,
+   "experiments_cancelled": 0,
+   "model_quality": {
+    "best": 0.8389838933944702,
+    "best_text": "0.8390",
+    "experiment_id": "3a898abd915f40a4aa524a5fcc072568",
+    "at_s": 884.776,
+    "source": "optuna",
+    "baseline": 0.4369393289089203,
+    "series": [
+     [
+      1.715,
+      0.3721562623977661
+     ],
+     [
+      2.487,
+      0.4734914004802704
+     ],
+     [
+      4.452,
+      0.6713516116142273
+     ],
+     [
+      7.491,
+      0.6829026341438293
+     ],
+     [
+      8.49,
+      0.7063618302345276
+     ],
+     [
+      10.949,
+      0.7247393131256104
+     ],
+     [
+      15.076,
+      0.7418368458747864
+     ],
+     [
+      17.879,
+      0.7536685466766357
+     ],
+     [
+      20.901,
+      0.7543200254440308
+     ],
+     [
+      23.494,
+      0.766777753829956
+     ],
+     [
+      34.878,
+      0.7721109986305237
+     ],
+     [
+      43.744,
+      0.7762988805770874
+     ],
+     [
+      58.141,
+      0.7778551578521729
+     ],
+     [
+      66.097,
+      0.7785334587097168
+     ],
+     [
+      74.289,
+      0.7797594666481018
+     ],
+     [
+      80.383,
+      0.7798249125480652
+     ],
+     [
+      87.369,
+      0.7810679078102112
+     ],
+     [
+      89.212,
+      0.7814136147499084
+     ],
+     [
+      99.374,
+      0.782551646232605
+     ],
+     [
+      114.635,
+      0.7830891609191895
+     ],
+     [
+      119.099,
+      0.7847712635993958
+     ],
+     [
+      122.286,
+      0.7853133082389832
+     ],
+     [
+      128.1,
+      0.7853193283081055
+     ],
+     [
+      133.148,
+      0.7866340279579163
+     ],
+     [
+      139.815,
+      0.7876204252243042
+     ],
+     [
+      150.672,
+      0.7893303632736206
+     ],
+     [
+      156.073,
+      0.7913548350334167
+     ],
+     [
+      166.148,
+      0.7926797270774841
+     ],
+     [
+      176.719,
+      0.795533299446106
+     ],
+     [
+      191.18,
+      0.7983103394508362
+     ],
+     [
+      213.288,
+      0.7993540167808533
+     ],
+     [
+      227.122,
+      0.801948606967926
+     ],
+     [
+      247.476,
+      0.8032421469688416
+     ],
+     [
+      263.759,
+      0.8033126592636108
+     ],
+     [
+      268.931,
+      0.8044641613960266
+     ],
+     [
+      280.326,
+      0.8045147657394409
+     ],
+     [
+      283.488,
+      0.8045976758003235
+     ],
+     [
+      283.574,
+      0.8052547574043274
+     ],
+     [
+      288.894,
+      0.8056157827377319
+     ],
+     [
+      291.084,
+      0.8074386715888977
+     ],
+     [
+      327.129,
+      0.8075156807899475
+     ],
+     [
+      333.51,
+      0.8080688118934631
+     ],
+     [
+      334.336,
+      0.8108664155006409
+     ],
+     [
+      347.261,
+      0.8109329342842102
+     ],
+     [
+      361.062,
+      0.8117515444755554
+     ],
+     [
+      372.318,
+      0.8147623538970947
+     ],
+     [
+      406.015,
+      0.8157451152801514
+     ],
+     [
+      426.605,
+      0.8165172338485718
+     ],
+     [
+      439.742,
+      0.8194472193717957
+     ],
+     [
+      475.045,
+      0.8197614550590515
+     ],
+     [
+      486.417,
+      0.8202900886535645
+     ],
+     [
+      488.412,
+      0.8211808204650879
+     ],
+     [
+      523.034,
+      0.8226293325424194
+     ],
+     [
+      528.458,
+      0.8236451148986816
+     ],
+     [
+      534.857,
+      0.8242030143737793
+     ],
+     [
+      540.441,
+      0.8250775337219238
+     ],
+     [
+      565.175,
+      0.8284663558006287
+     ],
+     [
+      621.807,
+      0.8296998143196106
+     ],
+     [
+      689.181,
+      0.8317961692810059
+     ],
+     [
+      727.446,
+      0.8338723182678223
+     ],
+     [
+      770.113,
+      0.8340473175048828
+     ],
+     [
+      843.625,
+      0.8372414112091064
+     ],
+     [
+      884.776,
+      0.8389838933944702
+     ]
+    ],
+    "goal_reached_at_s": 87.369,
+    "goal_reached_text": "Goal reached at 1:27"
+   },
+   "checks": {
+    "valid": 0,
+    "invalid": 0,
+    "unsure": 0,
+    "none": 0,
+    "claims_rejected_not_fake": 0
+   },
+   "fakes_caught": 0,
+   "fakes": [],
+   "planner": {
+    "thinking": false,
+    "since_s": null,
+    "calls": 0,
+    "last_k": null,
+    "thinking_s": 0.0
+   },
+   "reported_best": {
+    "experiment_id": "18ca55d062074851a59da26501d0e2b2",
+    "score": 0.832572340965271,
+    "at_s": 898.792,
+    "source": "optuna"
+   },
+   "final": {
+    "arm": "optuna",
+    "best_score": 0.8389838933944702,
+    "best_experiment_id": "3a898abd915f40a4aa524a5fcc072568",
+    "experiments_finished": 1506,
+    "experiments_failed": 0,
+    "gpu_cost_usd": 3.1968000000000028,
+    "llm_cost_usd": 0.0,
+    "gpu_idle_pct": 2.4781488180160522,
+    "time_to_target_s": 87.36920833587646,
+    "cost_to_target_usd": 0.3103354280090329,
+    "llm_calls": 0,
+    "llm_invalid_calls": 0,
+    "llm_p50_latency_ms": null,
+    "total_cost_usd": 3.1968000000000028
+   }
+  }
+ ],
+ "feed": [
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "341046b5347f41f79c667a3ce5a2e02a",
+   "at_s": 8.749,
+   "ts": 1792860360.9688916,
+   "claimed": 0.23188018798828125,
+   "real": null,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:08 \u00b7 claimed 0.2319 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "f684b88254f84213befc4e490dcab6d3",
+   "at_s": 10.453,
+   "ts": 1792860362.6730702,
+   "claimed": 0.36810123920440674,
+   "real": null,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:10 \u00b7 claimed 0.3681 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "8d4a642fcf984cbea398678abbc501b8",
+   "at_s": 13.848,
+   "ts": 1792860366.0679836,
+   "claimed": 0.5354431867599487,
+   "real": null,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:13 \u00b7 claimed 0.5354 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "66f1116e40634128bccfa3ac759df15c",
+   "at_s": 20.094,
+   "ts": 1792860372.3139565,
+   "claimed": 0.7028313875198364,
+   "real": null,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:20 \u00b7 claimed 0.7028 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "goal_reached",
+   "arm": "opus",
+   "at_s": 24.421,
+   "ts": 1792860376.6410456,
+   "experiment_id": "d4d90b9d3d80435a83ded29362d9c83a",
+   "quality": 0.8248981833457947,
+   "text": "Goal reached at 0:24"
+  },
+  {
+   "kind": "goal_reached",
+   "arm": "opus_bm",
+   "at_s": 33.781,
+   "ts": 1792860386.0008368,
+   "experiment_id": "0c580fa765c947e199a43163d0a79845",
+   "quality": 0.799323558807373,
+   "text": "Goal reached at 0:33"
+  },
+  {
+   "kind": "goal_reached",
+   "arm": "optuna",
+   "at_s": 87.369,
+   "ts": 1792860439.5890803,
+   "experiment_id": "d6b70352d47b4cb3b6b2fcb18f426d68",
+   "quality": 0.7810679078102112,
+   "text": "Goal reached at 1:27"
+  }
+ ],
+ "n_events": 11821
+}

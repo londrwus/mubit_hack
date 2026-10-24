@@ -340,8 +340,9 @@ async def test_trap_configs_from_the_sampler_are_caught_by_the_checker(sigma_tab
     import inspect
 
     assert list(inspect.signature(BackfillSampler.tell).parameters) == ["self", "experiment_id", "config", "value"]
+    # (isolation = where the study runs, thread or child process: never trap information)
     assert list(inspect.signature(BackfillSampler.__init__).parameters) == ["self", "spec", "seed",
-                                                                           "n_startup_trials"]
+                                                                           "n_startup_trials", "isolation"]
 
 
 # =========================================================================== D44 with backfill on
@@ -484,7 +485,7 @@ async def test_manifest_and_export_record_the_sources(tmp_path: Path, sigma_tabl
     bf = m["engine"]["per_arm"]["opus_bm"]["backfill"]
     assert bf == {"sampler": "optuna-tpe", "seed": cfg.seed, "n_startup_trials": 10, "constant_liar": True,
                   "direction": "minimize", "feedback": "worst_on_rejected", "llm_first": True,
-                  "label": ENGINE_FEATURE_LABELS["backfill"]}
+                  "label": ENGINE_FEATURE_LABELS["backfill"], "isolation": "thread"}   # a dev race
     assert m["differs_only_in"]["opus_bm"]["engine_features"] == ["backfill", "judge_policy", "lean_planner"]
     assert any("backfill" in c for c in m["engine"]["checks"])
     path = export_race(db, eng.race_id, tmp_path / "r.jsonl")

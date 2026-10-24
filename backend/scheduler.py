@@ -138,9 +138,12 @@ from backend.core.events import (
     ExperimentFinishedEvent,
     ExperimentStartedEvent,
     GpuStateEvent,
+    JudgeVerdictEvent,
     LLMCallEvent,
     MetricEvent,
     NewBestEvent,
+    PlannerFinishedEvent,
+    PlannerStartedEvent,
     RaceFinishedEvent,
 )
 from backend.core.types import (
@@ -224,8 +227,12 @@ class EventBus:
         self._history: dict[str, deque[Event]] = defaultdict(lambda: deque(maxlen=history_limit))
         self._global: list[Callable[[Event], None]] = []
 
-    def publish(self, event: Event) -> None:
-        self._history[event.race_id].append(event)
+    def publish(self, event: Event, *, keep: bool = True) -> None:
+        """``keep=False``: deliver to subscribers and listeners but leave it out of the history
+        (live-only readings such as ``modal_stats``, which a late subscriber must not replay and
+        which must not make a race look as if it ran in this process)."""
+        if keep:
+            self._history[event.race_id].append(event)
         for q in list(self._subs.get(event.race_id, ())):
             q.put_nowait(event)
         for fn in self._global:
@@ -273,6 +280,10 @@ class ExperimentSnapshot(BaseModel):
     verdict: Verdict | None = None
     diagnosis: dict[str, Any] | None = None
     summary: dict[str, Any] | None = None
+    # A human (or verifier) correction (``ArmRunner.apply_correction``): not the judge policy's
+    # label (D44). The planner must rank runs the way ``_eligible`` does, so it sees them.
+    flagged_fake: bool = False            # "fake improvement": never a best, score not shown
+    override_genuine: bool = False        # "genuine": counts even if the LLM judge said invalid
 
 
 class ResearchDigest(BaseModel):
@@ -402,6 +413,10 @@ def llm_policy_of(researcher: Any) -> dict[str, Any] | None:
         "max_retries": getattr(r, "max_retries", None),
         "has_fallback": getattr(r, "fallback_llm", None) is not None or getattr(r, "fallback_model", None) is not None,
         "fallback_model": getattr(r, "fallback_model", None),
+        # Record mode a fallback attempt is sent with (MubitClient: always "off", so it cannot be
+        # routed to an adapter); None for a client without the rule (mock LLM, test fakes).
+        "fallback_record": getattr(getattr(r, "fallback_llm", None) or getattr(r, "llm", None),
+                                   "fallback_record", None),
         "propose_prompt": setup.get("prompt_version"),
         "propose_effort": setup.get("effort"),
     }
@@ -487,6 +502,22 @@ def target_default_budget_s(cfg: RaceConfig, spec: TargetSpec | None = None) -> 
         return float(spec.budget_s)
 
 
+def _durations(prefix: str, xs: list[float]) -> dict[str, float | None]:
+    """p50 / p95 / max of a list of durations in seconds (None when empty)."""
+    if not xs:
+        return {f"{prefix}_p50_s": None, f"{prefix}_p95_s": None, f"{prefix}_max_s": None}
+    s = sorted(xs)
+    return {f"{prefix}_p50_s": statistics.median(s), f"{prefix}_p95_s": s[min(len(s) - 1, int(0.95 * len(s)))],
+            f"{prefix}_max_s": s[-1]}
+
+
+def _cpu_proposers(engine: Any) -> list[Any]:
+    """The race's CPU-bound TPE proposers: backfill samplers and Optuna researchers."""
+    out = [st.sampler for st in engine.engine_states.values() if st.sampler is not None]
+    out += [d.researcher for d in engine.arm_deps if d.kind == ArmKind.optuna]
+    return out
+
+
 def resolve_engine_state(cfg: RaceConfig, kind: ArmKind, spec: TargetSpec, *,
                          default_budget_s: float | None = None,
                          tables: dict[str, Any] | None = None) -> EngineState:
@@ -509,8 +540,12 @@ def resolve_engine_state(cfg: RaceConfig, kind: ArmKind, spec: TargetSpec, *,
     if "backfill" in feats and kind != ArmKind.optuna:
         # Lazy import: optuna_arm imports this module (ExperimentSnapshot, Proposal, ...).
         from backend.agent.optuna_arm import BackfillSampler
+        from backend.agent.study_worker import proposer_isolation
 
-        st.sampler = BackfillSampler(spec, cfg.seed, n_startup_trials=BACKFILL_N_STARTUP_TRIALS)
+        # Benchmark races run the sampler's study in its own process (GIL isolation from the
+        # other arms and the event loop); same TPE settings and seed either way.
+        st.sampler = BackfillSampler(spec, cfg.seed, n_startup_trials=BACKFILL_N_STARTUP_TRIALS,
+                                     isolation=proposer_isolation(cfg.mode))
     st.params = cfg.params_for(kind)
     if "planner_cadence" in feats and kind != ArmKind.optuna:
         st.min_propose_interval_s = cfg.min_propose_interval_for(kind)
@@ -619,6 +654,35 @@ def summarize_result(spec: TargetSpec, status: ExperimentStatus, score: float | 
     return out
 
 
+def finished_quality(status: str, score: float | None, is_trap: bool, metrics: dict[str, Any] | None) -> float | None:
+    """``ExperimentFinishedEvent.quality``: ``metrics.quality`` of a succeeded run, else None
+    (the same rule for the live stream and the replay, backend/replay.py)."""
+    if status != ExperimentStatus.succeeded.value:
+        return None
+    return quality({"score": score, "is_trap": is_trap, "metrics": metrics or {}})
+
+
+def judge_verdict_event(race_id: str, kind: ArmKind, row: dict[str, Any], *, llm_verdict: Any = None,
+                        ts: float | None = None) -> JudgeVerdictEvent:
+    """``judge_verdict`` from an experiment row (live: ``_Exp.row``; replay: the stored row), so
+    both build the same payload. ``llm_verdict`` None falls back to the judge policy's record,
+    then to the final verdict (an arm without a judge policy has only the LLM's)."""
+    summary = row.get("summary") or {}
+    pol = summary.get("judge_policy") or {}
+    final = row.get("judge_verdict")
+    if llm_verdict is None:
+        llm_verdict = pol.get("llm_verdict") if pol else final
+    llm_v = getattr(llm_verdict, "value", llm_verdict)
+    trap = bool(row.get("is_trap"))
+    q = finished_quality(str(row.get("status")), row.get("score"), trap, row.get("metrics"))
+    kw: dict[str, Any] = {} if ts is None else {"ts": ts}
+    return JudgeVerdictEvent(
+        race_id=race_id, arm=kind, experiment_id=str(row["id"]), verdict=final, llm_verdict=llm_v,
+        llm_reason=(pol.get("llm_reason") if pol else row.get("judge_reason")), reason=row.get("judge_reason"),
+        claimed_score=row.get("score"), previous_best=summary.get("best_before"), is_trap=trap, quality=q,
+        source=row.get("source"), fake_caught=trap and final == Verdict.invalid.value, **kw)
+
+
 # =========================================================================== arm state
 
 
@@ -710,6 +774,7 @@ class _Exp:
             metrics=agent_visible_metrics(self.metrics), is_baseline=self.is_baseline,
             duration_s=(self.ended_at - self.started_at) if (self.ended_at and self.started_at) else None,
             verdict=self.planner_verdict, diagnosis=self.diagnosis, summary=planner_summary(self.summary),
+            flagged_fake=self.flagged_fake, override_genuine=self.override_genuine,
         )
 
     def row(self, race_id: str, runner: str) -> dict[str, Any]:
@@ -833,6 +898,13 @@ class ArmRunner:
         self._worst_score: float | None = None      # worst reported score seen (checker-gated feedback)
         self.backfill_batches = 0
         self.backfill_ask_s = 0.0
+        self.backfill_ask_each: list[float] = []      # wall time of every sampler ask (s)
+        # Shared-CPU evidence (review: GIL contention between the arms' proposers): the wall time
+        # of every Optuna-arm propose (a TPE ask) and this arm's event-loop lag (how late each
+        # monitor tick woke up, s). The event loop is shared, so the lag is the race's, seen by
+        # this arm's monitor.
+        self.proposer_ask_each: list[float] = []
+        self.loop_lag: list[float] = []
         self.backfill_dropped = 0                    # sampler proposals dropped by the deadline rule
         self.backfill_tells: dict[str, int] = {"raw": 0, "worst_on_rejected": 0, "fail_on_rejected": 0,
                                                "no_score": 0}
@@ -959,7 +1031,15 @@ class ArmRunner:
                 **self.engine.sampler.counts(), "batches": self.backfill_batches, "ask_s": self.backfill_ask_s,
                 "dropped_by_deadline_rule": self.backfill_dropped, "tells": dict(self.backfill_tells),
                 "error": self.backfill_error,
+                "isolation": getattr(self.engine.sampler, "isolation", "thread"),
+                **_durations("ask", self.backfill_ask_each),
             }
+        if self.kind == ArmKind.optuna:
+            extras["proposer"] = {"isolation": getattr(self.researcher, "isolation", "thread"),
+                                  "asks": len(self.proposer_ask_each), "ask_s": sum(self.proposer_ask_each),
+                                  **_durations("ask", self.proposer_ask_each)}
+        extras["event_loop_lag"] = {"tick_s": self.tick_s, "samples": len(self.loop_lag),
+                                    **_durations("lag", self.loop_lag)}
         return summary, extras
 
     def apply_correction(self, experiment_id: str, label: CorrectionLabel, *, recorded: bool = False) -> bool:
@@ -998,11 +1078,13 @@ class ArmRunner:
         s.closed, s.closed_at = True, t
         self.slots_released_early += 1
 
-    def _apply_cutoff(self, t: float) -> None:
-        """Deadline rule kicks in (once): drop buffered proposals, release idle slots."""
-        if self.cutoff_applied or self.cutoff_at is None:
-            return
-        self.cutoff_applied = True
+    def _drop_buffered(self, t: float) -> int:
+        """Deadline rule: cancel every buffered (proposed, not launched) proposal and count it.
+        Runs on EVERY ``_apply_cutoff`` call, not only the first: a propose / sampler ask that
+        was in flight when the cutoff passed lands its proposals after the one-time work, and
+        they must be dropped and counted the same way (not left pending until the shutdown
+        labels them "stopped at end of budget"). A dropped sampler proposal is told to the
+        sampler as no score (FAIL), so its TPE trial closes."""
         dropped = 0
         for buf in (self.buffer, self.sampler_buffer):
             while buf:
@@ -1014,7 +1096,21 @@ class ArmRunner:
                 dropped += 1
                 if buf is self.sampler_buffer:
                     self.backfill_dropped += 1
+                    if self.sampler is not None:
+                        self.sampler.tell(exp.id, exp.config, None)
         self.launches_skipped_deadline += dropped
+        return dropped
+
+    def _apply_cutoff(self, t: float) -> None:
+        """Deadline rule: drop buffered proposals (every call), then once release idle slots."""
+        if self.cutoff_at is None:
+            return
+        dropped = self._drop_buffered(t)
+        if self.cutoff_applied:
+            if dropped:
+                log.info("%s: deadline rule: %d late proposal(s) not launched", self.kind, dropped)
+            return
+        self.cutoff_applied = True
         for s in self.slots:
             if s.state == SlotState.idle and not s.closed:
                 self._release_slot(s, max(s.since, self.cutoff_at))
@@ -1047,7 +1143,10 @@ class ArmRunner:
                 self._apply_cutoff(t)
             if self.db is not None:
                 self.db.flush_metrics()
-            await asyncio.sleep(max(0.001, min(self.tick_s, self.deadline - t)))
+            want = max(0.001, min(self.tick_s, self.deadline - t))
+            t_sleep = now()
+            await asyncio.sleep(want)
+            self.loop_lag.append(max(0.0, now() - t_sleep - want))
 
     # ------------------------------------------------------------------ events / storage
 
@@ -1159,7 +1258,7 @@ class ArmRunner:
             self._emit(ExperimentStartedEvent(race_id=self.race_id, arm=self.kind, experiment_id=exp.id,
                                               slot_id=s.slot.slot_id, config=exp.config,
                                               hypothesis=exp.hypothesis, seed=exp.seed,
-                                              hardware=s.slot.hardware, ts=t))
+                                              hardware=s.slot.hardware, source=exp.source, ts=t))
             self.run_tasks[exp.id] = asyncio.create_task(self._run_experiment(exp, s), name=f"run-{exp.id[:8]}")
         if (self.sampler is not None and not self.buffer and self._live() and self._can_launch()
                 and self._free_count() > len(self.sampler_buffer)):
@@ -1187,6 +1286,7 @@ class ArmRunner:
                 t = now()
                 proposals = await asyncio.to_thread(sampler.ask_batch, want)
                 self.backfill_ask_s += now() - t
+                self.backfill_ask_each.append(now() - t)
                 self.backfill_batches += 1
                 if self.stopped:
                     return
@@ -1301,7 +1401,10 @@ class ArmRunner:
         self._emit(ExperimentFinishedEvent(race_id=self.race_id, arm=self.kind, experiment_id=exp.id,
                                            slot_id=s.slot.slot_id, status=exp.status, score=exp.score,
                                            is_trap=exp.is_trap, duration_s=t - (exp.started_at or t),
-                                           gpu_cost_usd=exp.gpu_cost_usd, error=exp.error, ts=t))
+                                           gpu_cost_usd=exp.gpu_cost_usd, error=exp.error,
+                                           quality=finished_quality(exp.status.value, exp.score, exp.is_trap,
+                                                                    exp.metrics),
+                                           ts=t))
         self.finished.append(exp.id)
         self._fill_slots()      # pipelined proposals start immediately
         self._wake.set()
@@ -1470,10 +1573,19 @@ class ArmRunner:
                     self._hold_for_cadence(wait)
                     continue
                 self._note_propose_start(k)
+                t_start = self.propose_starts[-1]
+                if self.kind != ArmKind.optuna:   # dashboard: the AI planner is thinking
+                    self._emit(PlannerStartedEvent(race_id=self.race_id, arm=self.kind, k=k, ts=t_start))
+                t_ask = now()
                 proposals = await self.researcher.propose(self._digest(k), k)
+                if self.kind == ArmKind.optuna:
+                    self.proposer_ask_each.append(now() - t_ask)
                 if self.stopped:
                     return
                 added = sum(1 for p in proposals[:k] if self._add_proposal(p))
+                if self.kind != ArmKind.optuna:
+                    self._emit(PlannerFinishedEvent(race_id=self.race_id, arm=self.kind, started_at=t_start, k=k,
+                                                    n_added=added, ts=now()))
                 self._fill_slots()
                 if added == 0:
                     self.empty_batches += 1
@@ -1573,6 +1685,9 @@ class ArmRunner:
                 elif out is not None:
                     exp.verdict, exp.verdict_reason = out.verdict, out.reason
                     exp.llm_verdict = out.verdict
+                if self.kind != ArmKind.optuna:   # dashboard: the checker's decision (incl. fakes caught)
+                    self._emit(judge_verdict_event(self.race_id, self.kind, exp.row(self.race_id, self.runner.name),
+                                                   llm_verdict=exp.llm_verdict, ts=now()))
             # The agent's own best (planner view: the LLM judge's verdict, D44).
             if self._eligible(exp) and (self.best_id is None or
                                         self.spec.is_better(exp.score, self.exps[self.best_id].score)):  # type: ignore[arg-type]
@@ -1705,6 +1820,14 @@ class ArmRunner:
             self._store(e)
         if self.db is not None:
             self.db.flush_metrics()
+        if self.sampler is not None:
+            # Apply the tells still queued (e.g. deadline-rule drops told as no score), so the
+            # sampler's counts in the report leave no trial open for a proposal that never ran.
+            # Last, off the event loop: a sampler ask may still hold the study lock for a moment.
+            try:
+                await asyncio.wait_for(asyncio.to_thread(self.sampler.apply_tells), timeout=SHUTDOWN_GRACE_S)
+            except Exception:  # noqa: BLE001 - reporting only; never fail the shutdown
+                log.warning("arm %s: could not apply the sampler's queued tells at shutdown", self.kind)
 
 
 # =========================================================================== race engine
@@ -1902,6 +2025,11 @@ class RaceEngine:
             if st.sampler is not None and "backfill" in st.features:
                 row["backfill"] = {**st.sampler.manifest(), "feedback": BACKFILL_FEEDBACK, "llm_first": True,
                                    "label": ENGINE_FEATURE_LABELS["backfill"]}
+                row["proposer_isolation"] = getattr(st.sampler, "isolation", "thread")
+            if k == ArmKind.optuna:
+                d = next((d for d in self.arm_deps if d.kind == k), None)
+                if d is not None:
+                    row["proposer_isolation"] = getattr(d.researcher, "isolation", "thread")
             if st.params:
                 row["params"] = {f: dict(p) for f, p in st.params.items()}
             if "planner_cadence" in st.features:
@@ -1984,6 +2112,12 @@ class RaceEngine:
                                 gpus_per_arm=self.cfg.gpus_per_arm, seed=self.cfg.seed,
                                 config=self.cfg.model_dump(mode="json"), name=self.cfg.name, mode=self.cfg.mode,
                                 llm_mode=self.cfg.llm, runner=self.cfg.runner)
+        # Process-isolated TPE studies start (spawn + import) before the race clock, so no arm's
+        # first ask pays for it.
+        for p in _cpu_proposers(self):
+            start = getattr(p, "wait_ready", None)
+            if start is not None:
+                await asyncio.to_thread(start)
         t0 = now()
         self.t0 = t0
         deadline = t0 + self.cfg.budget_s
@@ -2036,6 +2170,13 @@ class RaceEngine:
             if self.db is not None:
                 self.db.update_arm(a.arm_id, status="finished", stop_reason=a.stop_reason, ended_at=a.t_end,
                                    summary=summary.model_dump(mode="json"), report=extras)
+        for p in _cpu_proposers(self):
+            close = getattr(p, "close", None)
+            if close is not None:
+                try:
+                    close()   # child processes of process-isolated studies; counts stay readable
+                except Exception:  # noqa: BLE001 - never hide the race result
+                    log.warning("could not close a proposer process", exc_info=True)
         t_end = max((a.t_end or now()) for a in self.arms.values()) if self.arms else now()
         self.status = "finished" if reason in ("budget", "cost_cap") else reason
         if self.db is not None:

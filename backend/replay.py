@@ -19,8 +19,16 @@ new_best               ``experiments.is_best`` (+ bests later flagged fake), the
                        arm's best walked in order (``previous_best``)
 llm_call               ``llm_calls`` (the stored ``LLMCallRecord``)                  exact
 correction             ``corrections`` made before the race ended                    exact
+judge_verdict          ``experiments.judge_verdict`` / ``summary.judge_policy`` of   approx.
+                       judged claims on LLM arms (at the judge call's completion)
+planner_started        ``arms.report.planner_cadence.propose_starts_s`` / ``_k``     ms
+planner_finished       the call's proposals (``experiments.proposed_at``, source     approx.
+                       llm), else its last propose ``llm_calls`` row
 race_finished          ``arms.summary`` + ``races.finish_reason``                    approx.
 =====================  ===========================================================  =========
+
+``experiment_started.source`` and ``experiment_finished.quality`` are rebuilt from the same
+row fields the engine uses (``experiments.source``; ``scheduler.finished_quality``).
 
 "approx." timestamps: a metric's live ``ts`` was its arrival time (estimated here as
 ``started_at + t``, clamped into the run); a new best was announced after the judge call
@@ -70,6 +78,8 @@ from backend.core.events import (
     LLMCallEvent,
     MetricEvent,
     NewBestEvent,
+    PlannerFinishedEvent,
+    PlannerStartedEvent,
     RaceFinishedEvent,
 )
 from backend.core.types import (
@@ -83,6 +93,7 @@ from backend.core.types import (
     new_id,
 )
 from backend.db import Database, _decode_row
+from backend.scheduler import finished_quality, judge_verdict_event
 
 REPLAYABLE_STATUSES = frozenset({"finished", "cancelled", "error"})
 MAX_SPEED = 1000.0
@@ -90,8 +101,9 @@ _END_ERRORS = ("stopped at end of budget",)  # set by the engine when a run ends
 _DEADLINE_PREFIX = "deadline rule"           # buffered proposal dropped, never launched
 
 # Tie-break for events with the same ts, in the order the engine emits them.
-_RANK = {"metric": 0, "llm_call": 1, "gpu_idle": 2, "experiment_finished": 3, "new_best": 4,
-         "correction": 5, "gpu_busy": 6, "experiment_started": 7, "race_finished": 9}
+_RANK = {"metric": 0, "planner_started": 0.5, "llm_call": 1, "gpu_idle": 2, "experiment_finished": 3,
+         "judge_verdict": 3.5, "new_best": 4, "correction": 5, "planner_finished": 5.5, "gpu_busy": 6,
+         "experiment_started": 7, "race_finished": 9}
 
 Rows = dict[str, list[dict[str, Any]]]
 
@@ -138,24 +150,25 @@ class ReadOnlyDB:
     def list_races(self, limit: int = 500) -> list[dict[str, Any]]:
         return self._all("SELECT * FROM races ORDER BY created_at DESC LIMIT ?", (limit,))
 
-    def race_rows(self, race_id: str) -> Rows:
-        """Same shape as ``Database.race_rows``."""
+    def race_rows(self, race_id: str, *, metrics: bool = True) -> Rows:
+        """Same shape as ``Database.race_rows``; ``metrics=False`` leaves the (large) metrics
+        table out (``"metrics": []``)."""
         race = self.get_race(race_id)
         if race is None:
             raise KeyError(race_id)
         exps = self._all("SELECT * FROM experiments WHERE race_id = ? ORDER BY proposed_at", (race_id,))
-        metrics: list[dict[str, Any]] = []
-        ids = [e["id"] for e in exps]
+        metric_rows: list[dict[str, Any]] = []
+        ids = [e["id"] for e in exps] if metrics else []
         for i in range(0, len(ids), 500):
             chunk = ids[i : i + 500]
             marks = ",".join("?" for _ in chunk)
-            metrics.extend(self._all(f"SELECT * FROM metrics WHERE experiment_id IN ({marks}) "
-                                     "ORDER BY experiment_id, step, t", tuple(chunk)))
+            metric_rows.extend(self._all(f"SELECT * FROM metrics WHERE experiment_id IN ({marks}) "
+                                         "ORDER BY experiment_id, step, t", tuple(chunk)))
         return {
             "races": [race],
             "arms": self._all("SELECT * FROM arms WHERE race_id = ? ORDER BY kind", (race_id,)),
             "experiments": exps,
-            "metrics": metrics,
+            "metrics": metric_rows,
             "llm_calls": self._all("SELECT * FROM llm_calls WHERE race_id = ? ORDER BY completed_at", (race_id,)),
             "gpu_intervals": self._all('SELECT * FROM gpu_intervals WHERE race_id = ? ORDER BY arm_id, slot, "start"',
                                        (race_id,)),
@@ -163,11 +176,23 @@ class ReadOnlyDB:
         }
 
 
-def read_jsonl_rows(path: str | Path) -> Rows:
-    """Rows of a JSONL export (``Database.export_race_jsonl``), grouped by table."""
-    from backend.benchmark.export import read_export
+def read_jsonl_rows(path: str | Path, *, metrics: bool = True) -> Rows:
+    """Rows of a JSONL export (``Database.export_race_jsonl``), grouped by table;
+    ``metrics=False`` skips the metric lines."""
+    from backend.benchmark.export import parse_jsonl, read_export
 
-    return read_export(path)
+    if metrics:
+        return read_export(path)
+    with Path(path).open(encoding="utf-8") as f:
+        rows = parse_jsonl(ln for ln in f if not _is_metric_line(ln))
+    rows["metrics"] = []
+    return rows
+
+
+def _is_metric_line(line: str) -> bool:
+    """The export writes ``{"row": {...}, "table": "metrics"}``: the table name is at the end."""
+    tail = line.rstrip()[-24:]
+    return '"table": "metrics"' in tail or '"table":"metrics"' in tail
 
 
 def _jsonl_race_row(path: Path) -> dict[str, Any] | None:
@@ -230,22 +255,37 @@ class ReplayCatalog:
         out.sort(key=lambda r: r.get("created_at") or 0.0, reverse=True)
         return out
 
-    def load(self, race_id: str) -> tuple[Rows, str]:
-        """Every row of the race and where it came from. KeyError if no source has it."""
+    def load(self, race_id: str, *, metrics: bool = True) -> tuple[Rows, str]:
+        """Every row of the race and where it came from. KeyError if no source has it.
+        ``metrics=False``: without the metrics table (much faster for big races)."""
         if self.db is not None and self.db.get_race(race_id) is not None:
-            return self.db.race_rows(race_id), "app"
+            rows = self.db.race_rows(race_id)
+            return (rows if metrics else {**rows, "metrics": []}), "app"
         for p in self._db_files():
             try:
                 with ReadOnlyDB(p) as ro:
                     if ro.get_race(race_id) is not None:
-                        return ro.race_rows(race_id), str(p)
+                        return ro.race_rows(race_id, metrics=metrics), str(p)
             except (OSError, sqlite3.Error):
                 continue
         for p in self._jsonl_files():
             r = _jsonl_race_row(p)
             if r is not None and r.get("id") == race_id:
-                return read_jsonl_rows(p), str(p)
+                return read_jsonl_rows(p, metrics=metrics), str(p)
         raise KeyError(race_id)
+
+    def resolve(self, key: str) -> str:
+        """A full race id from an id or a unique prefix of at least 4 characters (e.g.
+        ``4ca4ed27``). KeyError if no race or more than one race matches."""
+        if self.db is not None and self.db.get_race(key) is not None:
+            return key
+        ids = {r["id"] for r in self.list_races(replayable_only=False)}
+        if key in ids:
+            return key
+        hits = sorted(i for i in ids if i.startswith(key)) if len(key) >= 4 else []
+        if len(hits) == 1:
+            return hits[0]
+        raise KeyError(key)
 
 
 # =========================================================================== rebuild
@@ -261,6 +301,7 @@ class Timeline:
     direction: str
     target_value: float | None
     dropped: Counter[str] = field(default_factory=Counter)  # e.g. late corrections
+    arms: list[dict[str, Any]] = field(default_factory=list)  # the race's arm rows (dashboard header)
 
     @property
     def race_id(self) -> str:
@@ -381,6 +422,12 @@ def rebuild_events(rows: Rows, *, metric_stride: int = 1) -> Timeline:
             ts, st, exp_id = item
             push(GpuStateEvent(race_id=race_id, arm=kind, slot_id=slot, state=st, experiment_id=exp_id, ts=ts),
                  "gpu_busy" if st == SlotState.busy else "gpu_idle")
+        a_end = arm_end.get(arm_id) or race_end
+        if prev is not None and prev["state"] == "busy" and prev["end"] < a_end - 1e-6:
+            # Released right after its last run (deadline rule): the zero-length idle interval is not
+            # stored, so add the live stream's idle -> idle at the release (it marks the slot closed).
+            push(GpuStateEvent(race_id=race_id, arm=kind, slot_id=slot, state=SlotState.idle, ts=prev["end"]),
+                 "gpu_idle")
 
     # --- experiments ------------------------------------------------------------------
     by_id = {e["id"]: e for e in exps}
@@ -392,7 +439,8 @@ def rebuild_events(rows: Rows, *, metric_stride: int = 1) -> Timeline:
         push(ExperimentStartedEvent(race_id=race_id, arm=kind, experiment_id=e["id"], slot_id=e["slot_id"],
                                     config=e.get("config") or {}, hypothesis=e.get("hypothesis") or "",
                                     seed=int(e["seed"] if e.get("seed") is not None else cfg.get("seed", 0)),
-                                    hardware=e.get("hardware") or "", ts=started), "experiment_started")
+                                    hardware=e.get("hardware") or "", source=e.get("source"), ts=started),
+             "experiment_started")
         ended = _f(e.get("ended_at"))
         status = e.get("status")
         err = e.get("error") or ""
@@ -404,6 +452,8 @@ def rebuild_events(rows: Rows, *, metric_stride: int = 1) -> Timeline:
                                      status=ExperimentStatus(status), score=_f(e.get("score")),
                                      is_trap=bool(e.get("is_trap")), duration_s=ended - started,
                                      gpu_cost_usd=float(e.get("gpu_cost_usd") or 0.0), error=e.get("error"),
+                                     quality=finished_quality(str(status), _f(e.get("score")),
+                                                              bool(e.get("is_trap")), e.get("metrics")),
                                      ts=ended), "experiment_finished")
 
     # --- metrics ----------------------------------------------------------------------
@@ -450,6 +500,65 @@ def rebuild_events(rows: Rows, *, metric_stride: int = 1) -> Timeline:
         if rec.step_type.value == "judge_improvement":
             for x in rec.experiment_ids:
                 judge_done[x] = max(judge_done.get(x, ts), ts)
+
+    # --- judge verdicts (LLM arms: one per judged claim) ----------------------------
+    by_arm_spans: dict[str, list[tuple[float, float]]] = {k: sorted(v) for k, v in calls_by_arm.items()}
+
+    def processed_ts(e: dict[str, Any]) -> float:
+        """When the agent loop processed a finished run: its judge call's completion, else
+        the end of the LLM call the loop was waiting on when the run ended, else the run end."""
+        if e["id"] in judge_done:
+            return judge_done[e["id"]]
+        end = float(e["ended_at"])
+        busy = [b for a, b in by_arm_spans.get(e.get("arm_id") or "", []) if a <= end < b]
+        return max(busy) if busy else end
+
+    for e in exps:
+        kind = kind_of.get(e.get("arm_id"))
+        if kind is None or kind == ArmKind.optuna or e.get("is_baseline"):
+            continue
+        if e.get("status") != ExperimentStatus.succeeded.value or _f(e.get("ended_at")) is None:
+            continue
+        summ = e.get("summary") or {}
+        judged = (e["id"] in judge_done or bool(summ.get("judge_policy")) or e.get("judge_verdict") is not None)
+        if not (summ.get("claimed_new_best") and judged):
+            continue
+        push(judge_verdict_event(race_id, kind, e, ts=processed_ts(e)), "judge_verdict")
+
+    # --- planner calls (LLM arms; from the arm report's planner_cadence) ------------
+    for a in arms:
+        kind = kind_of.get(a["id"])
+        rep_ = (a.get("report") or {}).get("planner_cadence") or {}
+        starts = rep_.get("propose_starts_s") or []
+        ks = rep_.get("propose_k") or []
+        a_t0 = arm_t0.get(a["id"]) or t0
+        if kind is None or kind == ArmKind.optuna or not starts:
+            continue
+        a_end = arm_end.get(a["id"]) or race_end
+        abs_starts = [a_t0 + float(x) for x in starts]
+        mine_llm = sorted((float(e["proposed_at"]) for e in exps if e.get("arm_id") == a["id"]
+                           and e.get("source") == "llm" and _f(e.get("proposed_at")) is not None))
+        propose_done = sorted(float(c["completed_at"]) for c in (rows.get("llm_calls") or [])
+                              if c.get("arm_id") == a["id"] and c.get("step_type") == "propose_experiments"
+                              and _f(c.get("completed_at")) is not None)
+        # The report rounds each start to the ms: a window [start_i, start_i+1) shifted by half a ms
+        # still holds exactly call i's proposals / completions (each comes >= 1 ms after its own
+        # start, and before the next call starts: the agent loop runs one planner call at a time).
+        eps = 0.0005 + 1e-6
+        for i, st in enumerate(abs_starts):
+            k = int(ks[i]) if i < len(ks) else 0
+            push(PlannerStartedEvent(race_id=race_id, arm=kind, k=k, ts=st), "planner_started")
+            lo = st + eps
+            nxt = abs_starts[i + 1] + eps if i + 1 < len(abs_starts) else math.inf
+            added = [x for x in mine_llm if lo <= x < nxt]
+            if added:
+                push(PlannerFinishedEvent(race_id=race_id, arm=kind, started_at=st, k=k, n_added=len(added),
+                                          ts=max(added)), "planner_finished")
+                continue
+            done = [x for x in propose_done if lo <= x < nxt and x <= a_end]
+            if done:
+                push(PlannerFinishedEvent(race_id=race_id, arm=kind, started_at=st, k=k, n_added=0, ts=max(done)),
+                     "planner_finished")
 
     # --- corrections ------------------------------------------------------------------
     corrections = sorted(rows.get("corrections") or [], key=lambda r: r.get("created_at") or 0.0)
@@ -539,7 +648,8 @@ def rebuild_events(rows: Rows, *, metric_stride: int = 1) -> Timeline:
 
     out.sort(key=lambda x: (x[0], x[1], x[2]))
     return Timeline(race=race, events=[x[3] for x in out], t0=t0, direction=direction,
-                    target_value=target_value, dropped=dropped)
+                    target_value=target_value, dropped=dropped,
+                    arms=[{k: v for k, v in a.items() if k not in ("report",)} for a in arms])
 
 
 def check_stream(events: Sequence[Event]) -> list[str]:
@@ -671,15 +781,21 @@ def replay_router(catalog: ReplayCatalog, store: ReplayStore) -> APIRouter:
     router = APIRouter()
 
     def _build(race_id: str, metric_stride: int) -> tuple[Timeline, str]:
-        rows, source = catalog.load(race_id)
-        return rebuild_events(rows, metric_stride=metric_stride), source
+        # A unique id prefix (e.g. "4ca4ed27") is accepted too; metric_stride 0 = no metric events
+        # (the metrics table is not even read: much faster on big races, and the dashboard needs none).
+        try:
+            rows, source = catalog.load(race_id, metrics=metric_stride > 0)
+        except KeyError:
+            rows, source = catalog.load(catalog.resolve(race_id), metrics=metric_stride > 0)
+        return rebuild_events(rows, metric_stride=max(1, metric_stride)), source
 
     @router.post("/api/races/{race_id}/replay", status_code=201)
     async def create_replay(
         race_id: str,
         speed: float = Query(1.0, gt=0, le=MAX_SPEED, description="playback speed, N x real time"),
         max_gap_s: float | None = Query(None, ge=0, description="cap on any single wait (s, replay time)"),
-        metric_stride: int = Query(1, ge=1, le=1000, description="keep every Nth metric point per run"),
+        metric_stride: int = Query(1, ge=0, le=1000,
+                                   description="keep every Nth metric point per run (0 = no metric events)"),
     ) -> dict[str, Any]:
         try:
             timeline, source = await asyncio.to_thread(_build, race_id, metric_stride)

@@ -1,21 +1,28 @@
-# Busy Machines: submission summary
+# Busy Machines: compute intelligence for training sweeps
 
 Night Shift London, the Mubit hackathon (23–25 Oct 2026). Repo: https://github.com/londrwus/mubit_hack
 
-**One line:** the same model as a standard Opus 5.5 research agent for a quarter of the AI bill, on two tasks, three runs each (R78, R82). It is not a better model at the same money, and our first pre-registered tabular race failed (R75).
+Submission summary.
 
-Every number below comes from [`results_log.md`](results_log.md) (ids in brackets). Worse results sit beside the wins. AI $ is a list-price token estimate. On the tabular task, GPU time is simulated.
+**One line:** Busy Machines is the compute layer for AI-planned training sweeps: it decides when the AI planner is worth calling, keeps every machine busy in between, and blocks fake improvements. Measured on two tasks, three runs each, before any Mubit model served: **the same model as an Opus-driven sweep, a quarter of the AI bill, machines busy ~98%, no fakes shipped** (R78, R82). It is not a better model at the same money, and it has two logged limits: planning too rarely made the model worse (R75, our first pre-registered tabular race, failed), and on long runs on real L4 GPUs it was cheaper but 5% worse (R85, failed its quality line).
+
+**Two layers that multiply:** Mubit makes each AI call cheaper; Busy Machines decides how many calls a sweep needs. Our 4× is the Busy Machines layer alone, on plain Opus 5.5 through Mubit.
+
+Every number below comes from [`results_log.md`](results_log.md) (ids in brackets). Worse results sit beside the wins. AI $ is a list-price token estimate. Where it ran: game-playing on cloud CPU workers (R78), tabular on simulated GPU time (R82, R75), image recognition on real L4 GPUs (R85).
 
 ## The problem
-AI labs let agents run ML experiments. While the agent thinks, the GPUs wait: with 30 workers and 15-second runs, a standard Opus 5.5 agent left them waiting 69% of the time (R48), and 90.6% of its bill was its own thinking (R54). The agent is both the bottleneck and the main cost.
+ML and RL teams at AI labs now let an AI plan their hyperparameter and RL training sweeps. The planner is the expensive part, and while it thinks, the machines (GPUs or CPUs) wait: with 30 cloud CPU workers and 15-second runs, a standard Opus 5.5 sweep left them waiting 69% of the time (R48), and 90.6% of its bill was its own thinking (R54). Nothing in the sweep decides when the planner is worth calling, so the AI bill grows with every call and the compute idles between them.
 
 ## What we built
-- **An ML research agent** that improves any model whose training can be scripted. Tasks: game-playing (Pendulum, PPO on CPU), image recognition (CIFAR-10 on L4 GPUs) and tabular model tuning (LCBench, simulated GPU time).
-- **The Busy Machines engine**, on the same Opus 5.5: a shorter planner prompt, a no-AI sampler that fills idle machines while Opus thinks, a limit on how often the planner is called, and a checker that rejects fake improvements (test-set tuning, noise).
+- **Busy Machines, compute intelligence for training sweeps**: a compute layer that sits under any AI planner (Opus 5.5 here, or a lab's own research agent) and runs its sweep on a compute pool. It decides when the planner is worth calling (a pace limit and a shorter planner prompt), keeps every machine busy with a no-AI sampler fed only checked results, and blocks fake improvements (test-set tuning, noise) with a checker.
+- **Sweeps we ran it on:** game-playing (an RL sweep: Pendulum, PPO on cloud CPU workers), tabular model tuning (LCBench, simulated GPU time) and image recognition (CIFAR-10 on real L4 GPUs).
 - **`night/bench`**: a fair race harness. Same machines, wall-clock, $ cap, seeds, starting code and model; only the engine differs. Optuna (no AI) is the baseline in every race. Two races were pre-registered (D47, D49).
-- **sapling-research**: our fine-tune of Mubit's Banyan Sapling verifier for fake research gains. A community fine-tune, not an official MubitLabs model, and not published.
+- **sapling-research**: our fine-tune of Mubit's Banyan Sapling verifier for fake research gains. A community fine-tune, not an official MubitLabs model, and not published. v2 is the release. v4 failed its pre-declared gate (R83).
+- **A dashboard API** for live races and replays of logged races (R86, R88), with screens designed in Pen (see "Design" below). The frontend itself is not built.
 
 ## How we use Mubit
+**Runs on Mubit** (D54). Every AI call goes through Mubit's gateway and is recorded and traceable. Mubit trains small models on our calls, and we fine-tuned Mubit's Sapling. We don't say "powered by Mubit's models" or "Mubit cut our bill": the measured 4× came from our engine, with Opus answering through Mubit and no Mubit model serving.
+- **Mubit is the cheap-AI layer next to ours:** it makes each call cheaper, we decide how many calls a sweep needs, so the savings multiply. Our measured 4× is our layer alone; Mubit's models add on top once they pass.
 - **Every LLM call goes through the Mubit gateway** (Anthropic endpoint, model `claude-opus-5-5`), including both race sides and the checker.
 - The recurring steps (propose, diagnose a failed run, judge a claim) use frozen prompts, so Mubit groups them into tasks and trains small models ("adapters") from them.
 - Corrections are stored against the exact Mubit request ID and rated in the console.
@@ -29,14 +36,26 @@ AI labs let agents run ML experiments. While the agent thinks, the GPUs wait: wi
 ## Results
 | Comparison (3 runs each) | Win | Worse side |
 |---|---|---|
-| **Game-playing: Busy Machines vs standard Opus [R78]** | Same model, a tie: −154.3 vs −154.5 penalty. AI bill **$0.83 vs $3.30 per race (4.0× less)**; total $1.18 vs $3.65. GPUs waiting 1.5% vs 68.8% | Not a better model. Reached Opus's final quality in 2 of 3 runs only. In one run a burst of checker calls took the bill to 0.34× |
-| **Tabular, planner every ≥30 s [R82], pre-registered, success line met** | Within 0.0013: 0.8884 vs 0.8897. AI bill **$0.70 vs $2.77 (4.0× less)** | Standard Opus ahead in every run (about 1% more errors). **This setting was chosen after R75 failed** |
-| **Tabular, planner every ≥90 s [R75], pre-registered, FAILED** | AI bill $0.35 vs $2.83 (8.2× less) | **7% more errors:** 0.8816 vs 0.8892, worse in all 3 runs |
+| **Game-playing (RL sweep, cloud CPU workers): Busy Machines vs standard Opus [R78]** | Same model, a tie: −154.3 vs −154.5 penalty. AI bill **$0.83 vs $3.30 per race (4.0× less)**; total $1.18 vs $3.65. Machines waiting 1.5% vs 68.8%. 0 of 847 fakes accepted. To the −170 goal: 89% cheaper and 72% faster ($0.022 vs $0.200, 0.3 vs 1.0 min) [R87] | Not a better model. Reached Opus's final quality in 2 of 3 runs only. In one run a burst of checker calls took the bill to 0.34×. The shipped model came from the sampler in 3 of 3 runs (R84). The −170 goal is easy with 30 machines: the no-AI tool reached it cheapest ($0.009 / 0.4 min) [R87] |
+| **Tabular (simulated GPU time), planner every ≥30 s [R82], pre-registered, success line met** | Within 0.0013: 0.8884 vs 0.8897. AI bill **$0.70 vs $2.77 (4.0× less)**. Machines waiting 1.1% vs 30.3%. 0 of 85 fakes accepted | Standard Opus ahead in every run (about 1% more errors). Never reached Opus's final best (0/3); slower and dearer to 0.86 ($1.14 / 4.2 min vs $1.08 / 2.9 min). **This setting was chosen after R75 failed** |
+| **Tabular, planner every ≥90 s [R75], pre-registered, FAILED** | AI bill $0.35 vs $2.83 (8.2× less) | **7% more errors:** 0.8816 vs 0.8892, worse in all 3 runs (planned too rarely) |
+| **Image recognition, real L4 GPUs, planner every ≥60 s [R85], quality gate FAILED** | AI bill **$0.23 vs $1.06 (0.22×, 4.5× less)**; total $0.83 vs $1.66. Machines waiting 0.0% vs 12.0%. 0 of 12 fakes accepted | **5% more errors:** 0.9424 vs 0.9451, worse in all 3 runs. To the 0.94 goal 16% dearer and 2.1× slower; shipped model 0.9395, below the goal. On long runs the machines barely wait, so fewer AI calls cost quality |
 | Standard Opus vs Optuna, tabular [R38] | 28% fewer errors: 0.856 vs 0.799 | 0.3× the experiments per $. In one run Optuna reached the goal faster and cheaper |
 | Standard Opus vs Optuna, game-playing [R48] | Shipped model −156.9 vs −177.1 (Optuna shipped fakes) | Optuna won every search number: best clean model −155.2 vs −156.9, $0.35 vs $3.69 total |
 | Standard Opus vs Optuna, image recognition [R53] | 22% fewer errors: 0.9448 vs 0.9294. Goal reached 3/3 vs 0/3 | $1.65 vs $0.60 per race; 0.5× the experiments per $ |
 | Sapling on 152 real race claims with known answers [R81]: published / ours strict / ours looser / Opus | Fakes caught 0 / 8 / 57 / 109 of 109; fakes approved 0 for all four | Real gains confirmed 0 of 7 for all four. Opus is still the better judge. v4 failed its gate (R83) |
 | Mubit adapters [R70, R79] | Trained from our recorded calls | 11.4% and 58.3% vs the 95% target; none served, so there is no Mubit-arm number |
+| Backend and demo tooling [R86, R88, R89] (**checks, not results**) | API, live events and replay smoke test passed (R86). Review patches 06–09 applied, dashboard API added, full suite 817 passed, 3 skipped, 0 failed (R88). The 60-second live demo endpoint works (R89) | **R89 is a demo run, not a result**: at 60 s the standard agent was slightly ahead on quality (0.8090 vs 0.8064) and AI bill ($0.133 vs $0.142), which is why the video uses the R78 replay. Running the samplers in their own processes cut Optuna's contention from 2.52× / 2.49× to 1.40× / 1.46× slower, not to zero, and only for future races (R88). Logged races keep the R74 caveat |
+
+## Design (Pen)
+Designs are in `mubit.pen` (Pen.dev; open it only through the pencil MCP). PNG exports and their number check are in `design/exports/final/README.md`. Per-run values on the frames are logged in R90.
+- **Landing page `pOKAY`** ("Landing v2 · Compute intelligence (A+)"): hero `KekD1`, engine `QYavo`, our model `MgmgS`, benchmarks `oT6Ad`, call to action `c50WCZ`.
+- **Platform:** "Platform · Overview" `bxWh3`, "Platform · Sweep detail (live compare)" `eGVso` (R78 run 1 replayed at 30×).
+- **Known issues** (to fix in Pen before these frames are shown):
+  - `KekD1` says "GPUs" alone, against D54.
+  - `MgmgS` cites "99.9% vs 88.7%", which is not in the log.
+  - `oT6Ad` shows R87 without its caveat, and has no R75 or R85.
+- **Frontend:** not built. It is built only on the user's go.
 
 ## Links
 - Docs index: [`README.md`](README.md). Results: [`results_log.md`](results_log.md). Decisions: [`decisions.md`](decisions.md). Race ids and commands: [`evidence_pack.md`](evidence_pack.md)
@@ -71,7 +90,7 @@ python -m uv run --extra ml python scripts/headline.py --race 613e2537 --race 6a
 ## What's next
 1. Get one adapter to answer real calls, then race "Mubit + Busy Machines" against standard Opus.
 2. Throttle checker calls, the remaining cost lever (R78).
-3. Run each sampler in its own process, so Optuna's numbers are isolated (R74).
+3. Isolate Optuna's numbers fully. Running each sampler in its own process (patch 09, R88) cut the contention from 2.52× / 2.49× to 1.40× / 1.46× slower, but not to zero, and it applies only to future races. Logged races keep the R74 caveat.
 4. Put the Sapling verifier in the live race loop.
 5. A corrections API, so a flag becomes training data.
 
@@ -88,14 +107,16 @@ python -m uv run --extra ml python scripts/headline.py --race 613e2537 --race 6a
    - Shipped held-out scores: Opus 0.8896 ± 0.0015, Busy Machines 0.8883 ± 0.0017, Optuna 0.8563 ± 0.025 (n = 2, 1 fake shipped).
 6. **R78:** Optuna shipped a fake in 3 of 3 races. Its −157.7 is still a real held-out score.
 7. **R41 run totals:** if you count only runs that started, they are 466 of 497 and 1,649 of 2,216. Only its 70.0% waiting is quoted anywhere.
-8. Stale race `d17fc68f` is marked "running" in the DB. It was never pooled and is harmless.
-9. Review patches 06–09 are not applied, and every fingerprint matches the log.
-10. Before quoting items 1–7, wait until they are logged.
+8. Stale race `d17fc68f` (R36) is now marked "aborted" in the DB (R88). It was never pooled.
+9. Review patches 06–09 **are applied** (R88), and no existing fingerprint changed. Patch 09 changes the fingerprint of future paid races only.
+10. Items 1–7 are logged as R84; quote them from there.
 11. Fill in the team names.
+12. The 60-second live demo (R89) is "demo tool works; not a result". Never quote its numbers as a comparison. The video uses the R78 replay instead.
+13. R87's goal framing (89% cheaper, 72% faster) is always quoted with its caveat: the goal is easy, and the no-AI tool was cheapest.
 
 **Charts** (`data/charts/final/`, 2000×1125, light and dark; regenerate with `python -m uv run python scripts/final_charts.py`, which stops if the DB disagrees with R75/R78/R82/R81):
 - `1-headline-two-tasks-light.png`, `1-headline-two-tasks-dark.png`: AI bill and model quality for R78, R82 and R75 (R75 labelled as failed)
-- `2-gpus-waiting-r78-light.png`, `2-gpus-waiting-r78-dark.png`: R78 seed 1 (`d4913e95`), 68.9% vs 1.5% waiting
+- `2-gpus-waiting-r78-light.png`, `2-gpus-waiting-r78-dark.png`: R78 seed 1 (`d4913e95`); quote the logged 3-run means, 68.8% vs 1.5% waiting (R78), since the seed-1 values on the chart are not logged
 - `3-quality-over-time-r82-light.png`, `3-quality-over-time-r82-dark.png`: R82 seed 1 (`9d0cfd77`), "keeps pace, not ahead"
 - `4-sapling-real-claims-light.png`, `4-sapling-real-claims-dark.png`: R81, including the "real improvements confirmed 0 of 7" panel
 

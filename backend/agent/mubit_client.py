@@ -15,6 +15,10 @@ Request layout (budget.md, levers 2-6):
 - header ``x-middleware-record: off`` unless ``record=True`` (``record`` also accepts the
   header values ``"full"`` / ``"metadata"`` / ``"off"``; ``"metadata"`` keeps the task
   fingerprint but drops the content, see docs/mubit_office_hours.md item 2);
+- a FALLBACK attempt (``is_fallback=True``) is always sent with ``x-middleware-record: off`` and
+  without adapter headers, whatever the arm's record mode: without the task fingerprint Mubit
+  cannot route it to an adapter, so "fall back to Opus" is a provider answer and not the same
+  request a second time (``FALLBACK_RECORD``);
 - ``x-middleware-request-id`` captured; latency and the four usage meters recorded;
 - ``stop_reason`` max_tokens / refusal count as failed calls;
 - per-step **Mubit project routing** (D38): ``data/mubit_projects.json`` maps (arm, step) to a
@@ -327,6 +331,9 @@ class MubitClient:
     """LLMClient over the Mubit Anthropic gateway. See module docstring."""
 
     benchmark_safe = True  # real calls; MockLLM sets False
+    # Record mode of every fallback attempt (manifest: llm_policy.fallback_record). "off" drops the
+    # task fingerprint, so Mubit cannot route the fallback to an adapter (bench.py, configs.py).
+    fallback_record: RecordMode = "off"
 
     def __init__(
         self,
@@ -451,11 +458,17 @@ class MubitClient:
         step = StepType(step)
         arm = ArmKind(arm)
         cfg = self.step_configs[step]
-        try:
-            headers = record_headers(record)
-        except ValueError:
-            headers = {RECORD_HEADER: "off"}  # unknown mode: fail safe (never record by accident)
-        headers.update(self.projects.headers_for(arm, step))
+        if is_fallback:
+            # The fallback must reach the provider model: the first try and the retry were this
+            # same request, and an adapter that answered them badly must not answer it again.
+            # Record off (no task fingerprint: not routable) and no adapter-pinning header.
+            headers = record_headers(self.fallback_record)
+        else:
+            try:
+                headers = record_headers(record)
+            except ValueError:
+                headers = {RECORD_HEADER: "off"}  # unknown mode: fail safe (never record by accident)
+            headers.update(self.projects.headers_for(arm, step))
         rec = LLMCallRecord(
             arm=arm,
             arm_id=arm_id,
@@ -540,7 +553,8 @@ async def call_with_fallback(
     **kwargs: Any,
 ) -> tuple[T | None, list[LLMCallRecord]]:
     """Agent-loop policy (architecture.md section 1): try; on an invalid reply retry once with
-    the same model; if still invalid, fall back to ``fallback_model`` (Opus) through Mubit.
+    the same model; if still invalid, fall back to ``fallback_model`` (Opus) through Mubit, sent
+    with record off and no adapter headers (``MubitClient.call`` with ``is_fallback``).
     Every attempt is its own record and counts toward the arm's time and $. Same policy on
     every arm (fairness)."""
     records: list[LLMCallRecord] = []

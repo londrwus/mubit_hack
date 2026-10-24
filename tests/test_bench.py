@@ -230,7 +230,8 @@ def _reply(payload: Any | None, raw: str | None = None) -> httpx2.Response:
 
 @pytest.mark.parametrize(("record", "header"), [(False, "off"), ("metadata", "metadata"), (True, None)])
 async def test_researcher_record_mode_reaches_the_wire_on_every_attempt(record: Any, header: str | None) -> None:
-    """Attempt, retry and Opus fallback all send the arm's x-middleware-record value."""
+    """Attempt and retry send the arm's x-middleware-record value; the Opus fallback always goes
+    out with "off" (never routable to an adapter: review fix, tests/test_review_mubit_fallback.py)."""
     good = {"failure_class": "divergence", "cause": "lr too high.", "fix": "lower lr."}
     client, seen = _gateway([_reply(None, raw="not json"), _reply(None, raw="{}"), _reply(good)])
     r = LLMResearcher(kind=ArmKind.mubit, llm=client, spec=TOY, session_id="s", prompts=DefaultPrompts(),
@@ -239,7 +240,7 @@ async def test_researcher_record_mode_reaches_the_wire_on_every_attempt(record: 
                               error="loss is NaN")
     out = await r.diagnose(snap)
     assert out is not None and len(seen) == 3
-    assert [q.headers.get(RECORD_HEADER) for q in seen] == [header] * 3
+    assert [q.headers.get(RECORD_HEADER) for q in seen] == [header, header, "off"]
     await client.aclose()
 
 

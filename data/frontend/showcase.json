@@ -1,0 +1,3723 @@
+{
+  "schema_version": 1,
+  "generated_by": "scripts/build_showcase.py",
+  "sources": {
+    "bench_db": "data/bench/bench.db (opened read-only)",
+    "results_log": "docs/results_log.md",
+    "sapling": [
+      "data/sapling/compare_published/compare_published.json",
+      "data/sapling/sapling_v4/heads/final_v4.json"
+    ],
+    "race_sets": {
+      "R78": [
+        "4ca4ed27",
+        "d4913e95",
+        "145c2a2d"
+      ],
+      "R82": [
+        "c1f4b1d9",
+        "9d0cfd77",
+        "b3922d0e"
+      ],
+      "R75": [
+        "613e2537",
+        "6afbbe8a",
+        "c72b3af1"
+      ],
+      "R85": [
+        "e8106409",
+        "9ec18124",
+        "9f494453"
+      ],
+      "R53": [
+        "60477ba1",
+        "949fce51",
+        "c8261494"
+      ],
+      "R38": [
+        "5245bacc",
+        "91a4e48d",
+        "f98b6712"
+      ],
+      "R48": [
+        "8a76fa05",
+        "45ab180f",
+        "59d7f7eb"
+      ],
+      "R44": [
+        "2ded10bc",
+        "e3fddb29",
+        "aaedd180"
+      ]
+    }
+  },
+  "rules": [
+    "Every number carries the results-log row (r_id) it was checked against; R84 corrections applied.",
+    "AI $ is a list-price estimate (list price per call), not a provider bill.",
+    "Tabular races (R82, R75, R38) use simulated GPU time: their GPU $ is simulated.",
+    "Every number has in_log = true; the build refuses unlogged numbers (dashboard_spec.md section 6).",
+    "Every card has a worse_side: show it on the same screen as the card.",
+    "Card 'vs_no_ai_tool' is for a second slide or Q&A, not the main screen (D46)."
+  ],
+  "sides": {
+    "standard": {
+      "label": "Standard AI assistant",
+      "sublabel": "Opus 5.5",
+      "hover": "The plain research loop a lab would run with Opus 5.5"
+    },
+    "busy_machines": {
+      "label": "Busy Machines",
+      "sublabel": "Opus 5.5",
+      "hover": "The same Opus 5.5 plus our engine: lean planner prompt, a built-in no-AI tuner that fills idle machines, and a checker for fake improvements"
+    },
+    "no_ai_tool": {
+      "label": "No-AI tuning tool",
+      "sublabel": "standard search, no AI",
+      "hover": "A standard hyperparameter search with no AI (Optuna), run in every race as the baseline"
+    },
+    "published_sapling": {
+      "label": "Published Banyan Sapling",
+      "sublabel": "MubitLabs, as released",
+      "hover": "Stock head and its own calibration"
+    },
+    "ours_v2_strict": {
+      "label": "Our fine-tune v2, strict",
+      "sublabel": "the release",
+      "hover": "sapling-research v2, calibration alpha 0.01"
+    },
+    "ours_v2_looser": {
+      "label": "Our fine-tune v2, looser",
+      "sublabel": "the release",
+      "hover": "sapling-research v2, calibration alpha 0.05"
+    },
+    "ours_v4_strict": {
+      "label": "Our fine-tune v4, strict",
+      "sublabel": "not released",
+      "hover": "sapling-research v4, calibration alpha 0.01; failed its general gate (R83)"
+    },
+    "ours_v4_looser": {
+      "label": "Our fine-tune v4, looser",
+      "sublabel": "not released",
+      "hover": "sapling-research v4, calibration alpha 0.05; failed its general gate (R83)"
+    },
+    "opus": {
+      "label": "Opus 5.5",
+      "sublabel": "as the checker",
+      "hover": "Opus 5.5 judge prompt v1, recorded verdicts"
+    }
+  },
+  "cards": [
+    {
+      "id": "game_playing",
+      "order": 1,
+      "kind": "hero",
+      "placement": "main",
+      "title": "Game-playing AI",
+      "headline": "Same model quality. 4.0× cheaper AI bill, 3.1× cheaper in total.",
+      "r_ids": [
+        "R78",
+        "R84"
+      ],
+      "panels": [
+        {
+          "id": "r78",
+          "title": "Game-playing AI",
+          "r_id": "R78",
+          "race_ids": [
+            "4ca4ed27",
+            "d4913e95",
+            "145c2a2d"
+          ],
+          "exports": [
+            "data/bench/race-rl-seed0-4ca4ed27.jsonl",
+            "data/bench/race-rl-seed1-d4913e95.jsonl",
+            "data/bench/race-rl-seed2-145c2a2d.jsonl"
+          ],
+          "status": {
+            "text": "Headline result: 3 races, every number checked against the log",
+            "r_id": "R78"
+          },
+          "setup": "15 min per race · 30 cloud CPU workers per side · same model (Opus 5.5), machines, clock, $ cap and starting code · 3 runs per side",
+          "sides": [
+            "standard",
+            "busy_machines"
+          ],
+          "metrics": [
+            {
+              "id": "model_quality",
+              "label": "Model quality",
+              "hover": "Best score so far on game levels the model never trained on (average reward; higher is better)",
+              "higher_is_better": true,
+              "values": {
+                "standard": {
+                  "value": -154.47073872884116,
+                  "unit": "game_score",
+                  "display": "−154.5",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.6357339204987075,
+                  "n_total": 3,
+                  "std_display": "± 0.6",
+                  "per_run": [
+                    -155.00875854492188,
+                    -153.76922607421875,
+                    -154.6342315673828
+                  ],
+                  "in_log": true,
+                  "log_text": "−154.5 ± 0.6",
+                  "logged_value": -154.5,
+                  "tolerance": 0.05,
+                  "logged_std": 0.6,
+                  "std_tolerance": 0.05
+                },
+                "busy_machines": {
+                  "value": -154.31732177734375,
+                  "unit": "game_score",
+                  "display": "−154.3",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.4832616467990967,
+                  "n_total": 3,
+                  "std_display": "± 0.5",
+                  "per_run": [
+                    -154.8665771484375,
+                    -153.95736694335938,
+                    -154.12802124023438
+                  ],
+                  "in_log": true,
+                  "log_text": "−154.3 ± 0.5",
+                  "logged_value": -154.3,
+                  "tolerance": 0.05,
+                  "logged_std": 0.5,
+                  "std_tolerance": 0.05
+                }
+              },
+              "comparison": {
+                "value": 0.1534169514974053,
+                "unit": "game_score",
+                "display": "Same: a tie within noise",
+                "r_id": "R78",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "tie",
+                "formula": "Busy Machines mean − standard mean (best score); gap < run-to-run spread",
+                "per_run": {
+                  "values": [
+                    0.142181396484375,
+                    -0.188140869140625,
+                    0.5062103271484375
+                  ],
+                  "display": "+0.14, −0.19, +0.51",
+                  "r_id": "R78",
+                  "log_text": "+0.14, −0.19, +0.51"
+                },
+                "in_log": true,
+                "log_text": "a tie within noise"
+              }
+            },
+            {
+              "id": "ai_bill_per_race",
+              "label": "AI bill per race",
+              "hover": "Cost of the assistant's AI calls in one 15-minute race, at list price (estimate)",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 3.299733,
+                  "unit": "usd",
+                  "display": "$3.30",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.046231196914205075,
+                  "n_total": 3,
+                  "per_run": [
+                    3.3011676000000003,
+                    3.3452302,
+                    3.2528012
+                  ],
+                  "note": "list-price estimate",
+                  "in_log": true,
+                  "log_text": "$3.30 ± 0.05",
+                  "logged_value": 3.3,
+                  "tolerance": 0.005,
+                  "logged_std": 0.05,
+                  "std_tolerance": 0.005
+                },
+                "busy_machines": {
+                  "value": 0.8312952666666668,
+                  "unit": "usd",
+                  "display": "$0.83",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.23197267755150242,
+                  "n_total": 3,
+                  "per_run": [
+                    0.7025812,
+                    0.6922172,
+                    1.0990874
+                  ],
+                  "note": "list-price estimate",
+                  "in_log": true,
+                  "log_text": "$0.83 ± 0.23",
+                  "logged_value": 0.83,
+                  "tolerance": 0.005,
+                  "logged_std": 0.23,
+                  "std_tolerance": 0.005
+                }
+              },
+              "comparison": {
+                "value": 3.96938745150239,
+                "unit": "ratio",
+                "display": "4.0× cheaper",
+                "r_id": "R78",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "x_cheaper",
+                "formula": "standard mean ÷ Busy Machines mean (llm_cost_usd)",
+                "ratio_busy_over_standard": 0.2519280398343341,
+                "ratio_display": "0.25×",
+                "ratio_log_text": "0.25×",
+                "in_log": true,
+                "log_text": "4.0× cheaper",
+                "logged_value": 4.0,
+                "tolerance": 0.05,
+                "per_run_ratio": {
+                  "values": [
+                    0.21282809149102275,
+                    0.20692662645458598,
+                    0.33788950889467206
+                  ],
+                  "display": "0.21×, 0.21×, 0.34×",
+                  "r_id": "R78",
+                  "log_text": "0.21×, 0.21×, 0.34×"
+                }
+              },
+              "note": "list-price estimate"
+            },
+            {
+              "id": "total_cost_per_race",
+              "label": "Total cost per race",
+              "hover": "AI bill plus the machine time the side used during the race",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 3.6477768936861117,
+                  "unit": "usd",
+                  "display": "$3.65",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    3.6492336330033543,
+                    3.6934309329323054,
+                    3.6006661151226758
+                  ],
+                  "in_log": true,
+                  "log_text": "$3.65",
+                  "logged_value": 3.65,
+                  "tolerance": 0.005
+                },
+                "busy_machines": {
+                  "value": 1.1816358199093184,
+                  "unit": "usd",
+                  "display": "$1.18",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    1.0526687593010906,
+                    1.0427179463527914,
+                    1.449520754074073
+                  ],
+                  "in_log": true,
+                  "log_text": "$1.18",
+                  "logged_value": 1.18,
+                  "tolerance": 0.005
+                }
+              },
+              "comparison": {
+                "value": 3.08705680060211,
+                "unit": "ratio",
+                "display": "3.1× cheaper",
+                "r_id": "R78",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "x_cheaper",
+                "formula": "standard mean ÷ Busy Machines mean (total_cost_usd)",
+                "in_log": true,
+                "log_text": "3.1× cheaper",
+                "logged_value": 3.1,
+                "tolerance": 0.05
+              },
+              "note": "AI calls (list-price estimate) + machine time used in the race"
+            },
+            {
+              "id": "cost_to_match_best",
+              "label": "Cost to match the standard assistant's best model",
+              "hover": "Money spent until the side first reached the standard assistant's final best score in the same race (for the standard assistant: when it found that best)",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 3.0981025168975354,
+                  "unit": "usd",
+                  "display": "$3.10",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "reached_in": "3 of 3 races",
+                  "in_log": true,
+                  "log_text": "Opus $3.10",
+                  "logged_value": 3.1,
+                  "tolerance": 0.005
+                },
+                "busy_machines": {
+                  "value": 0.4573178437514782,
+                  "unit": "usd",
+                  "display": "$0.46",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 2,
+                  "n_total": 3,
+                  "reached_in": "2 of 3 races",
+                  "in_log": true,
+                  "log_text": "BM $0.46",
+                  "logged_value": 0.46,
+                  "tolerance": 0.005
+                }
+              },
+              "comparison": null,
+              "note": "Busy Machines matched it in 2 of 3 races; in the third it ended 0.19 short. Averages are over the races that reached it, so no ratio is shown"
+            },
+            {
+              "id": "time_to_goal",
+              "label": "Time to reach the goal",
+              "hover": "Race time until the first checked model at or past the goal",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 1.0020188305113051,
+                  "unit": "minutes",
+                  "display": "1.0 min",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "seconds": 60.121129830678306,
+                  "in_log": true,
+                  "log_text": "1.0 min",
+                  "logged_value": 1.0,
+                  "tolerance": 0.05
+                },
+                "busy_machines": {
+                  "value": 0.27746042013168337,
+                  "unit": "minutes",
+                  "display": "0.3 min",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "seconds": 16.647625207901,
+                  "in_log": true,
+                  "log_text": "0.3 min",
+                  "logged_value": 0.3,
+                  "tolerance": 0.05
+                }
+              },
+              "comparison": null,
+              "note": "Goal: a score of −170, frozen before the races. It is an easy goal with 30 machines: the no-AI tuning tool also reaches it in the first minute (R78, R48)"
+            },
+            {
+              "id": "cost_to_goal",
+              "label": "Cost to reach the goal",
+              "hover": "AI bill plus machine time spent until the goal was first reached",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 0.20035400402345657,
+                  "unit": "usd",
+                  "display": "$0.20",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "in_log": true,
+                  "log_text": "$0.20 / 1.0 min",
+                  "logged_value": 0.2,
+                  "tolerance": 0.005
+                },
+                "busy_machines": {
+                  "value": 0.022329850040038426,
+                  "unit": "usd",
+                  "display": "$0.022",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "in_log": true,
+                  "log_text": "$0.022 / 0.3 min",
+                  "logged_value": 0.022,
+                  "tolerance": 0.0005
+                }
+              },
+              "comparison": null,
+              "note": "Goal: a score of −170, frozen before the races. It is an easy goal with 30 machines: the no-AI tuning tool also reaches it in the first minute (R78, R48)"
+            },
+            {
+              "id": "machines_waiting",
+              "label": "Machines waiting",
+              "hover": "Share of paid machine time with nothing to run (30 cloud CPU workers per side)",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 68.78374231129834,
+                  "unit": "percent",
+                  "display": "68.8%",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    69.04372602428823,
+                    68.90494515309034,
+                    68.40255575651646
+                  ],
+                  "in_log": true,
+                  "log_text": "68.8%",
+                  "logged_value": 68.8,
+                  "tolerance": 0.05
+                },
+                "busy_machines": {
+                  "value": 1.5413543337703943,
+                  "unit": "percent",
+                  "display": "1.5%",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    1.3663924810101726,
+                    1.4920325768968103,
+                    1.7656379434041996
+                  ],
+                  "in_log": true,
+                  "log_text": "1.5%",
+                  "logged_value": 1.5,
+                  "tolerance": 0.05
+                }
+              },
+              "comparison": null,
+              "note": "Why it works: the standard assistant leaves machines idle while it thinks"
+            },
+            {
+              "id": "experiments_per_dollar",
+              "label": "Experiments per dollar",
+              "hover": "Experiments finished ÷ total cost, per race",
+              "higher_is_better": true,
+              "values": {
+                "standard": {
+                  "value": 137.17620418384448,
+                  "unit": "experiments_per_usd",
+                  "display": "137",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "in_log": true,
+                  "log_text": "137 vs 1,376",
+                  "logged_value": 137.0,
+                  "tolerance": 0.5
+                },
+                "busy_machines": {
+                  "value": 1375.7741730513983,
+                  "unit": "experiments_per_usd",
+                  "display": "1,376",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "in_log": true,
+                  "log_text": "137 vs 1,376",
+                  "logged_value": 1376.0,
+                  "tolerance": 0.5
+                }
+              },
+              "comparison": {
+                "value": 10.029248011612689,
+                "unit": "ratio",
+                "display": "10× more",
+                "r_id": "R78",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "x_more",
+                "formula": "Busy Machines mean ÷ standard mean (experiments per $)",
+                "in_log": true,
+                "log_text": "(10×)",
+                "logged_value": 10.0,
+                "tolerance": 0.5
+              }
+            },
+            {
+              "id": "fake_improvements_accepted",
+              "label": "Fake improvements accepted",
+              "hover": "Attempts that tested on data they had already seen (a shortcut that fakes a better score) and were accepted as a new best. Busy Machines' built-in tuner tried the shortcut 847 times; the checker accepted none",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 10",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "of": 10,
+                  "in_log": true,
+                  "log_text": "0 of 10",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "busy_machines": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 847",
+                  "r_id": "R78",
+                  "source": {
+                    "race_ids": [
+                      "4ca4ed27",
+                      "d4913e95",
+                      "145c2a2d"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "of": 847,
+                  "in_log": true,
+                  "log_text": "0 of 847",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                }
+              },
+              "comparison": null
+            }
+          ]
+        }
+      ],
+      "worse_side": {
+        "caption": "In 1 of 3 races a burst of fake-checking calls took the AI bill to 0.34× the standard assistant's (still cheaper). Busy Machines matched the standard assistant's best model in 2 of 3 races.",
+        "items": [
+          {
+            "text": "Race 3: the built-in tuner found the shortcut 759 times; the checker caught every one, but the extra checks raised the AI bill to 0.34× the standard assistant's (other races 0.21×)",
+            "r_id": "R78",
+            "numbers": [
+              {
+                "value": 0.33788950889467206,
+                "unit": "ratio",
+                "display": "0.34×",
+                "r_id": "R78",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 1,
+                "in_log": true,
+                "log_text": "0.34×",
+                "logged_value": 0.34,
+                "tolerance": 0.005
+              },
+              {
+                "value": 759,
+                "unit": "count",
+                "display": "759",
+                "r_id": "R78",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 1,
+                "in_log": true,
+                "log_text": "759 trap runs",
+                "logged_value": 759.0,
+                "tolerance": 0.0
+              }
+            ]
+          },
+          {
+            "text": "Matching the standard assistant's best model: 2 of 3 races; in race 2 Busy Machines ended 0.19 short (the standard assistant's model was better there)",
+            "r_id": "R78",
+            "numbers": [
+              {
+                "value": 0.188140869140625,
+                "unit": "game_score",
+                "display": "0.19",
+                "r_id": "R78",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 1,
+                "in_log": true,
+                "log_text": "missed by 0.19",
+                "logged_value": 0.19,
+                "tolerance": 0.005
+              }
+            ]
+          },
+          {
+            "text": "The no-AI tuning tool costs less still ($0.35 per race) and reaches the easy goal for $0.009 in 0.4 min, but builds a worse model (−157.3) and shipped a fake in 3 of 3 races",
+            "r_id": "R78",
+            "numbers": [
+              {
+                "value": 0.350206770941647,
+                "unit": "usd",
+                "display": "$0.35",
+                "r_id": "R78",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "in_log": true,
+                "log_text": "vs $0.35",
+                "logged_value": 0.35,
+                "tolerance": 0.005
+              },
+              {
+                "value": 0.008576836388587951,
+                "unit": "usd",
+                "display": "$0.009",
+                "r_id": "R78",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "in_log": true,
+                "log_text": "$0.009 / 0.4 min",
+                "logged_value": 0.009,
+                "tolerance": 0.0005
+              },
+              {
+                "value": 0.36373351944817434,
+                "unit": "minutes",
+                "display": "0.4 min",
+                "r_id": "R78",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "in_log": true,
+                "log_text": "0.4 min",
+                "logged_value": 0.4,
+                "tolerance": 0.05
+              },
+              {
+                "value": -157.31788635253906,
+                "unit": "game_score",
+                "display": "−157.3",
+                "r_id": "R78",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "std": 1.4383824492308657,
+                "in_log": true,
+                "log_text": "−157.3 ± 1.4",
+                "logged_value": -157.3,
+                "tolerance": 0.05,
+                "logged_std": 1.4,
+                "std_tolerance": 0.05
+              },
+              {
+                "value": 3,
+                "unit": "count",
+                "display": "3 of 3",
+                "r_id": "R84",
+                "source": {
+                  "race_ids": [
+                    "4ca4ed27",
+                    "d4913e95",
+                    "145c2a2d"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "of": 3,
+                "in_log": true,
+                "log_text": "Optuna's shipped model was a fake in 3 of 3",
+                "logged_value": 3.0,
+                "tolerance": 0.0
+              }
+            ]
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "The shipped model came from Busy Machines' built-in no-AI tuner in 3 of 3 races; that tuner also learns from the AI's runs once the checker has ruled on them",
+          "r_id": "R84",
+          "numbers": [
+            {
+              "value": 3,
+              "unit": "count",
+              "display": "3 of 3",
+              "r_id": "R84",
+              "source": {
+                "race_ids": [
+                  "4ca4ed27",
+                  "d4913e95",
+                  "145c2a2d"
+                ],
+                "file": "data/bench/bench.db",
+                "computed_by": "scripts/headline.py run()"
+              },
+              "n": 3,
+              "of": 3,
+              "in_log": true,
+              "log_text": "shipped model came from the sampler in 3 of 3",
+              "logged_value": 3.0,
+              "tolerance": 0.0
+            }
+          ]
+        },
+        {
+          "text": "Machine cost here is the time used during the race. Cloud metering was higher (warm-up and idle containers, the same for every side)",
+          "r_id": "R78",
+          "numbers": []
+        },
+        {
+          "text": "AI $ is a list-price estimate",
+          "r_id": "R78",
+          "numbers": []
+        }
+      ],
+      "footer": "Game-playing: logged race R78, 3 runs per side · AI $ at list price · every number: docs/results_log.md"
+    },
+    {
+      "id": "tabular",
+      "order": 2,
+      "kind": "task",
+      "placement": "main",
+      "title": "Tabular model tuning",
+      "headline": "Nearly the same model. 4.0× cheaper AI bill, 35% less total cost.",
+      "r_ids": [
+        "R82",
+        "R84",
+        "R75"
+      ],
+      "panels": [
+        {
+          "id": "r82",
+          "title": "Tabular model tuning, AI asked at most every 30 s",
+          "r_id": "R82",
+          "race_ids": [
+            "c1f4b1d9",
+            "9d0cfd77",
+            "b3922d0e"
+          ],
+          "exports": [
+            "data/bench/race-lcbench-seed0-c1f4b1d9.jsonl",
+            "data/bench/race-lcbench-seed1-9d0cfd77.jsonl",
+            "data/bench/race-lcbench-seed2-b3922d0e.jsonl"
+          ],
+          "status": {
+            "text": "Pre-registered success line met (4 of 4 checks)",
+            "r_id": "R82"
+          },
+          "setup": "15 min per race · 16 GPUs (simulated GPU time) per side · same model (Opus 5.5), machines, clock, $ cap and starting code · 3 runs per side",
+          "sides": [
+            "standard",
+            "busy_machines"
+          ],
+          "metrics": [
+            {
+              "id": "model_quality",
+              "label": "Model quality",
+              "hover": "Best accuracy so far on data the model never trained on (higher is better)",
+              "higher_is_better": true,
+              "values": {
+                "standard": {
+                  "value": 0.889687716960907,
+                  "unit": "accuracy",
+                  "display": "0.8897",
+                  "r_id": "R82",
+                  "source": {
+                    "race_ids": [
+                      "c1f4b1d9",
+                      "9d0cfd77",
+                      "b3922d0e"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.0013431301924859344,
+                  "n_total": 3,
+                  "std_display": "± 0.0013",
+                  "per_run": [
+                    0.890462338924408,
+                    0.8881368041038513,
+                    0.8904640078544617
+                  ],
+                  "in_log": true,
+                  "log_text": "0.8897 ± 0.0013",
+                  "logged_value": 0.8897,
+                  "tolerance": 5e-05,
+                  "logged_std": 0.0013,
+                  "std_tolerance": 5e-05
+                },
+                "busy_machines": {
+                  "value": 0.8883553544680277,
+                  "unit": "accuracy",
+                  "display": "0.8884",
+                  "r_id": "R82",
+                  "source": {
+                    "race_ids": [
+                      "c1f4b1d9",
+                      "9d0cfd77",
+                      "b3922d0e"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.0017173088883436734,
+                  "n_total": 3,
+                  "std_display": "± 0.0017",
+                  "per_run": [
+                    0.8903366327285767,
+                    0.8872936367988586,
+                    0.887435793876648
+                  ],
+                  "in_log": true,
+                  "log_text": "0.8884 ± 0.0017",
+                  "logged_value": 0.8884,
+                  "tolerance": 5e-05,
+                  "logged_std": 0.0017,
+                  "std_tolerance": 5e-05
+                }
+              },
+              "comparison": {
+                "value": 1.207809734485415,
+                "unit": "percent",
+                "display": "Nearly the same: 0.0013 lower (about 1% more errors)",
+                "r_id": "R82",
+                "source": {
+                  "race_ids": [
+                    "c1f4b1d9",
+                    "9d0cfd77",
+                    "b3922d0e"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "pct_more_errors",
+                "formula": "(errors_BM − errors_standard) ÷ errors_standard, errors = 1 − accuracy (means)",
+                "gap": 0.0013323624928792688,
+                "gap_display": "0.0013",
+                "gap_log_text": "within 0.0013",
+                "per_run": {
+                  "values": [
+                    -0.00012570619583129883,
+                    -0.0008431673049926758,
+                    -0.0030282139778137207
+                  ],
+                  "display": "−0.0001, −0.0008, −0.0030",
+                  "r_id": "R82",
+                  "log_text": "−0.0001, −0.0008, −0.0030"
+                },
+                "in_log": true,
+                "log_text": "about 1% more errors",
+                "logged_value": 1.0,
+                "tolerance": 0.5
+              },
+              "verdict": "Within the pre-set 0.003 margin; the standard assistant was ahead in all 3 runs"
+            },
+            {
+              "id": "ai_bill_per_race",
+              "label": "AI bill per race",
+              "hover": "Cost of the assistant's AI calls in one 15-minute race, at list price (estimate)",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 2.7743762000000003,
+                  "unit": "usd",
+                  "display": "$2.77",
+                  "r_id": "R82",
+                  "source": {
+                    "race_ids": [
+                      "c1f4b1d9",
+                      "9d0cfd77",
+                      "b3922d0e"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    3.0091246000000003,
+                    2.7092748,
+                    2.6047292
+                  ],
+                  "note": "list-price estimate",
+                  "in_log": true,
+                  "log_text": "$2.774",
+                  "logged_value": 2.774,
+                  "tolerance": 0.0005
+                },
+                "busy_machines": {
+                  "value": 0.6979065999999999,
+                  "unit": "usd",
+                  "display": "$0.70",
+                  "r_id": "R82",
+                  "source": {
+                    "race_ids": [
+                      "c1f4b1d9",
+                      "9d0cfd77",
+                      "b3922d0e"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    0.6739372,
+                    0.7527769999999999,
+                    0.6670056
+                  ],
+                  "note": "list-price estimate",
+                  "in_log": true,
+                  "log_text": "$0.698",
+                  "logged_value": 0.698,
+                  "tolerance": 0.0005
+                }
+              },
+              "comparison": {
+                "value": 3.9752829390064526,
+                "unit": "ratio",
+                "display": "4.0× cheaper",
+                "r_id": "R82",
+                "source": {
+                  "race_ids": [
+                    "c1f4b1d9",
+                    "9d0cfd77",
+                    "b3922d0e"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "x_cheaper",
+                "formula": "standard mean ÷ Busy Machines mean (llm_cost_usd)",
+                "ratio_busy_over_standard": 0.25155442149482105,
+                "ratio_display": "0.25×",
+                "ratio_log_text": "0.25×",
+                "in_log": true,
+                "log_text": "4.0× cheaper",
+                "logged_value": 4.0,
+                "tolerance": 0.05,
+                "per_run_ratio": {
+                  "values": [
+                    0.22396453772635402,
+                    0.27785184433856613,
+                    0.2560748349578912
+                  ],
+                  "display": "0.22×, 0.28×, 0.26×",
+                  "r_id": "R82",
+                  "log_text": "0.22×, 0.28×, 0.26×"
+                }
+              },
+              "note": "list-price estimate"
+            },
+            {
+              "id": "total_cost_per_race",
+              "label": "Total cost per race",
+              "hover": "AI bill plus the machine time the side used during the race",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 5.9711761999999995,
+                  "unit": "usd",
+                  "display": "$5.97",
+                  "r_id": "R82",
+                  "source": {
+                    "race_ids": [
+                      "c1f4b1d9",
+                      "9d0cfd77",
+                      "b3922d0e"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    6.205924600000001,
+                    5.9060748,
+                    5.801529199999999
+                  ],
+                  "in_log": true,
+                  "log_text": "$5.97",
+                  "logged_value": 5.97,
+                  "tolerance": 0.005
+                },
+                "busy_machines": {
+                  "value": 3.8947065999999997,
+                  "unit": "usd",
+                  "display": "$3.89",
+                  "r_id": "R82",
+                  "source": {
+                    "race_ids": [
+                      "c1f4b1d9",
+                      "9d0cfd77",
+                      "b3922d0e"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    3.8707372000000015,
+                    3.949576999999998,
+                    3.8638055999999996
+                  ],
+                  "in_log": true,
+                  "log_text": "$3.89",
+                  "logged_value": 3.89,
+                  "tolerance": 0.005
+                }
+              },
+              "comparison": {
+                "value": 34.77488405048238,
+                "unit": "percent",
+                "display": "35% less",
+                "r_id": "R82",
+                "source": {
+                  "race_ids": [
+                    "c1f4b1d9",
+                    "9d0cfd77",
+                    "b3922d0e"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "pct_less",
+                "formula": "1 − Busy Machines mean ÷ standard mean (total cost)",
+                "in_log": true,
+                "log_text": "(−35%, GPU $ virtual)",
+                "logged_value": 35.0,
+                "tolerance": 0.5
+              },
+              "note": "AI calls (list-price estimate) + machine time used in the race; simulated GPU time"
+            },
+            {
+              "id": "machines_waiting",
+              "label": "Machines waiting",
+              "hover": "Share of paid machine time with nothing to run (16 GPUs per side, simulated machine time)",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 30.318402853276993,
+                  "unit": "percent",
+                  "display": "30.3%",
+                  "r_id": "R82",
+                  "source": {
+                    "race_ids": [
+                      "c1f4b1d9",
+                      "9d0cfd77",
+                      "b3922d0e"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    26.247592439254124,
+                    31.81867961088816,
+                    32.88893650968869
+                  ],
+                  "in_log": true,
+                  "log_text": "30.3%",
+                  "logged_value": 30.3,
+                  "tolerance": 0.05
+                },
+                "busy_machines": {
+                  "value": 1.1139415817128289,
+                  "unit": "percent",
+                  "display": "1.1%",
+                  "r_id": "R82",
+                  "source": {
+                    "race_ids": [
+                      "c1f4b1d9",
+                      "9d0cfd77",
+                      "b3922d0e"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    0.4968946592675315,
+                    2.1386091162761054,
+                    0.7063209695948495
+                  ],
+                  "in_log": true,
+                  "log_text": "1.1%",
+                  "logged_value": 1.1,
+                  "tolerance": 0.05
+                }
+              },
+              "comparison": null,
+              "note": "Why it works (simulated GPU time)"
+            },
+            {
+              "id": "fake_improvements_accepted",
+              "label": "Fake improvements accepted",
+              "hover": "Attempts that tested on data they had already seen, accepted as a new best",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 70",
+                  "r_id": "R84",
+                  "source": {
+                    "race_ids": [
+                      "c1f4b1d9",
+                      "9d0cfd77",
+                      "b3922d0e"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "of": 70,
+                  "in_log": true,
+                  "log_text": "0 of 70",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "busy_machines": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 85",
+                  "r_id": "R82",
+                  "source": {
+                    "race_ids": [
+                      "c1f4b1d9",
+                      "9d0cfd77",
+                      "b3922d0e"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "of": 85,
+                  "in_log": true,
+                  "log_text": "0 of 85",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                }
+              },
+              "comparison": null
+            }
+          ]
+        }
+      ],
+      "worse_side": {
+        "caption": "Slower to reach 0.86: 4.2 min vs 2.9 min. This pace was chosen after the first pre-registered setting failed (R75).",
+        "items": [
+          {
+            "text": "Slower to reach 0.86 accuracy: 4.2 min vs 2.9 min ($1.14 vs $1.08)",
+            "r_id": "R82",
+            "numbers": [
+              {
+                "value": 0.86,
+                "unit": "accuracy",
+                "display": "0.86",
+                "r_id": "R82",
+                "source": {
+                  "race_ids": [
+                    "c1f4b1d9",
+                    "9d0cfd77",
+                    "b3922d0e"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "in_log": true,
+                "log_text": "reach 0.86",
+                "logged_value": 0.86,
+                "tolerance": 0.0
+              },
+              {
+                "value": 4.194242530398899,
+                "unit": "minutes",
+                "display": "4.2 min",
+                "r_id": "R82",
+                "source": {
+                  "race_ids": [
+                    "c1f4b1d9",
+                    "9d0cfd77",
+                    "b3922d0e"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "side": "busy_machines",
+                "in_log": true,
+                "log_text": "4.2 min",
+                "logged_value": 4.2,
+                "tolerance": 0.05
+              },
+              {
+                "value": 1.1438809680786128,
+                "unit": "usd",
+                "display": "$1.14",
+                "r_id": "R82",
+                "source": {
+                  "race_ids": [
+                    "c1f4b1d9",
+                    "9d0cfd77",
+                    "b3922d0e"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "side": "busy_machines",
+                "in_log": true,
+                "log_text": "$1.14",
+                "logged_value": 1.14,
+                "tolerance": 0.005
+              },
+              {
+                "value": 2.8650352795918783,
+                "unit": "minutes",
+                "display": "2.9 min",
+                "r_id": "R82",
+                "source": {
+                  "race_ids": [
+                    "c1f4b1d9",
+                    "9d0cfd77",
+                    "b3922d0e"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "side": "standard",
+                "in_log": true,
+                "log_text": "2.9 min",
+                "logged_value": 2.9,
+                "tolerance": 0.05
+              },
+              {
+                "value": 1.0837814521199547,
+                "unit": "usd",
+                "display": "$1.08",
+                "r_id": "R82",
+                "source": {
+                  "race_ids": [
+                    "c1f4b1d9",
+                    "9d0cfd77",
+                    "b3922d0e"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "side": "standard",
+                "in_log": true,
+                "log_text": "$1.08",
+                "logged_value": 1.08,
+                "tolerance": 0.005
+              }
+            ]
+          },
+          {
+            "text": "The standard assistant's model was better in all 3 runs, by 0.0001, 0.0008 and 0.0030 (per-run gaps under Model quality); Busy Machines never reached its final best (0 of 3 runs)",
+            "r_id": "R82",
+            "numbers": []
+          },
+          {
+            "text": "The AI here was asked at most every 30 s. That pace was chosen after the first pre-registered setting (every 90 s) failed, and frozen before these races ran",
+            "r_id": "R82",
+            "numbers": [
+              {
+                "value": 30,
+                "unit": "seconds",
+                "display": "30 s",
+                "r_id": "R82",
+                "source": {
+                  "race_ids": [
+                    "c1f4b1d9",
+                    "9d0cfd77",
+                    "b3922d0e"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "in_log": true,
+                "log_text": "30 instead of 90",
+                "logged_value": 30.0,
+                "tolerance": 0.0
+              },
+              {
+                "value": 90,
+                "unit": "seconds",
+                "display": "90 s",
+                "r_id": "R75",
+                "source": {
+                  "race_ids": [
+                    "613e2537",
+                    "6afbbe8a",
+                    "c72b3af1"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "in_log": true,
+                "log_text": "planner every ≥90 s",
+                "logged_value": 90.0,
+                "tolerance": 0.0
+              }
+            ]
+          },
+          {
+            "text": "Machine time is simulated here, so the GPU part of the total cost is simulated too",
+            "r_id": "R82",
+            "numbers": []
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "Always shown beside R75, the first pre-registered setting, which failed",
+          "r_id": "R82",
+          "numbers": []
+        },
+        {
+          "text": "AI $ is a list-price estimate; GPU $ is simulated GPU time",
+          "r_id": "R82",
+          "numbers": []
+        }
+      ],
+      "footer": "Tabular: logged race R82, 3 runs per side · standard assistant ahead in every run · chosen after R75 failed · AI $ at list price · simulated machine time"
+    },
+    {
+      "id": "where_it_costs_quality",
+      "order": 3,
+      "kind": "strip",
+      "placement": "main",
+      "title": "Where it costs quality",
+      "headline": "Cheaper AI bill, worse model: 4.5× cheaper with 5% more errors (image recognition), 8.2× cheaper with 7% more errors (tabular, slower AI pace).",
+      "r_ids": [
+        "R85",
+        "R75"
+      ],
+      "panels": [
+        {
+          "id": "r85",
+          "title": "Image recognition",
+          "r_id": "R85",
+          "race_ids": [
+            "e8106409",
+            "9ec18124",
+            "9f494453"
+          ],
+          "exports": [
+            "data/bench/race-cifar-seed0-e8106409.jsonl",
+            "data/bench/race-cifar-seed1-9ec18124.jsonl",
+            "data/bench/race-cifar-seed2-9f494453.jsonl"
+          ],
+          "status": {
+            "text": "Quality gate failed: Busy Machines' model is worse",
+            "r_id": "R85"
+          },
+          "setup": "15 min per race · 3 L4 GPUs (cloud) per side · same model (Opus 5.5), machines, clock, $ cap and starting code · 3 runs per side",
+          "sides": [
+            "standard",
+            "busy_machines"
+          ],
+          "metrics": [
+            {
+              "id": "model_quality",
+              "label": "Model quality",
+              "hover": "Best accuracy so far on data the model never trained on (higher is better)",
+              "higher_is_better": true,
+              "values": {
+                "standard": {
+                  "value": 0.9450666507085165,
+                  "unit": "accuracy",
+                  "display": "0.9451",
+                  "r_id": "R85",
+                  "source": {
+                    "race_ids": [
+                      "e8106409",
+                      "9ec18124",
+                      "9f494453"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.0009451391851777572,
+                  "n_total": 3,
+                  "std_display": "± 0.0010",
+                  "per_run": [
+                    0.9453999996185303,
+                    0.9440000057220459,
+                    0.9457999467849731
+                  ],
+                  "in_log": true,
+                  "log_text": "0.9451 ± 0.0010",
+                  "logged_value": 0.9451,
+                  "tolerance": 5e-05,
+                  "tolerance_note": "log shows ± 0.0010; recomputed sample spread 0.00095",
+                  "logged_std": 0.001,
+                  "std_tolerance": 0.0001
+                },
+                "busy_machines": {
+                  "value": 0.9423999786376953,
+                  "unit": "accuracy",
+                  "display": "0.9424",
+                  "r_id": "R85",
+                  "source": {
+                    "race_ids": [
+                      "e8106409",
+                      "9ec18124",
+                      "9f494453"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.0009165111435791417,
+                  "n_total": 3,
+                  "std_display": "± 0.0009",
+                  "per_run": [
+                    0.943399965763092,
+                    0.9422000050544739,
+                    0.94159996509552
+                  ],
+                  "in_log": true,
+                  "log_text": "0.9424 ± 0.0009",
+                  "logged_value": 0.9424,
+                  "tolerance": 5e-05,
+                  "logged_std": 0.0009,
+                  "std_tolerance": 5e-05
+                }
+              },
+              "comparison": {
+                "value": 4.8543773595006074,
+                "unit": "percent",
+                "display": "5% more errors",
+                "r_id": "R85",
+                "source": {
+                  "race_ids": [
+                    "e8106409",
+                    "9ec18124",
+                    "9f494453"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "pct_more_errors",
+                "formula": "(errors_BM − errors_standard) ÷ errors_standard, errors = 1 − accuracy (means)",
+                "in_log": true,
+                "log_text": "5% more errors",
+                "logged_value": 5.0,
+                "tolerance": 0.5
+              }
+            },
+            {
+              "id": "ai_bill_per_race",
+              "label": "AI bill per race",
+              "hover": "Cost of the assistant's AI calls in one 15-minute race, at list price (estimate)",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 1.0563050666666667,
+                  "unit": "usd",
+                  "display": "$1.06",
+                  "r_id": "R85",
+                  "source": {
+                    "race_ids": [
+                      "e8106409",
+                      "9ec18124",
+                      "9f494453"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    1.01608,
+                    1.1210216,
+                    1.0318136
+                  ],
+                  "note": "list-price estimate",
+                  "in_log": true,
+                  "log_text": "$1.056",
+                  "logged_value": 1.056,
+                  "tolerance": 0.0005
+                },
+                "busy_machines": {
+                  "value": 0.2324836,
+                  "unit": "usd",
+                  "display": "$0.23",
+                  "r_id": "R85",
+                  "source": {
+                    "race_ids": [
+                      "e8106409",
+                      "9ec18124",
+                      "9f494453"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    0.2577008,
+                    0.2075324,
+                    0.2322176
+                  ],
+                  "note": "list-price estimate",
+                  "in_log": true,
+                  "log_text": "$0.233",
+                  "logged_value": 0.233,
+                  "tolerance": 0.001,
+                  "tolerance_note": "logged $0.233; recomputed $0.2325 (rounding in the log row)"
+                }
+              },
+              "comparison": {
+                "value": 4.543568091111229,
+                "unit": "ratio",
+                "display": "4.5× cheaper",
+                "r_id": "R85",
+                "source": {
+                  "race_ids": [
+                    "e8106409",
+                    "9ec18124",
+                    "9f494453"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "x_cheaper",
+                "formula": "standard mean ÷ Busy Machines mean (llm_cost_usd)",
+                "ratio_busy_over_standard": 0.2200913422990934,
+                "ratio_display": "0.22×",
+                "ratio_log_text": "0.22×",
+                "in_log": true,
+                "log_text": "4.5× cheaper",
+                "logged_value": 4.5,
+                "tolerance": 0.05
+              },
+              "note": "list-price estimate"
+            },
+            {
+              "id": "total_cost_per_race",
+              "label": "Total cost per race",
+              "hover": "AI bill plus the machine time the side used during the race",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 1.6557050666666668,
+                  "unit": "usd",
+                  "display": "$1.66",
+                  "r_id": "R85",
+                  "source": {
+                    "race_ids": [
+                      "e8106409",
+                      "9ec18124",
+                      "9f494453"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    1.61548,
+                    1.7204216,
+                    1.6312135999999997
+                  ],
+                  "in_log": true,
+                  "log_text": "$1.66",
+                  "logged_value": 1.66,
+                  "tolerance": 0.005
+                },
+                "busy_machines": {
+                  "value": 0.8318836000000002,
+                  "unit": "usd",
+                  "display": "$0.83",
+                  "r_id": "R85",
+                  "source": {
+                    "race_ids": [
+                      "e8106409",
+                      "9ec18124",
+                      "9f494453"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    0.8571008,
+                    0.8069324,
+                    0.8316176000000003
+                  ],
+                  "in_log": true,
+                  "log_text": "$0.83",
+                  "logged_value": 0.83,
+                  "tolerance": 0.005
+                }
+              },
+              "comparison": {
+                "value": 1.9903085800305074,
+                "unit": "ratio",
+                "display": "2.0× cheaper",
+                "r_id": "R85",
+                "source": {
+                  "race_ids": [
+                    "e8106409",
+                    "9ec18124",
+                    "9f494453"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "x_cheaper",
+                "formula": "standard mean ÷ Busy Machines mean (total_cost_usd)",
+                "in_log": true,
+                "log_text": "2.0× cheaper",
+                "logged_value": 2.0,
+                "tolerance": 0.05
+              },
+              "note": "AI calls (list-price estimate) + machine time used in the race"
+            },
+            {
+              "id": "time_to_goal",
+              "label": "Time to reach the goal",
+              "hover": "Race time until the first checked model at or past 0.94 accuracy",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 2.541897229353587,
+                  "unit": "minutes",
+                  "display": "2.5 min",
+                  "r_id": "R85",
+                  "source": {
+                    "race_ids": [
+                      "e8106409",
+                      "9ec18124",
+                      "9f494453"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "seconds": 152.5138337612152,
+                  "in_log": true,
+                  "log_text": "2.5 min",
+                  "logged_value": 2.5,
+                  "tolerance": 0.05
+                },
+                "busy_machines": {
+                  "value": 5.434106532732645,
+                  "unit": "minutes",
+                  "display": "5.4 min",
+                  "r_id": "R85",
+                  "source": {
+                    "race_ids": [
+                      "e8106409",
+                      "9ec18124",
+                      "9f494453"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "seconds": 326.04639196395874,
+                  "in_log": true,
+                  "log_text": "5.4 min",
+                  "logged_value": 5.4,
+                  "tolerance": 0.05
+                }
+              },
+              "comparison": {
+                "value": 2.137815199599772,
+                "unit": "ratio",
+                "display": "2.1× slower",
+                "r_id": "R85",
+                "source": {
+                  "race_ids": [
+                    "e8106409",
+                    "9ec18124",
+                    "9f494453"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "x_slower",
+                "formula": "Busy Machines mean ÷ standard mean (time to goal)",
+                "in_log": true,
+                "log_text": "2.1× slower",
+                "logged_value": 2.1,
+                "tolerance": 0.05
+              }
+            }
+          ]
+        },
+        {
+          "id": "r75",
+          "title": "Tabular model tuning, AI asked at most every 90 s",
+          "r_id": "R75",
+          "race_ids": [
+            "613e2537",
+            "6afbbe8a",
+            "c72b3af1"
+          ],
+          "exports": [
+            "data/bench/race-lcbench-seed0-613e2537.jsonl",
+            "data/bench/race-lcbench-seed1-6afbbe8a.jsonl",
+            "data/bench/race-lcbench-seed2-c72b3af1.jsonl"
+          ],
+          "status": {
+            "text": "Pre-registered success line failed",
+            "r_id": "R75"
+          },
+          "setup": "15 min per race · 16 GPUs (simulated GPU time) per side · same model (Opus 5.5), machines, clock, $ cap and starting code · 3 runs per side",
+          "sides": [
+            "standard",
+            "busy_machines"
+          ],
+          "metrics": [
+            {
+              "id": "model_quality",
+              "label": "Model quality",
+              "hover": "Best accuracy so far on data the model never trained on (higher is better)",
+              "higher_is_better": true,
+              "values": {
+                "standard": {
+                  "value": 0.8892062703768412,
+                  "unit": "accuracy",
+                  "display": "0.8892",
+                  "r_id": "R75",
+                  "source": {
+                    "race_ids": [
+                      "613e2537",
+                      "6afbbe8a",
+                      "c72b3af1"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.0016564520710976617,
+                  "n_total": 3,
+                  "std_display": "± 0.0017",
+                  "per_run": [
+                    0.8872936367988586,
+                    0.8901770114898682,
+                    0.8901481628417969
+                  ],
+                  "in_log": true,
+                  "log_text": "0.8892 ± 0.0017",
+                  "logged_value": 0.8892,
+                  "tolerance": 5e-05,
+                  "logged_std": 0.0017,
+                  "std_tolerance": 5e-05
+                },
+                "busy_machines": {
+                  "value": 0.8815658887227377,
+                  "unit": "accuracy",
+                  "display": "0.8816",
+                  "r_id": "R75",
+                  "source": {
+                    "race_ids": [
+                      "613e2537",
+                      "6afbbe8a",
+                      "c72b3af1"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.003802753095147233,
+                  "n_total": 3,
+                  "std_display": "± 0.0038",
+                  "per_run": [
+                    0.8841598033905029,
+                    0.8772006034851074,
+                    0.8833372592926025
+                  ],
+                  "in_log": true,
+                  "log_text": "0.8816 ± 0.0038",
+                  "logged_value": 0.8816,
+                  "tolerance": 5e-05,
+                  "logged_std": 0.0038,
+                  "std_tolerance": 5e-05
+                }
+              },
+              "comparison": {
+                "value": 6.896041572109405,
+                "unit": "percent",
+                "display": "7% more errors",
+                "r_id": "R75",
+                "source": {
+                  "race_ids": [
+                    "613e2537",
+                    "6afbbe8a",
+                    "c72b3af1"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "pct_more_errors",
+                "formula": "(errors_BM − errors_standard) ÷ errors_standard, errors = 1 − accuracy (means)",
+                "in_log": true,
+                "log_text": "7% more errors",
+                "logged_value": 7.0,
+                "tolerance": 0.5
+              }
+            },
+            {
+              "id": "ai_bill_per_race",
+              "label": "AI bill per race",
+              "hover": "Cost of the assistant's AI calls in one 15-minute race, at list price (estimate)",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 2.8307986,
+                  "unit": "usd",
+                  "display": "$2.83",
+                  "r_id": "R75",
+                  "source": {
+                    "race_ids": [
+                      "613e2537",
+                      "6afbbe8a",
+                      "c72b3af1"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    2.7127090000000003,
+                    2.8831842,
+                    2.8965026000000003
+                  ],
+                  "note": "list-price estimate",
+                  "in_log": true,
+                  "log_text": "$2.831",
+                  "logged_value": 2.831,
+                  "tolerance": 0.0005
+                },
+                "busy_machines": {
+                  "value": 0.34694426666666667,
+                  "unit": "usd",
+                  "display": "$0.35",
+                  "r_id": "R75",
+                  "source": {
+                    "race_ids": [
+                      "613e2537",
+                      "6afbbe8a",
+                      "c72b3af1"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    0.39881659999999997,
+                    0.3116672,
+                    0.330349
+                  ],
+                  "note": "list-price estimate",
+                  "in_log": true,
+                  "log_text": "$0.347",
+                  "logged_value": 0.347,
+                  "tolerance": 0.0005
+                }
+              },
+              "comparison": {
+                "value": 8.159231530751144,
+                "unit": "ratio",
+                "display": "8.2× cheaper",
+                "r_id": "R75",
+                "source": {
+                  "race_ids": [
+                    "613e2537",
+                    "6afbbe8a",
+                    "c72b3af1"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "x_cheaper",
+                "formula": "standard mean ÷ Busy Machines mean (llm_cost_usd)",
+                "ratio_busy_over_standard": 0.12256056176750499,
+                "ratio_display": "0.12×",
+                "ratio_log_text": "0.12×",
+                "in_log": true,
+                "log_text": "8.2× cheaper",
+                "logged_value": 8.2,
+                "tolerance": 0.05
+              },
+              "note": "list-price estimate"
+            },
+            {
+              "id": "total_cost_per_race",
+              "label": "Total cost per race",
+              "hover": "AI bill plus the machine time the side used during the race",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 6.027598600000002,
+                  "unit": "usd",
+                  "display": "$6.03",
+                  "r_id": "R75",
+                  "source": {
+                    "race_ids": [
+                      "613e2537",
+                      "6afbbe8a",
+                      "c72b3af1"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    5.909509000000003,
+                    6.079984200000004,
+                    6.093302600000001
+                  ],
+                  "in_log": true,
+                  "log_text": "$6.03",
+                  "logged_value": 6.03,
+                  "tolerance": 0.005
+                },
+                "busy_machines": {
+                  "value": 3.543744266666667,
+                  "unit": "usd",
+                  "display": "$3.54",
+                  "r_id": "R75",
+                  "source": {
+                    "race_ids": [
+                      "613e2537",
+                      "6afbbe8a",
+                      "c72b3af1"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "n_total": 3,
+                  "per_run": [
+                    3.595616599999998,
+                    3.508467200000002,
+                    3.527149000000002
+                  ],
+                  "in_log": true,
+                  "log_text": "$3.54",
+                  "logged_value": 3.54,
+                  "tolerance": 0.005
+                }
+              },
+              "comparison": {
+                "value": 41.208024922783245,
+                "unit": "percent",
+                "display": "41% less",
+                "r_id": "R75",
+                "source": {
+                  "race_ids": [
+                    "613e2537",
+                    "6afbbe8a",
+                    "c72b3af1"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "pct_less",
+                "formula": "1 − Busy Machines mean ÷ standard mean (total cost)",
+                "in_log": true,
+                "log_text": "(−41%)",
+                "logged_value": 41.0,
+                "tolerance": 0.5
+              },
+              "note": "AI calls (list-price estimate) + machine time used in the race; simulated GPU time"
+            }
+          ]
+        }
+      ],
+      "worse_side": {
+        "caption": "Here the cheaper bill comes with a worse model: Busy Machines never matched the standard assistant's best (0 of 3 races in both).",
+        "items": [
+          {
+            "text": "Image recognition: never matched the standard assistant's final model (0 of 3), 2.1× slower to the goal, and its shipped model (0.9395) sat below the 0.94 goal",
+            "r_id": "R85",
+            "numbers": [
+              {
+                "value": 2.137815199599772,
+                "unit": "ratio",
+                "display": "2.1× slower",
+                "r_id": "R85",
+                "source": {
+                  "race_ids": [
+                    "e8106409",
+                    "9ec18124",
+                    "9f494453"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "x_slower",
+                "formula": "Busy Machines mean ÷ standard mean (time to goal)",
+                "in_log": true,
+                "log_text": "2.1× slower",
+                "logged_value": 2.1,
+                "tolerance": 0.05
+              },
+              {
+                "value": 0.939466655254364,
+                "unit": "accuracy",
+                "display": "0.9395",
+                "r_id": "R85",
+                "source": {
+                  "race_ids": [
+                    "e8106409",
+                    "9ec18124",
+                    "9f494453"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "in_log": true,
+                "log_text": "vs 0.9395",
+                "logged_value": 0.9395,
+                "tolerance": 5e-05
+              },
+              {
+                "value": 0.94,
+                "unit": "accuracy",
+                "display": "0.94",
+                "r_id": "R85",
+                "source": {
+                  "race_ids": [
+                    "e8106409",
+                    "9ec18124",
+                    "9f494453"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "in_log": true,
+                "log_text": "goal 0.94",
+                "logged_value": 0.94,
+                "tolerance": 0.0
+              }
+            ]
+          },
+          {
+            "text": "Image-recognition runs are long, so machines wait little even for the standard assistant (12%) and the built-in tuner adds nothing: fewer AI proposals cost quality",
+            "r_id": "R85",
+            "numbers": [
+              {
+                "value": 11.95728858900659,
+                "unit": "percent",
+                "display": "12%",
+                "r_id": "R85",
+                "source": {
+                  "race_ids": [
+                    "e8106409",
+                    "9ec18124",
+                    "9f494453"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "in_log": true,
+                "log_text": "GPUs waiting 12.0%",
+                "logged_value": 12.0,
+                "tolerance": 0.05
+              }
+            ]
+          },
+          {
+            "text": "Tabular at 90 s: the first pre-registered setting; logged as a fail, no re-runs",
+            "r_id": "R75",
+            "numbers": [
+              {
+                "value": 90,
+                "unit": "seconds",
+                "display": "90 s",
+                "r_id": "R75",
+                "source": {
+                  "race_ids": [
+                    "613e2537",
+                    "6afbbe8a",
+                    "c72b3af1"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "in_log": true,
+                "log_text": "planner every ≥90 s",
+                "logged_value": 90.0,
+                "tolerance": 0.0
+              }
+            ]
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "AI $ is a list-price estimate; tabular GPU $ is simulated GPU time",
+          "r_id": "R75",
+          "numbers": []
+        }
+      ],
+      "footer": "Image recognition: R85 · tabular at the 90 s pace: R75 (failed, shown beside R82)"
+    },
+    {
+      "id": "sapling",
+      "order": 4,
+      "kind": "verifier",
+      "placement": "main",
+      "title": "Catching fake improvements",
+      "headline": "The published Sapling caught 0 of 109 fakes in our real race claims; our fine-tune catches 57 of 109 and approves none.",
+      "r_ids": [
+        "R81",
+        "R83",
+        "R76"
+      ],
+      "panels": [
+        {
+          "id": "r81_r83",
+          "title": "226 real claims from our races, 152 with known truth",
+          "r_id": "R81",
+          "race_ids": [],
+          "exports": [
+            "data/sapling/compare_published/compare_published.json",
+            "data/sapling/sapling_v4/heads/final_v4.json"
+          ],
+          "status": {
+            "text": "v2 is the release; v4 is shown for reference and was not released",
+            "r_id": "R83"
+          },
+          "setup": "Each checker reads the same claims and says: real, fake, or no answer",
+          "sides": [
+            "published_sapling",
+            "ours_v2_strict",
+            "ours_v2_looser",
+            "ours_v4_strict",
+            "ours_v4_looser",
+            "opus"
+          ],
+          "metrics": [
+            {
+              "id": "fakes_caught",
+              "label": "Fakes caught",
+              "hover": "Known fake improvements the checker called fake, of 109",
+              "higher_is_better": true,
+              "values": {
+                "published_sapling": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 109",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.stock_sapling_published.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "0/109",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "ours_v2_strict": {
+                  "value": 8,
+                  "unit": "count",
+                  "display": "8 of 109",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.sapling_research_v2_a01.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "8/109",
+                  "logged_value": 8.0,
+                  "tolerance": 0.0
+                },
+                "ours_v2_looser": {
+                  "value": 57,
+                  "unit": "count",
+                  "display": "57 of 109",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.sapling_research_v2_a05.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "57/109",
+                  "logged_value": 57.0,
+                  "tolerance": 0.0
+                },
+                "ours_v4_strict": {
+                  "value": 97,
+                  "unit": "count",
+                  "display": "97 of 109",
+                  "r_id": "R83",
+                  "source": {
+                    "file": "data/sapling/sapling_v4/heads/final_v4.json",
+                    "key": "r81.results.v4_a01.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "57 / 97 / 104 / 109",
+                  "logged_value": 97.0,
+                  "tolerance": 0.0
+                },
+                "ours_v4_looser": {
+                  "value": 104,
+                  "unit": "count",
+                  "display": "104 of 109",
+                  "r_id": "R83",
+                  "source": {
+                    "file": "data/sapling/sapling_v4/heads/final_v4.json",
+                    "key": "r81.results.v4_a05.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "57 / 97 / 104 / 109",
+                  "logged_value": 104.0,
+                  "tolerance": 0.0
+                },
+                "opus": {
+                  "value": 109,
+                  "unit": "count",
+                  "display": "109 of 109",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.opus_5_5_recorded.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "109/109",
+                  "logged_value": 109.0,
+                  "tolerance": 0.0
+                }
+              },
+              "comparison": null
+            },
+            {
+              "id": "fakes_approved",
+              "label": "Fakes approved",
+              "hover": "Known fake improvements the checker called real, of 109",
+              "higher_is_better": false,
+              "values": {
+                "published_sapling": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 109",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.stock_sapling_published.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "fakes approved 0 / 0 / 0 / 0",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "ours_v2_strict": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 109",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.sapling_research_v2_a01.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "fakes approved 0 / 0 / 0 / 0",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "ours_v2_looser": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 109",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.sapling_research_v2_a05.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "fakes approved 0 / 0 / 0 / 0",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "ours_v4_strict": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 109",
+                  "r_id": "R83",
+                  "source": {
+                    "file": "data/sapling/sapling_v4/heads/final_v4.json",
+                    "key": "r81.results.v4_a01.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "fakes approved 0 / 0 / 1",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "ours_v4_looser": {
+                  "value": 1,
+                  "unit": "count",
+                  "display": "1 of 109",
+                  "r_id": "R83",
+                  "source": {
+                    "file": "data/sapling/sapling_v4/heads/final_v4.json",
+                    "key": "r81.results.v4_a05.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "fakes approved 0 / 0 / 1",
+                  "logged_value": 1.0,
+                  "tolerance": 0.0
+                },
+                "opus": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 109",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.opus_5_5_recorded.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 109,
+                  "of": 109,
+                  "in_log": true,
+                  "log_text": "fakes approved 0 / 0 / 0 / 0",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                }
+              },
+              "comparison": null
+            },
+            {
+              "id": "real_confirmed",
+              "label": "Real improvements confirmed",
+              "hover": "Confirmed real gains the checker called real, of 7 (few cases: counts, not rates)",
+              "higher_is_better": true,
+              "values": {
+                "published_sapling": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 7",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.stock_sapling_published.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 7,
+                  "of": 7,
+                  "in_log": true,
+                  "log_text": "real gains accepted 0/7 for all four",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "ours_v2_strict": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 7",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.sapling_research_v2_a01.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 7,
+                  "of": 7,
+                  "in_log": true,
+                  "log_text": "real gains accepted 0/7 for all four",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "ours_v2_looser": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 7",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.sapling_research_v2_a05.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 7,
+                  "of": 7,
+                  "in_log": true,
+                  "log_text": "real gains accepted 0/7 for all four",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "ours_v4_strict": {
+                  "value": 5,
+                  "unit": "count",
+                  "display": "5 of 7",
+                  "r_id": "R83",
+                  "source": {
+                    "file": "data/sapling/sapling_v4/heads/final_v4.json",
+                    "key": "r81.results.v4_a01.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 7,
+                  "of": 7,
+                  "in_log": true,
+                  "log_text": "real gains accepted 0 / 5 / 5 / 0 of 7",
+                  "logged_value": 5.0,
+                  "tolerance": 0.0
+                },
+                "ours_v4_looser": {
+                  "value": 5,
+                  "unit": "count",
+                  "display": "5 of 7",
+                  "r_id": "R83",
+                  "source": {
+                    "file": "data/sapling/sapling_v4/heads/final_v4.json",
+                    "key": "r81.results.v4_a05.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 7,
+                  "of": 7,
+                  "in_log": true,
+                  "log_text": "real gains accepted 0 / 5 / 5 / 0 of 7",
+                  "logged_value": 5.0,
+                  "tolerance": 0.0
+                },
+                "opus": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 7",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.opus_5_5_recorded.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 7,
+                  "of": 7,
+                  "in_log": true,
+                  "log_text": "real gains accepted 0/7 for all four",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                }
+              },
+              "comparison": null
+            },
+            {
+              "id": "no_answer",
+              "label": "No answer",
+              "hover": "Claims where the checker gave no confident answer, of 152",
+              "higher_is_better": false,
+              "values": {
+                "published_sapling": {
+                  "value": 152,
+                  "unit": "count",
+                  "display": "152 of 152",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.stock_sapling_published.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 152,
+                  "of": 152,
+                  "in_log": true,
+                  "log_text": "152/152",
+                  "logged_value": 152.0,
+                  "tolerance": 0.0
+                },
+                "ours_v2_strict": {
+                  "value": 105,
+                  "unit": "count",
+                  "display": "105 of 152",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.sapling_research_v2_a01.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 152,
+                  "of": 152,
+                  "in_log": true,
+                  "log_text": "105/152",
+                  "logged_value": 105.0,
+                  "tolerance": 0.0
+                },
+                "ours_v2_looser": {
+                  "value": 24,
+                  "unit": "count",
+                  "display": "24 of 152",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.sapling_research_v2_a05.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 152,
+                  "of": 152,
+                  "in_log": true,
+                  "log_text": "24/152",
+                  "logged_value": 24.0,
+                  "tolerance": 0.0
+                },
+                "ours_v4_strict": {
+                  "value": 22,
+                  "unit": "count",
+                  "display": "22 of 152",
+                  "r_id": "R83",
+                  "source": {
+                    "file": "data/sapling/sapling_v4/heads/final_v4.json",
+                    "key": "r81.results.v4_a01.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 152,
+                  "of": 152,
+                  "in_log": true,
+                  "log_text": "unsure 24 / 22 / 6",
+                  "logged_value": 22.0,
+                  "tolerance": 0.0
+                },
+                "ours_v4_looser": {
+                  "value": 6,
+                  "unit": "count",
+                  "display": "6 of 152",
+                  "r_id": "R83",
+                  "source": {
+                    "file": "data/sapling/sapling_v4/heads/final_v4.json",
+                    "key": "r81.results.v4_a05.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 152,
+                  "of": 152,
+                  "in_log": true,
+                  "log_text": "unsure 24 / 22 / 6",
+                  "logged_value": 6.0,
+                  "tolerance": 0.0
+                },
+                "opus": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "Always answers",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "results.opus_5_5_recorded.ground_truth",
+                    "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                  },
+                  "n": 152,
+                  "of": 152,
+                  "in_log": true,
+                  "log_text": "Opus never abstains",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                }
+              },
+              "comparison": null
+            },
+            {
+              "id": "time_per_check",
+              "label": "Time per check",
+              "hover": "Median time per claim: Sapling models on one H100; Opus 5.5 median call time",
+              "higher_is_better": false,
+              "values": {
+                "published_sapling": {
+                  "value": 105.2,
+                  "unit": "ms",
+                  "display": "105.2 ms",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "latency_and_cost"
+                  },
+                  "n": 226,
+                  "in_log": true,
+                  "log_text": "stock median 105.2 ms",
+                  "logged_value": 105.2,
+                  "tolerance": 0.05
+                },
+                "ours_v2_strict": {
+                  "value": 99.4,
+                  "unit": "ms",
+                  "display": "99.4 ms",
+                  "r_id": "R76",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "latency_and_cost"
+                  },
+                  "n": 16,
+                  "in_log": true,
+                  "log_text": "median 99.4 ms",
+                  "logged_value": 99.4,
+                  "tolerance": 0.05
+                },
+                "ours_v2_looser": {
+                  "value": 99.4,
+                  "unit": "ms",
+                  "display": "99.4 ms",
+                  "r_id": "R76",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "latency_and_cost"
+                  },
+                  "n": 16,
+                  "in_log": true,
+                  "log_text": "median 99.4 ms",
+                  "logged_value": 99.4,
+                  "tolerance": 0.05
+                },
+                "ours_v4_strict": null,
+                "ours_v4_looser": null,
+                "opus": {
+                  "value": 1655.7,
+                  "unit": "ms",
+                  "display": "1,656 ms",
+                  "r_id": "R81",
+                  "source": {
+                    "file": "data/sapling/compare_published/compare_published.json",
+                    "key": "latency_and_cost"
+                  },
+                  "n": 405,
+                  "in_log": true,
+                  "log_text": "p50 1,656 ms",
+                  "logged_value": 1656.0,
+                  "tolerance": 0.5
+                }
+              },
+              "comparison": null,
+              "note": "v4 timing not measured"
+            }
+          ]
+        }
+      ],
+      "worse_side": {
+        "caption": "v4 did not pass our general gate (R83); v2 is the release",
+        "items": [
+          {
+            "text": "Opus 5.5 is still the better checker: 109 of 109 fakes caught vs 57 of 109 for our release",
+            "r_id": "R81",
+            "numbers": [
+              {
+                "value": 109,
+                "unit": "count",
+                "display": "109 of 109",
+                "r_id": "R81",
+                "source": {
+                  "file": "data/sapling/compare_published/compare_published.json",
+                  "key": "results.opus_5_5_recorded.ground_truth",
+                  "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                },
+                "n": 109,
+                "of": 109,
+                "in_log": true,
+                "log_text": "109/109",
+                "logged_value": 109.0,
+                "tolerance": 0.0
+              },
+              {
+                "value": 57,
+                "unit": "count",
+                "display": "57 of 109",
+                "r_id": "R81",
+                "source": {
+                  "file": "data/sapling/compare_published/compare_published.json",
+                  "key": "results.sapling_research_v2_a05.ground_truth",
+                  "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                },
+                "n": 109,
+                "of": 109,
+                "in_log": true,
+                "log_text": "57/109",
+                "logged_value": 57.0,
+                "tolerance": 0.0
+              }
+            ]
+          },
+          {
+            "text": "v4 at the looser setting approved 1 fake, and it is worse than v2 on general claims and contracts (79.5% vs 84.25% on ContractNLI)",
+            "r_id": "R83",
+            "numbers": [
+              {
+                "value": 1,
+                "unit": "count",
+                "display": "1 of 109",
+                "r_id": "R83",
+                "source": {
+                  "file": "data/sapling/sapling_v4/heads/final_v4.json",
+                  "key": "r81.results.v4_a05.ground_truth",
+                  "rows": "226 real race claims, 152 with known truth (109 fake, 36 noise, 7 real)"
+                },
+                "n": 109,
+                "of": 109,
+                "in_log": true,
+                "log_text": "fakes approved 0 / 0 / 1",
+                "logged_value": 1.0,
+                "tolerance": 0.0
+              },
+              {
+                "value": 79.5,
+                "unit": "percent",
+                "display": "79.5%",
+                "r_id": "R83",
+                "source": {
+                  "file": "data/sapling/sapling_v4/heads/final_v4.json",
+                  "key": "gate.predeclared.checks.d.contractnli_400_raw_accuracy"
+                },
+                "n": 400,
+                "in_log": true,
+                "log_text": "ContractNLI 84.25% vs 79.5%",
+                "logged_value": 79.5,
+                "tolerance": 0.0005
+              },
+              {
+                "value": 84.25,
+                "unit": "percent",
+                "display": "84.25%",
+                "r_id": "R83",
+                "source": {
+                  "file": "data/sapling/sapling_v4/heads/final_v4.json",
+                  "key": "gate.v2_reference.a05.cnli_raw_acc"
+                },
+                "n": 400,
+                "in_log": true,
+                "log_text": "ContractNLI 84.25%",
+                "logged_value": 84.25,
+                "tolerance": 0.0005
+              }
+            ]
+          },
+          {
+            "text": "Only 7 real improvements in the set, so these are counts, not rates; the released v2 and Opus confirm none of them",
+            "r_id": "R81",
+            "numbers": []
+          },
+          {
+            "text": "Our fine-tune retrains Banyan Sapling's verification head with the backbone frozen; a community fine-tune, not an official MubitLabs model",
+            "r_id": "R81",
+            "numbers": []
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "The race checker in the other cards is Opus 5.5; the Sapling fine-tune runs offline",
+          "r_id": "R81",
+          "numbers": []
+        }
+      ],
+      "footer": "R81 (published Sapling vs v2 vs Opus) · R83 (v4, failed its gate) · R76 (v2 timing)"
+    },
+    {
+      "id": "vs_no_ai_tool",
+      "order": 5,
+      "kind": "baseline",
+      "placement": "secondary",
+      "title": "Versus a no-AI tuning tool",
+      "headline": "The AI assistant's model has 22% fewer errors (image recognition) and 28% fewer errors (tabular); the no-AI tool shipped a fake in 6 of 9 races.",
+      "r_ids": [
+        "R53",
+        "R38",
+        "R54"
+      ],
+      "panels": [
+        {
+          "id": "r53",
+          "title": "Image recognition",
+          "r_id": "R53",
+          "race_ids": [
+            "60477ba1",
+            "949fce51",
+            "c8261494"
+          ],
+          "exports": [
+            "data/bench/race-cifar-seed0-60477ba1.jsonl",
+            "data/bench/race-cifar-seed1-949fce51.jsonl",
+            "data/bench/race-cifar-seed2-c8261494.jsonl"
+          ],
+          "status": {
+            "text": "Logged result: 3 races per side",
+            "r_id": "R53"
+          },
+          "setup": "15 min per race · 3 L4 GPUs (cloud) per side · same machines, clock and starting code · 3 runs per side",
+          "sides": [
+            "standard",
+            "no_ai_tool"
+          ],
+          "metrics": [
+            {
+              "id": "model_quality",
+              "label": "Model quality",
+              "hover": "Best accuracy so far on data the model never trained on (higher is better)",
+              "higher_is_better": true,
+              "values": {
+                "standard": {
+                  "value": 0.9447999795277914,
+                  "unit": "accuracy",
+                  "display": "0.9448",
+                  "r_id": "R53",
+                  "source": {
+                    "race_ids": [
+                      "60477ba1",
+                      "949fce51",
+                      "c8261494"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.0014422201268555661,
+                  "n_total": 3,
+                  "std_display": "± 0.0014",
+                  "per_run": [
+                    0.946399986743927,
+                    0.9443999528884888,
+                    0.9435999989509583
+                  ],
+                  "in_log": true,
+                  "log_text": "0.9448 ± 0.0014",
+                  "logged_value": 0.9448,
+                  "tolerance": 5e-05,
+                  "logged_std": 0.0014,
+                  "std_tolerance": 5e-05
+                },
+                "no_ai_tool": {
+                  "value": 0.9293999870618185,
+                  "unit": "accuracy",
+                  "display": "0.9294",
+                  "r_id": "R53",
+                  "source": {
+                    "race_ids": [
+                      "60477ba1",
+                      "949fce51",
+                      "c8261494"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.0022271113290561286,
+                  "n_total": 3,
+                  "std_display": "± 0.0022",
+                  "per_run": [
+                    0.9314000010490417,
+                    0.9269999861717224,
+                    0.9297999739646912
+                  ],
+                  "in_log": true,
+                  "log_text": "0.9294 ± 0.0022",
+                  "logged_value": 0.9294,
+                  "tolerance": 5e-05,
+                  "logged_std": 0.0022,
+                  "std_tolerance": 5e-05
+                }
+              },
+              "comparison": {
+                "value": 21.813016492585312,
+                "unit": "percent",
+                "display": "22% fewer errors",
+                "r_id": "R53",
+                "source": {
+                  "race_ids": [
+                    "60477ba1",
+                    "949fce51",
+                    "c8261494"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "pct_fewer_errors",
+                "formula": "(errors_tool − errors_assistant) ÷ errors_tool, errors = 1 − accuracy (means)",
+                "in_log": true,
+                "log_text": "22% fewer errors",
+                "logged_value": 22.0,
+                "tolerance": 0.5
+              }
+            },
+            {
+              "id": "fake_improvements_accepted",
+              "label": "Fake improvements accepted",
+              "hover": "Attempts that tested on data they had already seen, accepted as a new best",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 0",
+                  "r_id": "R53",
+                  "source": {
+                    "race_ids": [
+                      "60477ba1",
+                      "949fce51",
+                      "c8261494"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "of": 0,
+                  "in_log": true,
+                  "log_text": "0 (Opus ran 0 trap runs)",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "no_ai_tool": {
+                  "value": 15,
+                  "unit": "count",
+                  "display": "15 of 118",
+                  "r_id": "R53",
+                  "source": {
+                    "race_ids": [
+                      "60477ba1",
+                      "949fce51",
+                      "c8261494"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "of": 118,
+                  "in_log": true,
+                  "log_text": "15 of 118",
+                  "logged_value": 15.0,
+                  "tolerance": 0.0
+                }
+              },
+              "comparison": null,
+              "note": "The AI assistant never tried the shortcut on image recognition"
+            }
+          ]
+        },
+        {
+          "id": "r38",
+          "title": "Tabular model tuning",
+          "r_id": "R38",
+          "race_ids": [
+            "5245bacc",
+            "91a4e48d",
+            "f98b6712"
+          ],
+          "exports": [
+            "data/bench/race-lcbench-seed0-5245bacc.jsonl",
+            "data/bench/race-lcbench-seed1-91a4e48d.jsonl",
+            "data/bench/race-lcbench-seed2-f98b6712.jsonl"
+          ],
+          "status": {
+            "text": "Logged result: 3 races per side",
+            "r_id": "R38"
+          },
+          "setup": "15 min per race · 16 GPUs (simulated GPU time) per side · same machines, clock and starting code · 3 runs per side",
+          "sides": [
+            "standard",
+            "no_ai_tool"
+          ],
+          "metrics": [
+            {
+              "id": "model_quality",
+              "label": "Model quality",
+              "hover": "Best accuracy so far on data the model never trained on (higher is better)",
+              "higher_is_better": true,
+              "values": {
+                "standard": {
+                  "value": 0.8560091455777487,
+                  "unit": "accuracy",
+                  "display": "0.856",
+                  "r_id": "R38",
+                  "source": {
+                    "race_ids": [
+                      "5245bacc",
+                      "91a4e48d",
+                      "f98b6712"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.009597943014992845,
+                  "n_total": 3,
+                  "std_display": "± 0.010",
+                  "per_run": [
+                    0.8450546264648438,
+                    0.8629422187805176,
+                    0.8600305914878845
+                  ],
+                  "in_log": true,
+                  "log_text": "0.856 ± 0.010",
+                  "logged_value": 0.856,
+                  "tolerance": 0.0005,
+                  "logged_std": 0.01,
+                  "std_tolerance": 0.0005
+                },
+                "no_ai_tool": {
+                  "value": 0.7989590565363566,
+                  "unit": "accuracy",
+                  "display": "0.799",
+                  "r_id": "R38",
+                  "source": {
+                    "race_ids": [
+                      "5245bacc",
+                      "91a4e48d",
+                      "f98b6712"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "std": 0.021766051530998448,
+                  "n_total": 3,
+                  "std_display": "± 0.022",
+                  "per_run": [
+                    0.7768232226371765,
+                    0.7997184991836548,
+                    0.8203354477882385
+                  ],
+                  "in_log": true,
+                  "log_text": "0.799 ± 0.022",
+                  "logged_value": 0.799,
+                  "tolerance": 0.0005,
+                  "logged_std": 0.022,
+                  "std_tolerance": 0.0005
+                }
+              },
+              "comparison": {
+                "value": 28.377348443805484,
+                "unit": "percent",
+                "display": "28% fewer errors",
+                "r_id": "R38",
+                "source": {
+                  "race_ids": [
+                    "5245bacc",
+                    "91a4e48d",
+                    "f98b6712"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "kind": "pct_fewer_errors",
+                "formula": "(errors_tool − errors_assistant) ÷ errors_tool, errors = 1 − accuracy (means)",
+                "in_log": true,
+                "log_text": "28% fewer errors",
+                "logged_value": 28.0,
+                "tolerance": 0.5
+              }
+            },
+            {
+              "id": "fake_improvements_accepted",
+              "label": "Fake improvements accepted",
+              "hover": "Attempts that tested on data they had already seen, accepted as a new best",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 33",
+                  "r_id": "R38",
+                  "source": {
+                    "race_ids": [
+                      "5245bacc",
+                      "91a4e48d",
+                      "f98b6712"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "of": 33,
+                  "in_log": true,
+                  "log_text": "Opus 0/33",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "no_ai_tool": {
+                  "value": 8,
+                  "unit": "count",
+                  "display": "8 of 62",
+                  "r_id": "R38",
+                  "source": {
+                    "race_ids": [
+                      "5245bacc",
+                      "91a4e48d",
+                      "f98b6712"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run()"
+                  },
+                  "n": 3,
+                  "of": 62,
+                  "in_log": true,
+                  "log_text": "Optuna 8/62",
+                  "logged_value": 8.0,
+                  "tolerance": 0.0
+                }
+              },
+              "comparison": null
+            }
+          ]
+        },
+        {
+          "id": "r54",
+          "title": "Across 9 races",
+          "r_id": "R54",
+          "race_ids": [
+            "8a76fa05",
+            "45ab180f",
+            "59d7f7eb",
+            "60477ba1",
+            "949fce51",
+            "c8261494",
+            "2ded10bc",
+            "e3fddb29",
+            "aaedd180"
+          ],
+          "exports": [
+            "data/bench/race-rl-seed0-8a76fa05.jsonl",
+            "data/bench/race-rl-seed1-45ab180f.jsonl",
+            "data/bench/race-rl-seed2-59d7f7eb.jsonl",
+            "data/bench/race-cifar-seed0-60477ba1.jsonl",
+            "data/bench/race-cifar-seed1-949fce51.jsonl",
+            "data/bench/race-cifar-seed2-c8261494.jsonl",
+            "data/bench/race-lcbench-seed0-2ded10bc.jsonl",
+            "data/bench/race-lcbench-seed1-e3fddb29.jsonl",
+            "data/bench/race-lcbench-seed2-aaedd180.jsonl"
+          ],
+          "status": {
+            "text": "Computed from the logged races, no new runs",
+            "r_id": "R54"
+          },
+          "setup": "Game-playing (R48), image recognition (R53) and tabular (R44), 3 races each",
+          "sides": [
+            "standard",
+            "no_ai_tool"
+          ],
+          "metrics": [
+            {
+              "id": "shipped_fake",
+              "label": "Shipped a fake improvement",
+              "hover": "Races where the model a side would hand over was a fake improvement (game-playing 3 races, image recognition 3, tabular 3)",
+              "higher_is_better": false,
+              "values": {
+                "standard": {
+                  "value": 0,
+                  "unit": "count",
+                  "display": "0 of 9",
+                  "r_id": "R54",
+                  "source": {
+                    "race_ids": [
+                      "8a76fa05",
+                      "45ab180f",
+                      "59d7f7eb",
+                      "60477ba1",
+                      "949fce51",
+                      "c8261494",
+                      "2ded10bc",
+                      "e3fddb29",
+                      "aaedd180"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run() (RaceArm.shipped_is_fake)",
+                    "race_sets": [
+                      "R48",
+                      "R53",
+                      "R44"
+                    ]
+                  },
+                  "n": 9,
+                  "of": 9,
+                  "in_log": true,
+                  "log_text": "0 of 9 shipped",
+                  "logged_value": 0.0,
+                  "tolerance": 0.0
+                },
+                "no_ai_tool": {
+                  "value": 6,
+                  "unit": "count",
+                  "display": "6 of 9",
+                  "r_id": "R54",
+                  "source": {
+                    "race_ids": [
+                      "8a76fa05",
+                      "45ab180f",
+                      "59d7f7eb",
+                      "60477ba1",
+                      "949fce51",
+                      "c8261494",
+                      "2ded10bc",
+                      "e3fddb29",
+                      "aaedd180"
+                    ],
+                    "file": "data/bench/bench.db",
+                    "computed_by": "scripts/headline.py run() (RaceArm.shipped_is_fake)",
+                    "race_sets": [
+                      "R48",
+                      "R53",
+                      "R44"
+                    ]
+                  },
+                  "n": 9,
+                  "of": 9,
+                  "by_task": {
+                    "game_playing": "3 of 3",
+                    "image_recognition": "3 of 3",
+                    "tabular": "0 of 3"
+                  },
+                  "in_log": true,
+                  "log_text": "fake in 6 of 9 races",
+                  "logged_value": 6.0,
+                  "tolerance": 0.0
+                }
+              },
+              "comparison": null
+            }
+          ]
+        }
+      ],
+      "worse_side": {
+        "caption": "The no-AI tool runs more experiments per dollar (81.2 vs 38.7 on image recognition) and costs less per race ($0.60 vs $1.65).",
+        "items": [
+          {
+            "text": "Image recognition: 81.2 vs 38.7 experiments per dollar, $0.60 vs $1.65 per race",
+            "r_id": "R53",
+            "numbers": [
+              {
+                "value": 81.19230341452567,
+                "unit": "experiments_per_usd",
+                "display": "81.2",
+                "r_id": "R53",
+                "source": {
+                  "race_ids": [
+                    "60477ba1",
+                    "949fce51",
+                    "c8261494"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "side": "no_ai_tool",
+                "in_log": true,
+                "log_text": "38.7 vs 81.2",
+                "logged_value": 81.2,
+                "tolerance": 0.05
+              },
+              {
+                "value": 38.66275523774172,
+                "unit": "experiments_per_usd",
+                "display": "38.7",
+                "r_id": "R53",
+                "source": {
+                  "race_ids": [
+                    "60477ba1",
+                    "949fce51",
+                    "c8261494"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "side": "standard",
+                "in_log": true,
+                "log_text": "38.7 vs 81.2",
+                "logged_value": 38.7,
+                "tolerance": 0.05
+              },
+              {
+                "value": 0.5993999999999998,
+                "unit": "usd",
+                "display": "$0.60",
+                "r_id": "R53",
+                "source": {
+                  "race_ids": [
+                    "60477ba1",
+                    "949fce51",
+                    "c8261494"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "side": "no_ai_tool",
+                "in_log": true,
+                "log_text": "$1.65 vs $0.60",
+                "logged_value": 0.6,
+                "tolerance": 0.005
+              },
+              {
+                "value": 1.6456126666666666,
+                "unit": "usd",
+                "display": "$1.65",
+                "r_id": "R53",
+                "source": {
+                  "race_ids": [
+                    "60477ba1",
+                    "949fce51",
+                    "c8261494"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "side": "standard",
+                "in_log": true,
+                "log_text": "$1.65 vs $0.60",
+                "logged_value": 1.65,
+                "tolerance": 0.005
+              }
+            ]
+          },
+          {
+            "text": "Tabular: 80.9 vs 22.7 experiments per dollar",
+            "r_id": "R38",
+            "numbers": [
+              {
+                "value": 80.91424758091422,
+                "unit": "experiments_per_usd",
+                "display": "80.9",
+                "r_id": "R38",
+                "source": {
+                  "race_ids": [
+                    "5245bacc",
+                    "91a4e48d",
+                    "f98b6712"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "side": "no_ai_tool",
+                "in_log": true,
+                "log_text": "22.7 vs 80.9",
+                "logged_value": 80.9,
+                "tolerance": 0.05
+              },
+              {
+                "value": 22.737132134247474,
+                "unit": "experiments_per_usd",
+                "display": "22.7",
+                "r_id": "R38",
+                "source": {
+                  "race_ids": [
+                    "5245bacc",
+                    "91a4e48d",
+                    "f98b6712"
+                  ],
+                  "file": "data/bench/bench.db",
+                  "computed_by": "scripts/headline.py run()"
+                },
+                "n": 3,
+                "side": "standard",
+                "in_log": true,
+                "log_text": "22.7 vs 80.9",
+                "logged_value": 22.7,
+                "tolerance": 0.05
+              }
+            ]
+          },
+          {
+            "text": "The no-AI tool has no checker by design, so the fake counts compare a checked side with an unchecked one",
+            "r_id": "R54",
+            "numbers": []
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "Secondary slide or Q&A: the main screen compares the standard assistant with Busy Machines (D46). These races are the standard assistant, not Busy Machines",
+          "r_id": "R54",
+          "numbers": []
+        }
+      ],
+      "footer": "R53 (image recognition) · R38 (tabular) · R54 (9-race fake count) · AI $ at list price"
+    }
+  ],
+  "checks_against_log": 142
+}

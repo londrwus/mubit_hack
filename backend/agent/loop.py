@@ -91,6 +91,10 @@ def _exp_brief(e: ExperimentSnapshot, *, with_diag: bool = True) -> dict[str, An
         d["baseline"] = True
     if e.verdict is not None:
         d["judge"] = e.verdict.value
+    if e.flagged_fake:
+        d["human"] = "fake improvement, not counted"
+    elif e.override_genuine:
+        d["human"] = "genuine"
     if with_diag and e.diagnosis:
         d["diagnosis"] = {"class": e.diagnosis.get("failure_class"), "fix": e.diagnosis.get("fix")}
     if e.error and not e.diagnosis:
@@ -215,9 +219,16 @@ class RepoPrompts:
         return self._P.load_system_prompt(step, self._ver(step))
 
     def _row(self, e: ExperimentSnapshot) -> Any:
+        """One history row. Its score is hidden (so it can never top the leaderboard, be the
+        'current best config' line, or the base a diff reply expands on) exactly when the
+        scheduler's ``_eligible`` refuses it as a best: a human 'fake improvement' correction
+        first, then the LLM judge's ``invalid`` unless a human marked the run genuine."""
         note: str | None = None
         score = e.score
-        if e.verdict is not None and e.verdict.value == "invalid":
+        if e.flagged_fake:
+            note = "human: fake improvement, not counted"
+            score = None
+        elif e.verdict is not None and e.verdict.value == "invalid" and not e.override_genuine:
             note = "judge: invalid, not counted"
             score = None
         elif e.diagnosis:
@@ -377,8 +388,9 @@ class LLMResearcher:
         self.spec = spec
         self.session_id = session_id
         self.prompts = prompts or DefaultPrompts()
-        # x-middleware-record for every call of this arm, fallbacks included: False ("off"),
-        # True ("full") or a header value ("metadata"). Per arm, see RaceConfig.record_mode.
+        # x-middleware-record for every call of this arm: False ("off"), True ("full") or a header
+        # value ("metadata"). Per arm, see RaceConfig.record_mode. A fallback attempt is the
+        # exception: MubitClient always sends it with record off (never routable to an adapter).
         self.record = record
         self.propose_schema = propose_schema
         self.max_retries = max_retries

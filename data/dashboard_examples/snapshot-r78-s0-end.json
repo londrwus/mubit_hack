@@ -1,0 +1,1552 @@
+{
+ "schema": "busy-machines.dashboard/1",
+ "race_id": "4ca4ed2709854a34bd6427ca2992e006",
+ "ts": 1792857014.474789,
+ "race_elapsed_s": 900.0,
+ "clock": "15:00 / 15:00",
+ "status": "finished",
+ "finish_reason": "budget",
+ "finished_text": "Finished \u00b7 15:00",
+ "header": {
+  "race_id": "4ca4ed2709854a34bd6427ca2992e006",
+  "race_name": "RL wide 15 min (15 s runs), Busy Machines with Opus + planner cadence 60 s seed 0",
+  "title": "Busy Machines",
+  "subtitle": "compute intelligence for training sweeps",
+  "task": "Game-playing AI",
+  "target": "rl",
+  "budget_s": 900.0,
+  "cost_cap_usd": 8.0,
+  "gpus_per_arm": 30,
+  "budget_text": "15 min \u00b7 up to $8.00 per side \u00b7 30 machines each",
+  "goal": -170.0,
+  "goal_text": "Goal: \u2212170",
+  "direction": "max",
+  "higher_is_better": true,
+  "score_decimals": 1,
+  "machines": {
+   "label": "Machines",
+   "caption": "30 cloud CPU workers",
+   "count": 30,
+   "hardware": "CPU",
+   "simulated": false,
+   "waiting_label": "Machines waiting"
+  },
+  "arms": [
+   {
+    "kind": "opus",
+    "label": "Standard AI assistant",
+    "sublabel": "Opus 5.5",
+    "side": "left",
+    "uses_ai": true,
+    "n_slots": 30,
+    "hardware": "CPU",
+    "price_per_slot_s": 1.31e-05,
+    "model": "claude-opus-5-5",
+    "features": [],
+    "feature_labels": []
+   },
+   {
+    "kind": "opus_bm",
+    "label": "Busy Machines",
+    "sublabel": "Opus 5.5",
+    "side": "right",
+    "uses_ai": true,
+    "n_slots": 30,
+    "hardware": "CPU",
+    "price_per_slot_s": 1.31e-05,
+    "model": "claude-opus-5-5",
+    "features": [
+     "backfill",
+     "judge_policy",
+     "lean_planner",
+     "planner_cadence"
+    ],
+    "feature_labels": [
+     "keeps GPUs busy with a no-AI sampler while the AI thinks",
+     "checks every claimed improvement (AI for leaks, seed-spread rule for noise)",
+     "shorter planner replies: only the settings it changes",
+     "calls the AI planner at most every N seconds; the no-AI sampler keeps GPUs busy in between"
+    ]
+   },
+   {
+    "kind": "optuna",
+    "label": "No-AI tuner",
+    "sublabel": "no AI",
+    "side": "secondary",
+    "uses_ai": false,
+    "n_slots": 30,
+    "hardware": "CPU",
+    "price_per_slot_s": 1.31e-05,
+    "model": null,
+    "features": [],
+    "feature_labels": []
+   }
+  ],
+  "mode": "replay",
+  "is_replay": true,
+  "replay": null,
+  "race_mode": "benchmark",
+  "llm": "mubit",
+  "runner": "modal",
+  "preset": "rl-wide-bm-cadence-15m",
+  "demo_run": false,
+  "demo_label": null,
+  "mode_tag": "Replay of logged race R78, run 1 of 3",
+  "logged_race": {
+   "ref": "R78",
+   "run": 1,
+   "runs": 3
+  },
+  "seed": 0,
+  "started_at": 1792856114.474789,
+  "stored_status": "finished",
+  "ai_cost_note": "AI $ at list price (estimate)",
+  "gpu_cost_note": null
+ },
+ "arms": [
+  {
+   "kind": "opus",
+   "label": "Standard AI assistant",
+   "sublabel": "Opus 5.5",
+   "side": "left",
+   "uses_ai": true,
+   "n_slots": 30,
+   "slots": [
+    {
+     "slot_id": "modal-CPU-0",
+     "state": "off",
+     "since_s": 893.17,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-1",
+     "state": "off",
+     "since_s": 893.156,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-2",
+     "state": "off",
+     "since_s": 893.663,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-3",
+     "state": "off",
+     "since_s": 892.561,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-4",
+     "state": "off",
+     "since_s": 892.557,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-5",
+     "state": "off",
+     "since_s": 893.122,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-6",
+     "state": "off",
+     "since_s": 893.159,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-7",
+     "state": "off",
+     "since_s": 892.537,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-8",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-9",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-10",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-11",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-12",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-13",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-14",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-15",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-16",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-17",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-18",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-19",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-20",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-21",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-22",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-23",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-24",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-25",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-26",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-27",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-28",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-29",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    }
+   ],
+   "slot_counts": {
+    "busy": 0,
+    "waiting": 0,
+    "cancelled": 0,
+    "off": 30
+   },
+   "working_now": 0,
+   "open_now": 0,
+   "waiting_now_pct": null,
+   "waiting_so_far_pct": 69.04372602428823,
+   "busy_s": 8225.059,
+   "idle_s": 18344.867,
+   "ai_bill_usd": 3.3011676000000003,
+   "gpu_bill_usd": 0.34806603300335415,
+   "total_usd": 3.6492336330033543,
+   "llm_calls": 78,
+   "llm_invalid_calls": 0,
+   "experiments_started": 497,
+   "started_by_source": {
+    "baseline": 1,
+    "llm": 496
+   },
+   "experiments_finished": 497,
+   "finished_by_source": {
+    "baseline": 1,
+    "llm": 496
+   },
+   "experiments_failed": 0,
+   "experiments_cancelled": 0,
+   "model_quality": {
+    "best": -155.00875854492188,
+    "best_text": "\u2212155.0",
+    "experiment_id": "1b6ebf537472467085f0eb3a4fd595e4",
+    "at_s": 825.89,
+    "source": "llm",
+    "baseline": -1068.680419921875,
+    "series": [
+     [
+      16.395,
+      -1068.680419921875
+     ],
+     [
+      30.39,
+      -294.37139892578125
+     ],
+     [
+      30.392,
+      -206.6077880859375
+     ],
+     [
+      30.572,
+      -192.7762451171875
+     ],
+     [
+      56.392,
+      -187.57424926757812
+     ],
+     [
+      74.572,
+      -163.2691192626953
+     ],
+     [
+      120.229,
+      -162.01705932617188
+     ],
+     [
+      133.478,
+      -161.236572265625
+     ],
+     [
+      168.357,
+      -160.2650146484375
+     ],
+     [
+      180.847,
+      -159.88986206054688
+     ],
+     [
+      181.892,
+      -157.93362426757812
+     ],
+     [
+      280.985,
+      -157.78616333007812
+     ],
+     [
+      299.219,
+      -157.31219482421875
+     ],
+     [
+      360.413,
+      -155.54718017578125
+     ],
+     [
+      445.731,
+      -155.42147827148438
+     ],
+     [
+      825.89,
+      -155.00875854492188
+     ]
+    ],
+    "goal_reached_at_s": 74.572,
+    "goal_reached_text": "Goal reached at 1:14"
+   },
+   "checks": {
+    "valid": 0,
+    "invalid": 0,
+    "unsure": 15,
+    "none": 0,
+    "claims_rejected_not_fake": 0
+   },
+   "fakes_caught": 0,
+   "fakes": [],
+   "planner": {
+    "thinking": false,
+    "since_s": null,
+    "calls": 63,
+    "last_k": 8,
+    "thinking_s": 860.681
+   },
+   "reported_best": {
+    "experiment_id": "1b6ebf537472467085f0eb3a4fd595e4",
+    "score": -155.00875854492188,
+    "at_s": 838.649,
+    "source": "llm"
+   },
+   "final": {
+    "arm": "opus",
+    "best_score": -155.00875854492188,
+    "best_experiment_id": "1b6ebf537472467085f0eb3a4fd595e4",
+    "experiments_finished": 497,
+    "experiments_failed": 0,
+    "gpu_cost_usd": 0.34806603300335415,
+    "llm_cost_usd": 3.3011676000000003,
+    "gpu_idle_pct": 69.04372602428823,
+    "time_to_target_s": 74.57234477996826,
+    "cost_to_target_usd": 0.26446233149852755,
+    "llm_calls": 78,
+    "llm_invalid_calls": 0,
+    "llm_p50_latency_ms": 13014.310600061435,
+    "total_cost_usd": 3.6492336330033543
+   }
+  },
+  {
+   "kind": "opus_bm",
+   "label": "Busy Machines",
+   "sublabel": "Opus 5.5",
+   "side": "right",
+   "uses_ai": true,
+   "n_slots": 30,
+   "slots": [
+    {
+     "slot_id": "modal-CPU-0",
+     "state": "off",
+     "since_s": 886.813,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-1",
+     "state": "off",
+     "since_s": 886.841,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-2",
+     "state": "off",
+     "since_s": 894.837,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-3",
+     "state": "off",
+     "since_s": 889.248,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-4",
+     "state": "off",
+     "since_s": 895.886,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-5",
+     "state": "off",
+     "since_s": 886.655,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-6",
+     "state": "off",
+     "since_s": 890.37,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-7",
+     "state": "off",
+     "since_s": 883.355,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-8",
+     "state": "off",
+     "since_s": 884.568,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-9",
+     "state": "off",
+     "since_s": 899.46,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-10",
+     "state": "off",
+     "since_s": 885.715,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-11",
+     "state": "off",
+     "since_s": 890.337,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-12",
+     "state": "off",
+     "since_s": 884.397,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-13",
+     "state": "off",
+     "since_s": 889.147,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-14",
+     "state": "off",
+     "since_s": 889.116,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-15",
+     "state": "off",
+     "since_s": 889.215,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-16",
+     "state": "off",
+     "since_s": 895.916,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-17",
+     "state": "off",
+     "since_s": 886.839,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-18",
+     "state": "off",
+     "since_s": 889.218,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-19",
+     "state": "off",
+     "since_s": 889.246,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-20",
+     "state": "off",
+     "since_s": 899.54,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-21",
+     "state": "off",
+     "since_s": 889.243,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-22",
+     "state": "off",
+     "since_s": 891.382,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-23",
+     "state": "off",
+     "since_s": 883.481,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-24",
+     "state": "off",
+     "since_s": 895.941,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-25",
+     "state": "off",
+     "since_s": 891.505,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-26",
+     "state": "off",
+     "since_s": 895.867,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-27",
+     "state": "off",
+     "since_s": 895.914,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-28",
+     "state": "off",
+     "since_s": 895.823,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-29",
+     "state": "off",
+     "since_s": 898.367,
+     "experiment_id": null,
+     "source": null
+    }
+   ],
+   "slot_counts": {
+    "busy": 0,
+    "waiting": 0,
+    "cancelled": 0,
+    "off": 30
+   },
+   "working_now": 0,
+   "open_now": 0,
+   "waiting_now_pct": null,
+   "waiting_so_far_pct": 1.3663924810101726,
+   "busy_s": 26359.083,
+   "idle_s": 365.158,
+   "ai_bill_usd": 0.7025812,
+   "gpu_bill_usd": 0.35008755930109065,
+   "total_usd": 1.0526687593010906,
+   "llm_calls": 55,
+   "llm_invalid_calls": 0,
+   "experiments_started": 1594,
+   "started_by_source": {
+    "baseline": 1,
+    "sampler": 1473,
+    "llm": 120
+   },
+   "experiments_finished": 1594,
+   "finished_by_source": {
+    "sampler": 1473,
+    "baseline": 1,
+    "llm": 120
+   },
+   "experiments_failed": 0,
+   "experiments_cancelled": 0,
+   "model_quality": {
+    "best": -154.8665771484375,
+    "best_text": "\u2212154.9",
+    "experiment_id": "ce79a69a19b84abd92036ddd49f05a6b",
+    "at_s": 484.645,
+    "source": "sampler",
+    "baseline": -1050.0225830078125,
+    "series": [
+     [
+      16.432,
+      -531.4171142578125
+     ],
+     [
+      16.448,
+      -218.3040771484375
+     ],
+     [
+      16.859,
+      -169.12188720703125
+     ],
+     [
+      34.271,
+      -168.81301879882812
+     ],
+     [
+      50.688,
+      -167.4188232421875
+     ],
+     [
+      51.091,
+      -163.03079223632812
+     ],
+     [
+      66.104,
+      -162.66961669921875
+     ],
+     [
+      66.671,
+      -161.67218017578125
+     ],
+     [
+      67.044,
+      -161.66854858398438
+     ],
+     [
+      67.389,
+      -160.87371826171875
+     ],
+     [
+      83.008,
+      -158.86236572265625
+     ],
+     [
+      98.641,
+      -158.07382202148438
+     ],
+     [
+      149.359,
+      -157.0321044921875
+     ],
+     [
+      228.656,
+      -156.84400939941406
+     ],
+     [
+      269.402,
+      -156.78125
+     ],
+     [
+      297.873,
+      -156.29537963867188
+     ],
+     [
+      301.99,
+      -155.89950561523438
+     ],
+     [
+      316.539,
+      -155.0602264404297
+     ],
+     [
+      484.645,
+      -154.8665771484375
+     ]
+    ],
+    "goal_reached_at_s": 16.859,
+    "goal_reached_text": "Goal reached at 0:16"
+   },
+   "checks": {
+    "valid": 3,
+    "invalid": 21,
+    "unsure": 16,
+    "none": 0,
+    "claims_rejected_not_fake": 0
+   },
+   "fakes_caught": 21,
+   "fakes": [
+    {
+     "experiment_id": "1454f3422ebc4a05a0ea5472e9ab7005",
+     "at_s": 51.428,
+     "ts": 1792856165.9030144,
+     "claimed": -154.28732299804688,
+     "real": -195.22711181640625,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "0:51 \u00b7 claimed \u2212154.3, real score \u2212195.2 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "0a096b0793c6413fac496039dcbbb183",
+     "at_s": 53.598,
+     "ts": 1792856168.0723774,
+     "claimed": -168.7882080078125,
+     "real": -206.46385192871094,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "0:53 \u00b7 claimed \u2212168.8, real score \u2212206.5 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "e15343d0c1744a779db349774f9cb169",
+     "at_s": 69.657,
+     "ts": 1792856184.13139,
+     "claimed": -148.50213623046875,
+     "real": -188.4838409423828,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "1:09 \u00b7 claimed \u2212148.5, real score \u2212188.5 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "6e6a0a0e1a224323ab098ad5da19440f",
+     "at_s": 404.345,
+     "ts": 1792856518.8197427,
+     "claimed": -139.1094970703125,
+     "real": -159.32281494140625,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "6:44 \u00b7 claimed \u2212139.1, real score \u2212159.3 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "04a6b7bd2cba4829b2362a1bbc366bef",
+     "at_s": 492.284,
+     "ts": 1792856606.7592223,
+     "claimed": -140.40316772460938,
+     "real": -159.24166870117188,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "8:12 \u00b7 claimed \u2212140.4, real score \u2212159.2 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "0ae5c452a82a49a6ad27822c2fde2c25",
+     "at_s": 571.872,
+     "ts": 1792856686.3472292,
+     "claimed": -138.70767211914062,
+     "real": -164.9442596435547,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "9:31 \u00b7 claimed \u2212138.7, real score \u2212164.9 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "2caf771f06e2483faaeaaa05b1eba6fc",
+     "at_s": 573.363,
+     "ts": 1792856687.837527,
+     "claimed": -137.7644500732422,
+     "real": -156.55392456054688,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "9:33 \u00b7 claimed \u2212137.8, real score \u2212156.6 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "62d4b01081db490d97225842c1adc535",
+     "at_s": 642.501,
+     "ts": 1792856756.9760993,
+     "claimed": -138.61163330078125,
+     "real": -167.9406280517578,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "10:42 \u00b7 claimed \u2212138.6, real score \u2212167.9 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "25a21a4954e04083a774c8fa475bf267",
+     "at_s": 689.451,
+     "ts": 1792856803.9257047,
+     "claimed": -138.20626831054688,
+     "real": -164.6288604736328,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "11:29 \u00b7 claimed \u2212138.2, real score \u2212164.6 (tested on data it had already seen)"
+    },
+    {
+     "experiment_id": "01390385324f43b9b652b6a3f4b811a6",
+     "at_s": 736.608,
+     "ts": 1792856851.0829394,
+     "claimed": -140.80886840820312,
+     "real": -159.8978271484375,
+     "why": "tested on data it had already seen",
+     "by": "checker",
+     "source": "sampler",
+     "text": "12:16 \u00b7 claimed \u2212140.8, real score \u2212159.9 (tested on data it had already seen)"
+    }
+   ],
+   "planner": {
+    "thinking": false,
+    "since_s": null,
+    "calls": 15,
+    "last_k": 8,
+    "thinking_s": 81.355
+   },
+   "reported_best": {
+    "experiment_id": "ce79a69a19b84abd92036ddd49f05a6b",
+    "score": -154.8665771484375,
+    "at_s": 487.169,
+    "source": "sampler"
+   },
+   "final": {
+    "arm": "opus_bm",
+    "best_score": -154.8665771484375,
+    "best_experiment_id": "ce79a69a19b84abd92036ddd49f05a6b",
+    "experiments_finished": 1594,
+    "experiments_failed": 0,
+    "gpu_cost_usd": 0.35008755930109065,
+    "llm_cost_usd": 0.7025812,
+    "gpu_idle_pct": 1.3663924810101726,
+    "time_to_target_s": 16.859394550323486,
+    "cost_to_target_usd": 0.03099174205827713,
+    "llm_calls": 55,
+    "llm_invalid_calls": 0,
+    "llm_p50_latency_ms": 2080.1042000530288,
+    "total_cost_usd": 1.0526687593010906
+   }
+  },
+  {
+   "kind": "optuna",
+   "label": "No-AI tuner",
+   "sublabel": "no AI",
+   "side": "secondary",
+   "uses_ai": false,
+   "n_slots": 30,
+   "slots": [
+    {
+     "slot_id": "modal-CPU-0",
+     "state": "off",
+     "since_s": 883.482,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-1",
+     "state": "off",
+     "since_s": 895.885,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-2",
+     "state": "off",
+     "since_s": 883.424,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-3",
+     "state": "off",
+     "since_s": 884.559,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-4",
+     "state": "off",
+     "since_s": 884.694,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-5",
+     "state": "off",
+     "since_s": 889.265,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-6",
+     "state": "off",
+     "since_s": 884.688,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-7",
+     "state": "off",
+     "since_s": 886.647,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-8",
+     "state": "off",
+     "since_s": 888.163,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-9",
+     "state": "off",
+     "since_s": 888.163,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-10",
+     "state": "off",
+     "since_s": 890.37,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-11",
+     "state": "off",
+     "since_s": 884.574,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-12",
+     "state": "off",
+     "since_s": 895.323,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-13",
+     "state": "off",
+     "since_s": 895.913,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-14",
+     "state": "off",
+     "since_s": 894.759,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-15",
+     "state": "off",
+     "since_s": 894.838,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-16",
+     "state": "off",
+     "since_s": 897.148,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-17",
+     "state": "off",
+     "since_s": 898.37,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-18",
+     "state": "off",
+     "since_s": 895.823,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-19",
+     "state": "off",
+     "since_s": 895.867,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-20",
+     "state": "off",
+     "since_s": 898.3,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-21",
+     "state": "off",
+     "since_s": 897.063,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-22",
+     "state": "off",
+     "since_s": 899.939,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-23",
+     "state": "off",
+     "since_s": 898.799,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-24",
+     "state": "off",
+     "since_s": 898.886,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-25",
+     "state": "off",
+     "since_s": 898.887,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-26",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-27",
+     "state": "off",
+     "since_s": 883.525,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-28",
+     "state": "off",
+     "since_s": 883.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-29",
+     "state": "off",
+     "since_s": 883.42,
+     "experiment_id": null,
+     "source": null
+    }
+   ],
+   "slot_counts": {
+    "busy": 0,
+    "waiting": 0,
+    "cancelled": 0,
+    "off": 30
+   },
+   "working_now": 0,
+   "open_now": 0,
+   "waiting_now_pct": null,
+   "waiting_so_far_pct": 1.7122807439361805,
+   "busy_s": 26278.968,
+   "idle_s": 457.809,
+   "ai_bill_usd": 0.0,
+   "gpu_bill_usd": 0.35025177011969144,
+   "total_usd": 0.35025177011969144,
+   "llm_calls": 0,
+   "llm_invalid_calls": 0,
+   "experiments_started": 1588,
+   "started_by_source": {
+    "baseline": 1,
+    "optuna": 1587
+   },
+   "experiments_finished": 1588,
+   "finished_by_source": {
+    "optuna": 1587,
+    "baseline": 1
+   },
+   "experiments_failed": 0,
+   "experiments_cancelled": 0,
+   "model_quality": {
+    "best": -155.72154235839844,
+    "best_text": "\u2212155.7",
+    "experiment_id": "9f03310493ca4f81afecf2fa62bf2ec1",
+    "at_s": 881.778,
+    "source": "optuna",
+    "baseline": -1037.6253662109375,
+    "series": [
+     [
+      16.363,
+      -992.3446044921875
+     ],
+     [
+      16.459,
+      -161.5185546875
+     ],
+     [
+      573.001,
+      -156.06964111328125
+     ],
+     [
+      881.778,
+      -155.72154235839844
+     ]
+    ],
+    "goal_reached_at_s": 16.459,
+    "goal_reached_text": "Goal reached at 0:16"
+   },
+   "checks": {
+    "valid": 0,
+    "invalid": 0,
+    "unsure": 0,
+    "none": 0,
+    "claims_rejected_not_fake": 0
+   },
+   "fakes_caught": 0,
+   "fakes": [],
+   "planner": {
+    "thinking": false,
+    "since_s": null,
+    "calls": 0,
+    "last_k": null,
+    "thinking_s": 0.0
+   },
+   "reported_best": {
+    "experiment_id": "46ccf28608c143d680a141b053752806",
+    "score": -135.5904541015625,
+    "at_s": 833.499,
+    "source": "optuna"
+   },
+   "final": {
+    "arm": "optuna",
+    "best_score": -155.72154235839844,
+    "best_experiment_id": "9f03310493ca4f81afecf2fa62bf2ec1",
+    "experiments_finished": 1588,
+    "experiments_failed": 0,
+    "gpu_cost_usd": 0.35025177011969144,
+    "llm_cost_usd": 0.0,
+    "gpu_idle_pct": 1.7122807439361805,
+    "time_to_target_s": 16.4590425491333,
+    "cost_to_target_usd": 0.006468403721809387,
+    "llm_calls": 0,
+    "llm_invalid_calls": 0,
+    "llm_p50_latency_ms": null,
+    "total_cost_usd": 0.35025177011969144
+   }
+  }
+ ],
+ "feed": [
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "e24e2e3239ad444184280627c6a2eed8",
+   "at_s": 31.8,
+   "ts": 1792856146.2751253,
+   "claimed": -141.07928466796875,
+   "real": -162.350830078125,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:31 \u00b7 claimed \u2212141.1, real score \u2212162.4 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "72a78542c88743dbb1c33c082fcbd2b6",
+   "at_s": 33.774,
+   "ts": 1792856148.2489958,
+   "claimed": -161.55078125,
+   "real": -186.94717407226562,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:33 \u00b7 claimed \u2212161.6, real score \u2212186.9 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "34ff9434cacb47388e6de8986d86cdca",
+   "at_s": 35.334,
+   "ts": 1792856149.8086357,
+   "claimed": -146.6289825439453,
+   "real": -170.44789123535156,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:35 \u00b7 claimed \u2212146.6, real score \u2212170.4 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "bad06e6e9411445c9562260c9329f3ba",
+   "at_s": 37.619,
+   "ts": 1792856152.0938659,
+   "claimed": -158.2847900390625,
+   "real": -246.2857666015625,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:37 \u00b7 claimed \u2212158.3, real score \u2212246.3 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "07cd3094fed24a63ad56524e78230efa",
+   "at_s": 39.288,
+   "ts": 1792856153.762729,
+   "claimed": -142.5188751220703,
+   "real": -162.50692749023438,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:39 \u00b7 claimed \u2212142.5, real score \u2212162.5 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "82df15bc997b41fb9091f0aeeaf03c88",
+   "at_s": 40.696,
+   "ts": 1792856155.170636,
+   "claimed": -139.88491821289062,
+   "real": -156.73175048828125,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:40 \u00b7 claimed \u2212139.9, real score \u2212156.7 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "0e5f3a9feecf44a1b1348f0abeeee0c6",
+   "at_s": 42.197,
+   "ts": 1792856156.6718044,
+   "claimed": -149.10000610351562,
+   "real": -171.40170288085938,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:42 \u00b7 claimed \u2212149.1, real score \u2212171.4 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "d34b41eecf51492da30fa99e1d0c4f8b",
+   "at_s": 45.905,
+   "ts": 1792856160.3800645,
+   "claimed": -159.5301971435547,
+   "real": -185.75660705566406,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:45 \u00b7 claimed \u2212159.5, real score \u2212185.8 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "fa202227bbad4a4180a925a03239fbae",
+   "at_s": 48.218,
+   "ts": 1792856162.692604,
+   "claimed": -149.62635803222656,
+   "real": -181.4254150390625,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:48 \u00b7 claimed \u2212149.6, real score \u2212181.4 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "1454f3422ebc4a05a0ea5472e9ab7005",
+   "at_s": 51.428,
+   "ts": 1792856165.9030144,
+   "claimed": -154.28732299804688,
+   "real": -195.22711181640625,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:51 \u00b7 claimed \u2212154.3, real score \u2212195.2 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "0a096b0793c6413fac496039dcbbb183",
+   "at_s": 53.598,
+   "ts": 1792856168.0723774,
+   "claimed": -168.7882080078125,
+   "real": -206.46385192871094,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "0:53 \u00b7 claimed \u2212168.8, real score \u2212206.5 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "e15343d0c1744a779db349774f9cb169",
+   "at_s": 69.657,
+   "ts": 1792856184.13139,
+   "claimed": -148.50213623046875,
+   "real": -188.4838409423828,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "1:09 \u00b7 claimed \u2212148.5, real score \u2212188.5 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "goal_reached",
+   "arm": "opus",
+   "at_s": 74.572,
+   "ts": 1792856189.0471337,
+   "experiment_id": "eba34855926741fa99119093c22f7481",
+   "quality": -163.2691192626953,
+   "text": "Goal reached at 1:14"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "6e6a0a0e1a224323ab098ad5da19440f",
+   "at_s": 404.345,
+   "ts": 1792856518.8197427,
+   "claimed": -139.1094970703125,
+   "real": -159.32281494140625,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "6:44 \u00b7 claimed \u2212139.1, real score \u2212159.3 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "04a6b7bd2cba4829b2362a1bbc366bef",
+   "at_s": 492.284,
+   "ts": 1792856606.7592223,
+   "claimed": -140.40316772460938,
+   "real": -159.24166870117188,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "8:12 \u00b7 claimed \u2212140.4, real score \u2212159.2 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "0ae5c452a82a49a6ad27822c2fde2c25",
+   "at_s": 571.872,
+   "ts": 1792856686.3472292,
+   "claimed": -138.70767211914062,
+   "real": -164.9442596435547,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "9:31 \u00b7 claimed \u2212138.7, real score \u2212164.9 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "2caf771f06e2483faaeaaa05b1eba6fc",
+   "at_s": 573.363,
+   "ts": 1792856687.837527,
+   "claimed": -137.7644500732422,
+   "real": -156.55392456054688,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "9:33 \u00b7 claimed \u2212137.8, real score \u2212156.6 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "62d4b01081db490d97225842c1adc535",
+   "at_s": 642.501,
+   "ts": 1792856756.9760993,
+   "claimed": -138.61163330078125,
+   "real": -167.9406280517578,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "10:42 \u00b7 claimed \u2212138.6, real score \u2212167.9 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "25a21a4954e04083a774c8fa475bf267",
+   "at_s": 689.451,
+   "ts": 1792856803.9257047,
+   "claimed": -138.20626831054688,
+   "real": -164.6288604736328,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "11:29 \u00b7 claimed \u2212138.2, real score \u2212164.6 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  },
+  {
+   "kind": "fake_caught",
+   "arm": "opus_bm",
+   "experiment_id": "01390385324f43b9b652b6a3f4b811a6",
+   "at_s": 736.608,
+   "ts": 1792856851.0829394,
+   "claimed": -140.80886840820312,
+   "real": -159.8978271484375,
+   "why": "tested on data it had already seen",
+   "by": "checker",
+   "source": "sampler",
+   "text": "12:16 \u00b7 claimed \u2212140.8, real score \u2212159.9 (tested on data it had already seen)",
+   "headline": "Fake improvement caught"
+  }
+ ],
+ "n_events": 15292
+}

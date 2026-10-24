@@ -1,0 +1,926 @@
+{
+ "schema": "busy-machines.dashboard/1",
+ "race_id": "4ca4ed2709854a34bd6427ca2992e006",
+ "ts": 1792856114.474789,
+ "race_elapsed_s": 0.0,
+ "clock": "00:00 / 15:00",
+ "status": "running",
+ "finish_reason": null,
+ "finished_text": null,
+ "header": {
+  "race_id": "4ca4ed2709854a34bd6427ca2992e006",
+  "race_name": "RL wide 15 min (15 s runs), Busy Machines with Opus + planner cadence 60 s seed 0",
+  "title": "Busy Machines",
+  "subtitle": "compute intelligence for training sweeps",
+  "task": "Game-playing AI",
+  "target": "rl",
+  "budget_s": 900.0,
+  "cost_cap_usd": 8.0,
+  "gpus_per_arm": 30,
+  "budget_text": "15 min \u00b7 up to $8.00 per side \u00b7 30 machines each",
+  "goal": -170.0,
+  "goal_text": "Goal: \u2212170",
+  "direction": "max",
+  "higher_is_better": true,
+  "score_decimals": 1,
+  "machines": {
+   "label": "Machines",
+   "caption": "30 cloud CPU workers",
+   "count": 30,
+   "hardware": "CPU",
+   "simulated": false,
+   "waiting_label": "Machines waiting"
+  },
+  "arms": [
+   {
+    "kind": "opus",
+    "label": "Standard AI assistant",
+    "sublabel": "Opus 5.5",
+    "side": "left",
+    "uses_ai": true,
+    "n_slots": 30,
+    "hardware": "CPU",
+    "price_per_slot_s": 1.31e-05,
+    "model": "claude-opus-5-5",
+    "features": [],
+    "feature_labels": []
+   },
+   {
+    "kind": "opus_bm",
+    "label": "Busy Machines",
+    "sublabel": "Opus 5.5",
+    "side": "right",
+    "uses_ai": true,
+    "n_slots": 30,
+    "hardware": "CPU",
+    "price_per_slot_s": 1.31e-05,
+    "model": "claude-opus-5-5",
+    "features": [
+     "backfill",
+     "judge_policy",
+     "lean_planner",
+     "planner_cadence"
+    ],
+    "feature_labels": [
+     "keeps GPUs busy with a no-AI sampler while the AI thinks",
+     "checks every claimed improvement (AI for leaks, seed-spread rule for noise)",
+     "shorter planner replies: only the settings it changes",
+     "calls the AI planner at most every N seconds; the no-AI sampler keeps GPUs busy in between"
+    ]
+   },
+   {
+    "kind": "optuna",
+    "label": "No-AI tuner",
+    "sublabel": "no AI",
+    "side": "secondary",
+    "uses_ai": false,
+    "n_slots": 30,
+    "hardware": "CPU",
+    "price_per_slot_s": 1.31e-05,
+    "model": null,
+    "features": [],
+    "feature_labels": []
+   }
+  ],
+  "mode": "replay",
+  "is_replay": true,
+  "replay": null,
+  "race_mode": "benchmark",
+  "llm": "mubit",
+  "runner": "modal",
+  "preset": "rl-wide-bm-cadence-15m",
+  "demo_run": false,
+  "demo_label": null,
+  "mode_tag": "Replay of logged race R78, run 1 of 3",
+  "logged_race": {
+   "ref": "R78",
+   "run": 1,
+   "runs": 3
+  },
+  "seed": 0,
+  "started_at": 1792856114.474789,
+  "stored_status": "finished",
+  "ai_cost_note": "AI $ at list price (estimate)",
+  "gpu_cost_note": null
+ },
+ "arms": [
+  {
+   "kind": "opus",
+   "label": "Standard AI assistant",
+   "sublabel": "Opus 5.5",
+   "side": "left",
+   "uses_ai": true,
+   "n_slots": 30,
+   "slots": [
+    {
+     "slot_id": "modal-CPU-0",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-1",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-2",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-3",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-4",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-5",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-6",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-7",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-8",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-9",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-10",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-11",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-12",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-13",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-14",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-15",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-16",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-17",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-18",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-19",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-20",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-21",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-22",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-23",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-24",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-25",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-26",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-27",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-28",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-29",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    }
+   ],
+   "slot_counts": {
+    "busy": 0,
+    "waiting": 30,
+    "cancelled": 0,
+    "off": 0
+   },
+   "working_now": 0,
+   "open_now": 30,
+   "waiting_now_pct": 100.0,
+   "waiting_so_far_pct": 0.0,
+   "busy_s": 0.0,
+   "idle_s": 0.0,
+   "ai_bill_usd": 0.0,
+   "gpu_bill_usd": 0.0,
+   "total_usd": 0.0,
+   "llm_calls": 0,
+   "llm_invalid_calls": 0,
+   "experiments_started": 0,
+   "started_by_source": {},
+   "experiments_finished": 0,
+   "finished_by_source": {},
+   "experiments_failed": 0,
+   "experiments_cancelled": 0,
+   "model_quality": {
+    "best": null,
+    "best_text": null,
+    "experiment_id": null,
+    "at_s": null,
+    "source": null,
+    "baseline": null,
+    "series": [],
+    "goal_reached_at_s": null,
+    "goal_reached_text": null
+   },
+   "checks": {
+    "valid": 0,
+    "invalid": 0,
+    "unsure": 0,
+    "none": 0,
+    "claims_rejected_not_fake": 0
+   },
+   "fakes_caught": 0,
+   "fakes": [],
+   "planner": {
+    "thinking": false,
+    "since_s": null,
+    "calls": 0,
+    "last_k": null,
+    "thinking_s": 0.0
+   },
+   "reported_best": null,
+   "final": null
+  },
+  {
+   "kind": "opus_bm",
+   "label": "Busy Machines",
+   "sublabel": "Opus 5.5",
+   "side": "right",
+   "uses_ai": true,
+   "n_slots": 30,
+   "slots": [
+    {
+     "slot_id": "modal-CPU-0",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-1",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-2",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-3",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-4",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-5",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-6",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-7",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-8",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-9",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-10",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-11",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-12",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-13",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-14",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-15",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-16",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-17",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-18",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-19",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-20",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-21",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-22",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-23",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-24",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-25",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-26",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-27",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-28",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-29",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    }
+   ],
+   "slot_counts": {
+    "busy": 0,
+    "waiting": 30,
+    "cancelled": 0,
+    "off": 0
+   },
+   "working_now": 0,
+   "open_now": 30,
+   "waiting_now_pct": 100.0,
+   "waiting_so_far_pct": 0.0,
+   "busy_s": 0.0,
+   "idle_s": 0.0,
+   "ai_bill_usd": 0.0,
+   "gpu_bill_usd": 0.0,
+   "total_usd": 0.0,
+   "llm_calls": 0,
+   "llm_invalid_calls": 0,
+   "experiments_started": 0,
+   "started_by_source": {},
+   "experiments_finished": 0,
+   "finished_by_source": {},
+   "experiments_failed": 0,
+   "experiments_cancelled": 0,
+   "model_quality": {
+    "best": null,
+    "best_text": null,
+    "experiment_id": null,
+    "at_s": null,
+    "source": null,
+    "baseline": null,
+    "series": [],
+    "goal_reached_at_s": null,
+    "goal_reached_text": null
+   },
+   "checks": {
+    "valid": 0,
+    "invalid": 0,
+    "unsure": 0,
+    "none": 0,
+    "claims_rejected_not_fake": 0
+   },
+   "fakes_caught": 0,
+   "fakes": [],
+   "planner": {
+    "thinking": false,
+    "since_s": null,
+    "calls": 0,
+    "last_k": null,
+    "thinking_s": 0.0
+   },
+   "reported_best": null,
+   "final": null
+  },
+  {
+   "kind": "optuna",
+   "label": "No-AI tuner",
+   "sublabel": "no AI",
+   "side": "secondary",
+   "uses_ai": false,
+   "n_slots": 30,
+   "slots": [
+    {
+     "slot_id": "modal-CPU-0",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-1",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-2",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-3",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-4",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-5",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-6",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-7",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-8",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-9",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-10",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-11",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-12",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-13",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-14",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-15",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-16",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-17",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-18",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-19",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-20",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-21",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-22",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-23",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-24",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-25",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-26",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-27",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-28",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    },
+    {
+     "slot_id": "modal-CPU-29",
+     "state": "waiting",
+     "since_s": 0.0,
+     "experiment_id": null,
+     "source": null
+    }
+   ],
+   "slot_counts": {
+    "busy": 0,
+    "waiting": 30,
+    "cancelled": 0,
+    "off": 0
+   },
+   "working_now": 0,
+   "open_now": 30,
+   "waiting_now_pct": 100.0,
+   "waiting_so_far_pct": 0.0,
+   "busy_s": 0.0,
+   "idle_s": 0.0,
+   "ai_bill_usd": 0.0,
+   "gpu_bill_usd": 0.0,
+   "total_usd": 0.0,
+   "llm_calls": 0,
+   "llm_invalid_calls": 0,
+   "experiments_started": 0,
+   "started_by_source": {},
+   "experiments_finished": 0,
+   "finished_by_source": {},
+   "experiments_failed": 0,
+   "experiments_cancelled": 0,
+   "model_quality": {
+    "best": null,
+    "best_text": null,
+    "experiment_id": null,
+    "at_s": null,
+    "source": null,
+    "baseline": null,
+    "series": [],
+    "goal_reached_at_s": null,
+    "goal_reached_text": null
+   },
+   "checks": {
+    "valid": 0,
+    "invalid": 0,
+    "unsure": 0,
+    "none": 0,
+    "claims_rejected_not_fake": 0
+   },
+   "fakes_caught": 0,
+   "fakes": [],
+   "planner": {
+    "thinking": false,
+    "since_s": null,
+    "calls": 0,
+    "last_k": null,
+    "thinking_s": 0.0
+   },
+   "reported_best": null,
+   "final": null
+  }
+ ],
+ "feed": [],
+ "n_events": 90
+}

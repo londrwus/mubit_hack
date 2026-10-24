@@ -10,6 +10,12 @@ The scheduler's starting-code baseline is added to the study as a completed tria
 Early stopping: the arm gets the same median rule as the Busy Machines arms (engine code in
 the scheduler, ``RaceConfig.features_for(optuna)`` = median_stop, flagged in the manifest):
 the standard MedianPruner practice. A run the rule stopped is told to the study as PRUNED.
+
+Isolation (``isolation="thread" | "process"``, ``study_worker.proposer_isolation``): with
+"process" the study (same TPE settings and seed) lives in a child process
+(``backend.agent.study_worker``), so its CPU-bound asks never compete for the race process's
+GIL with the other arms and the event loop. The operations reach the study in the same order,
+so the configs are the same as in-thread. Benchmark races use "process".
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ from optuna.distributions import (
 )
 from optuna.trial import TrialState
 
+from backend.agent.study_worker import Isolation, StudyWorker
 from backend.core.types import ArmKind, DiagnoseOutput, ExperimentStatus, JudgeOutput, LLMCallRecord
 from backend.scheduler import ExperimentSnapshot, JudgeClaim, Proposal, ResearchDigest
 from workers.targets.base import TargetSpec
@@ -57,16 +64,37 @@ def distributions(spec: TargetSpec) -> dict[str, BaseDistribution]:
 class OptunaResearcher:
     kind = ArmKind.optuna
 
-    def __init__(self, spec: TargetSpec, seed: int, *, n_startup_trials: int = 10) -> None:
+    def __init__(self, spec: TargetSpec, seed: int, *, n_startup_trials: int = 10,
+                 isolation: Isolation = "thread") -> None:
         self.spec = spec
         self.seed = seed
-        sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=n_startup_trials, constant_liar=True)
-        self.study = optuna.create_study(
-            direction="minimize" if spec.direction == "min" else "maximize", sampler=sampler
-        )
+        self.n_startup_trials = n_startup_trials
+        self.isolation: Isolation = isolation
+        direction = "minimize" if spec.direction == "min" else "maximize"
+        # thread: the study lives here. process: in a child process (study_worker), and the
+        # observe() operations are queued and sent with the next ask, in order.
+        self.study: optuna.Study | None = None
+        self._worker: StudyWorker | None = None
+        if isolation == "process":
+            self._worker = StudyWorker(spec, seed, n_startup_trials, direction)
+        else:
+            sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=n_startup_trials, constant_liar=True)
+            self.study = optuna.create_study(direction=direction, sampler=sampler)
         self._dists = distributions(spec)
         self._trials: dict[str, optuna.trial.Trial] = {}
+        self._numbers: dict[str, int] = {}               # process: experiment id -> trial number
+        self._ops: list[tuple[Any, ...]] = []           # process: observe() operations not sent yet
+        self._ops_lock = threading.Lock()
         self.on_call: Callable[[LLMCallRecord], None] = lambda _r: None
+
+    def wait_ready(self) -> None:
+        """Start the study's child process now (process isolation; before the race clock)."""
+        if self._worker is not None:
+            self._worker.start()
+
+    def close(self) -> None:
+        if self._worker is not None:
+            self._worker.close()
 
     async def propose(self, digest: ResearchDigest, k: int) -> list[Proposal]:
         # TPE's ask() is CPU-bound and grows with the study (measured on the rl-wide space:
@@ -80,6 +108,15 @@ class OptunaResearcher:
 
     def _ask_batch(self, k: int) -> list[Proposal]:
         out: list[Proposal] = []
+        if self._worker is not None:
+            with self._ops_lock:
+                ops, self._ops = self._ops, []
+            got = self._worker.run(ops, k)
+            for config, number in zip(got["configs"], got["numbers"], strict=True):
+                p = Proposal(config=config, hypothesis=HYPOTHESIS)
+                self._numbers[p.experiment_id] = number
+                out.append(p)
+            return out
         for _ in range(k):
             trial = self.study.ask()
             config = self.spec.validate_config(self.spec.suggest_optuna(trial))
@@ -90,6 +127,9 @@ class OptunaResearcher:
 
     def observe(self, exp: ExperimentSnapshot) -> None:
         ok = exp.status == ExperimentStatus.succeeded and exp.score is not None and math.isfinite(exp.score)
+        if self._worker is not None:
+            self._queue_observe(exp, ok)
+            return
         trial = self._trials.pop(exp.id, None)
         if trial is not None:
             if ok:
@@ -105,6 +145,24 @@ class OptunaResearcher:
             self.study.add_trial(optuna.trial.create_trial(
                 params=params, distributions={k: self._dists[k] for k in params}, value=float(exp.score),  # type: ignore[arg-type]
             ))
+
+    def _queue_observe(self, exp: ExperimentSnapshot, ok: bool) -> None:
+        """Process isolation: the same decisions as the in-thread ``observe``, as operations."""
+        number = self._numbers.pop(exp.id, None)
+        if number is not None:
+            if ok:
+                op: tuple[Any, ...] = ("tell", number, float(exp.score))  # type: ignore[arg-type]
+            elif (exp.summary or {}).get("early_stop", {}).get("outcome") == "stopped":
+                op = ("tell_state", number, "pruned")
+            else:
+                op = ("tell_state", number, "fail")
+        elif ok:
+            params: dict[str, Any] = {k: exp.config[k] for k in self._dists if k in exp.config}
+            op = ("add", params, float(exp.score), False)  # type: ignore[arg-type]
+        else:
+            return
+        with self._ops_lock:
+            self._ops.append(op)
 
     async def diagnose(self, exp: ExperimentSnapshot) -> DiagnoseOutput | None:
         return None
@@ -134,20 +192,32 @@ class BackfillSampler:
     tells and then asks, under a second lock, so the study is only ever used by one thread at a
     time (Optuna's InMemoryStorage locks its own calls, but trial objects and ask/tell order do
     not belong to it).
+
+    ``isolation="process"``: the study lives in a child process (``study_worker``); the queued
+    tells are turned into operations under the same lock and sent with the ask, in the same
+    order ``_drain`` applies them, so the configs are the same as in-thread.
     """
 
     kind = "sampler"
 
-    def __init__(self, spec: TargetSpec, seed: int, *, n_startup_trials: int = 10) -> None:
+    def __init__(self, spec: TargetSpec, seed: int, *, n_startup_trials: int = 10,
+                 isolation: Isolation = "thread") -> None:
         self.spec = spec
         self.seed = seed
         self.n_startup_trials = n_startup_trials
-        sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=n_startup_trials, constant_liar=True)
-        self.study = optuna.create_study(
-            direction="minimize" if spec.direction == "min" else "maximize", sampler=sampler
-        )
+        self.isolation: Isolation = isolation
+        direction = "minimize" if spec.direction == "min" else "maximize"
+        self._direction = direction
+        self.study: optuna.Study | None = None
+        self._worker: StudyWorker | None = None
+        if isolation == "process":
+            self._worker = StudyWorker(spec, seed, n_startup_trials, direction)
+        else:
+            sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=n_startup_trials, constant_liar=True)
+            self.study = optuna.create_study(direction=direction, sampler=sampler)
         self._dists = distributions(spec)
         self._trials: dict[str, optuna.trial.Trial] = {}   # experiment id -> its open trial
+        self._numbers: dict[str, int] = {}                  # process: experiment id -> open trial number
         self._queue: list[tuple[str, dict[str, Any], float | None]] = []
         self._queue_lock = threading.Lock()
         self._study_lock = threading.Lock()
@@ -159,13 +229,61 @@ class BackfillSampler:
 
     def manifest(self) -> dict[str, Any]:
         return {"sampler": "optuna-tpe", "seed": self.seed, "n_startup_trials": self.n_startup_trials,
-                "constant_liar": True, "direction": self.study.direction.name.lower()}
+                "constant_liar": True, "direction": self._direction, "isolation": self.isolation}
 
     def counts(self) -> dict[str, int]:
         with self._queue_lock:
             pending = len(self._queue)
+        open_trials = len(self._numbers) if self._worker is not None else len(self._trials)
         return {"asked": self.asked, "told": self.told, "told_failed": self.told_failed, "added": self.added,
-                "add_skipped": self.add_skipped, "tells_pending": pending, "open_trials": len(self._trials)}
+                "add_skipped": self.add_skipped, "tells_pending": pending, "open_trials": open_trials}
+
+    def wait_ready(self) -> None:
+        """Start the study's child process now (process isolation; before the race clock)."""
+        if self._worker is not None:
+            self._worker.start()
+
+    def close(self) -> None:
+        if self._worker is not None:
+            self._worker.close()
+
+    def _drain_ops(self) -> list[tuple[Any, ...]]:
+        """Process isolation: ``_drain``'s decisions as operations for the child, same order.
+        Tells to this sampler's own trials are counted here; added trials when the child replies."""
+        with self._queue_lock:
+            batch, self._queue = self._queue, []
+        ops: list[tuple[Any, ...]] = []
+        for exp_id, config, value in batch:
+            number = self._numbers.pop(exp_id, None)
+            if number is not None:
+                if value is None:
+                    ops.append(("tell_state", number, "fail"))
+                    self.told_failed += 1
+                else:
+                    ops.append(("tell", number, value))
+                    self.told += 1
+                continue
+            if value is None:
+                self.add_skipped += 1
+                continue
+            ops.append(("add", dict(config), value, True))
+        return ops
+
+    def _run_remote(self, k: int) -> list[Proposal]:
+        assert self._worker is not None
+        ops = self._drain_ops()
+        if not ops and k <= 0:
+            return []
+        got = self._worker.run(ops, k)
+        self.added += int(got["added"])
+        self.add_skipped += int(got["add_skipped"])
+        out: list[Proposal] = []
+        for config, number in zip(got["configs"], got["numbers"], strict=True):
+            p = Proposal(config=config, hypothesis=BACKFILL_HYPOTHESIS)
+            self._numbers[p.experiment_id] = number
+            self.asked += 1
+            out.append(p)
+        return out
 
     def tell(self, experiment_id: str, config: dict[str, Any], value: float | None) -> None:
         """Queue one finished run (any source). ``value`` None = no usable score (failed run)."""
@@ -201,12 +319,17 @@ class BackfillSampler:
     def apply_tells(self) -> None:
         """Apply queued tells now (tests / shutdown); same lock as ``ask_batch``."""
         with self._study_lock:
+            if self._worker is not None:
+                self._run_remote(0)
+                return
             self._drain()
 
     def ask_batch(self, k: int) -> list[Proposal]:
         """Apply the queued tells, then ask ``k`` configs. CPU-bound: call it in a worker thread."""
         out: list[Proposal] = []
         with self._study_lock:
+            if self._worker is not None:
+                return self._run_remote(max(0, k))
             self._drain()
             for _ in range(max(0, k)):
                 trial = self.study.ask()

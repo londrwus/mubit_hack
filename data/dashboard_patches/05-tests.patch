@@ -1,0 +1,427 @@
+--- a/tests/test_core.py
++++ b/tests/test_core.py
+@@ -139,7 +139,7 @@
+         assert parsed == e
+     assert parse_event({"type": "metric", "race_id": "r", "arm": "opus", "experiment_id": "e",
+                         "step": 1, "t": 0.5, "name": "loss", "value": 2.0}).type == "metric"
+-    assert len(EVENT_TYPES) == 8
++    assert len(EVENT_TYPES) == 9
+     with pytest.raises(ValidationError):
+         parse_event({"type": "nope", "race_id": "r"})
+ 
+--- a/tests/test_demo_modal_apps.py
++++ b/tests/test_demo_modal_apps.py
+@@ -90,8 +90,9 @@
+     spec = get_target(cfg.target).spec
+     calls = _recording_construct(monkeypatch)
+     runners = {k: app_mod._make_runner(cfg, spec, k) for k in cfg.arms}
+-    assert calls == [{"slots": {"L4": 3}, "app_name": "busy-machines-opus"},
+-                     {"slots": {"L4": 3}, "app_name": "busy-machines-bm"}]
++    assert calls == [{"slots": {"L4": 3}, "app_name": "busy-machines-opus", "gpu_telemetry_s": 1.0},
++                     {"slots": {"L4": 3}, "app_name": "busy-machines-bm", "gpu_telemetry_s": 1.0}]
++    assert runners[ArmKind.opus].gpu_telemetry_s == runners[ArmKind.opus_bm].gpu_telemetry_s == 1.0
+     assert runners[ArmKind.opus].app_name == "busy-machines-opus"
+     assert runners[ArmKind.opus_bm].app_name == "busy-machines-bm"
+     runners[ArmKind.opus]._function("L4")
+@@ -220,7 +221,8 @@
+             continue
+         assert "modal_apps" not in dumped and "demo_label" not in dumped, name
+         assert "modal_apps" not in p.model_dump_json() and "demo_label" not in p.model_dump_json(), name
+-        assert set(dumped) == set(RaceConfig.model_fields) - {"modal_apps", "demo_label"}, name
++        assert "gpu_telemetry_s" not in dumped and "gpu_telemetry_s" not in p.model_dump_json(), name
++        assert set(dumped) == set(RaceConfig.model_fields) - {"modal_apps", "demo_label", "gpu_telemetry_s"}, name
+         for c in bench.build_races(name, seeds=[0]):
+             assert "modal_apps" not in c.model_dump(mode="json") and not c.is_demo, name
+ 
+--- /dev/null
++++ b/tests/test_dashboard_modal.py
+@@ -0,0 +1,389 @@
++"""Live Modal metrics on our dashboard (demo races only), offline: fakes for Modal and the GPU.
++
++- ModalRunner adds ``gpu_telemetry`` to a job only when asked (demo); benchmark jobs are unchanged;
++- the container path samples the GPU beside the run only for such jobs, through the run's queue;
++- RaceConfig.gpu_telemetry_s is demo-only and set on the demo preset;
++- the app polls Modal stats only for demo races: GET /api/races/{id}/modal and 'modal_stats' events.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import json
++import time
++from pathlib import Path
++from types import SimpleNamespace
++from typing import Any
++
++import pytest
++from fastapi.testclient import TestClient
++
++from backend.app import create_app, modal_stats_enabled
++from backend.benchmark.configs import DEMO_LABEL, PER_ARM_MODAL_APPS, PRESETS, RaceConfig
++from backend.core.events import MetricEvent, ModalStatsEvent, parse_event
++from backend.core.types import ArmKind, MetricPoint
++from backend.scheduler import ArmDeps
++from test_engine import SPEC, FakeLLM, FakeRunner, llm_arm
++from workers.runners import modal_stats as ms
++from workers.targets.base import TargetSpec, get_target
++
++modal_runner = pytest.importorskip("workers.runners.modal_runner")
++ModalRunner = modal_runner.ModalRunner
++
++DEMO = "demo-cifar-modal-5m"
++APPS = {k.value: v for k, v in PER_ARM_MODAL_APPS.items()}
++
++
++# --------------------------------------------------------------------------- fakes
++
++
++class _Aio:
++    def __init__(self, fn: Any) -> None:
++        self.aio = fn
++
++
++class _NoopCall:
++    _n = 0
++
++    def __init__(self) -> None:
++        _NoopCall._n += 1
++        self.object_id = f"fc-noop{_NoopCall._n}"
++        self.get = _Aio(self._get)
++        self.cancel = _Aio(self._cancel)
++
++    async def _get(self, timeout: float | None = None) -> Any:
++        await asyncio.sleep(timeout or 0)
++        raise TimeoutError
++
++    async def _cancel(self, **kw: Any) -> None:
++        return None
++
++
++class _RecordingFunction:
++    """Records spawned jobs; never runs anything."""
++
++    def __init__(self) -> None:
++        self.jobs: list[dict[str, Any]] = []
++        self.spawn = _Aio(self._spawn)
++
++    async def _spawn(self, job: dict[str, Any]) -> _NoopCall:
++        self.jobs.append(job)
++        return _NoopCall()
++
++
++class _ListQueue:
++    def __init__(self) -> None:
++        self.items: list[tuple[str, dict[str, Any]]] = []
++        self.get_many = _Aio(self._get_many)
++        self.clear = _Aio(self._clear)
++
++    def put_many(self, items: list[Any], partition: str | None = None, **_: Any) -> None:
++        self.items.extend((partition or "", it) for it in items)
++
++    async def _get_many(self, n: int, block: bool = True, partition: str | None = None, **_: Any) -> list[Any]:
++        return []
++
++    async def _clear(self, **_: Any) -> None:
++        return None
++
++
++class FakeStats:
++    """Stands in for modal.Function.from_name(app, fn).get_current_stats.aio()."""
++
++    def __init__(self, by_app: dict[str, tuple[int, int, int]]) -> None:
++        self.by_app = by_app
++        self.calls: list[tuple[str, str]] = []
++
++    async def __call__(self, app: str, function: str) -> Any:
++        self.calls.append((app, function))
++        backlog, total, running = self.by_app[app]
++        return SimpleNamespace(backlog=backlog, num_total_runners=total, num_running_inputs=running,
++                               input_headroom=0)
++
++
++# --------------------------------------------------------------------------- runner: job field
++
++
++async def _launch_job(**kw: Any) -> dict[str, Any]:
++    ModalRunner._global_busy.clear()
++    fn = _RecordingFunction()
++    r = ModalRunner({"L4": 1}, function_resolver=lambda name: fn, queue=_ListQueue(), poll_interval_s=0.05, **kw)
++    cfg = get_target("cifar").spec.default_config()
++    h = await r.launch("cifar", cfg, 0, 45, lambda p: None)
++    assert r.calls_in_flight() == [{"run_id": h.run_id, "modal_call_id": h.run_ref, "hardware": "L4",
++                                    "container_started_at": None, "cancelled": False}]
++    run = r._runs[h.run_id]
++    run.stop_polling = True
++    if run.poller is not None:
++        run.poller.cancel()
++    ModalRunner._global_busy.clear()
++    return fn.jobs[0]
++
++
++async def test_benchmark_jobs_have_no_telemetry_field() -> None:
++    job = await _launch_job()
++    assert set(job) == {"run_id", "target", "config", "seed", "budget_s", "started_at", "extra_imports",
++                        "queue_name"}
++    assert ModalRunner({"L4": 1}).gpu_telemetry_s is None
++
++
++async def test_demo_jobs_carry_the_telemetry_interval() -> None:
++    job = await _launch_job(gpu_telemetry_s=0.5)
++    assert job["gpu_telemetry"] == {"interval_s": 0.5}
++    with pytest.raises(ValueError):
++        ModalRunner({"L4": 1}, gpu_telemetry_s=0)
++
++
++# --------------------------------------------------------------------------- container path
++
++
++def _container(monkeypatch: pytest.MonkeyPatch, *, run_s: float) -> _ListQueue:
++    q = _ListQueue()
++    monkeypatch.setattr(modal_runner, "_container_queue", lambda name: q)
++    monkeypatch.setattr(modal_runner, "_needs_volume", lambda *a, **k: False)   # never touch the Volume
++
++    def fake_execute(job: dict[str, Any], emit: Any) -> dict[str, Any]:
++        emit(0, 0.01, "train_loss", 2.0)
++        time.sleep(run_s)
++        return {"ok": True, "result": {"score": 0.9, "metrics": {"epochs": 1.0}}, "logs_tail": []}
++
++    monkeypatch.setattr(modal_runner, "execute_job", fake_execute)
++    return q
++
++
++def test_container_samples_gpu_only_with_the_flag(monkeypatch: pytest.MonkeyPatch) -> None:
++    q = _container(monkeypatch, run_s=0.35)
++    reads = {"n": 0}
++
++    def reader() -> list[ms.GpuReading]:
++        reads["n"] += 1
++        return [ms.GpuReading(0, 0.0 if reads["n"] == 1 else 93.0, 7000.0, 23034.0)]
++
++    monkeypatch.setattr(ms, "default_gpu_reader", lambda: reader)
++    job = {"run_id": "run-a", "target": "cifar", "config": {}, "seed": 0, "budget_s": 45,
++           "started_at": time.time(), "gpu_telemetry": {"interval_s": 0.05}}
++    payload = modal_runner._remote_execute(job)
++    metrics = [it for part, it in q.items if part == "run-a" and it.get("type") == "metric"]
++    names = [m["name"] for m in metrics]
++    assert "train_loss" in names
++    util = [m for m in metrics if m["name"] == "gpu_util_pct"]
++    assert len(util) >= 3 and util[0]["value"] == 0.0 and util[-1]["value"] == 93.0   # 0 % windows kept
++    assert [m["step"] for m in util] == list(range(len(util)))
++    assert names.count("gpu_mem_total_mb") == 1 and "gpu_mem_mb" in names
++    # telemetry never reaches the run's result (whose metrics go to the judge prompt)
++    assert payload["result"]["metrics"] == {"epochs": 1.0}
++
++
++def test_container_without_flag_never_starts_a_sampler(monkeypatch: pytest.MonkeyPatch) -> None:
++    q = _container(monkeypatch, run_s=0.05)
++
++    def boom(*a: Any, **k: Any) -> Any:
++        raise AssertionError("sampler started for a job without gpu_telemetry")
++
++    monkeypatch.setattr(ms, "GpuSampler", boom)
++    monkeypatch.setattr(ms, "sampler_for_job", boom)
++    job = {"run_id": "run-b", "target": "cifar", "config": {}, "seed": 0, "budget_s": 45, "started_at": time.time()}
++    payload = modal_runner._remote_execute(job)
++    assert payload["ok"]
++    assert [it["name"] for _, it in q.items if it.get("type") == "metric"] == ["train_loss"]
++
++
++def test_container_survives_a_broken_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
++    q = _container(monkeypatch, run_s=0.1)
++
++    def no_gpu() -> list[ms.GpuReading]:
++        raise FileNotFoundError("nvidia-smi")
++
++    monkeypatch.setattr(ms, "default_gpu_reader", lambda: no_gpu)
++    job = {"run_id": "run-c", "target": "cifar", "config": {}, "seed": 0, "budget_s": 45,
++           "started_at": time.time(), "gpu_telemetry": {"interval_s": 0.02}}
++    payload = modal_runner._remote_execute(job)
++    assert payload["ok"] and payload["result"]["score"] == 0.9
++    assert [it["name"] for _, it in q.items if it.get("type") == "metric"] == ["train_loss"]
++
++
++async def test_host_forwards_gpu_points_like_any_metric() -> None:
++    ModalRunner._global_busy.clear()
++    r = ModalRunner({"L4": 1}, function_resolver=lambda n: _RecordingFunction(), queue=_ListQueue())
++    got: list[MetricPoint] = []
++    from backend.core.types import RunHandle
++
++    h = RunHandle(runner="modal", target="cifar", config={}, seed=0, budget_s=45, hardware="L4")
++    run = modal_runner._ModalRun(handle=h, call=None, on_metric=got.append)
++    await r._handle_items(run, [{"type": "metric", "step": 0, "t": 0.5, "name": "gpu_util_pct", "value": 88.0}])
++    assert got[0].name == "gpu_util_pct" and got[0].value == 88.0 and got[0].experiment_id == h.run_id
++
++
++# --------------------------------------------------------------------------- config
++
++
++def test_demo_preset_enables_telemetry_and_benchmarks_cannot() -> None:
++    demo = PRESETS[DEMO]
++    assert demo.gpu_telemetry_s == 1.0 and demo.model_dump(mode="json")["gpu_telemetry_s"] == 1.0
++    assert modal_stats_enabled(demo)
++    for name, p in PRESETS.items():
++        if name == DEMO:
++            continue
++        assert p.gpu_telemetry_s is None and not modal_stats_enabled(p), name
++        with pytest.raises(ValueError, match="gpu_telemetry_s"):
++            RaceConfig.model_validate({**p.model_dump(), "gpu_telemetry_s": 1.0})
++    with pytest.raises(ValueError, match="needs per-arm Modal apps"):
++        RaceConfig.model_validate({**demo.model_dump(), "modal_apps": {}, "gpu_telemetry_s": 1.0})
++    # the demo without the flag still validates (polling still works; no in-container sampling)
++    assert RaceConfig.model_validate({**demo.model_dump(), "gpu_telemetry_s": None}).gpu_telemetry_s is None
++
++
++def test_kill_switch(monkeypatch: pytest.MonkeyPatch) -> None:
++    monkeypatch.setenv("BUSY_MODAL_STATS", "0")
++    assert not modal_stats_enabled(PRESETS[DEMO])
++
++
++# --------------------------------------------------------------------------- app
++
++
++class GpuFakeRunner(FakeRunner):
++    """FakeRunner that also emits one in-container GPU sample per run (like the demo container)."""
++
++    async def launch(self, target: str, config: dict[str, Any], seed: int, budget_s: int, on_metric: Any) -> Any:
++        h = await super().launch(target, config, seed, budget_s, on_metric)
++        on_metric(MetricPoint(experiment_id=h.run_id, step=0, t=0.0, name="gpu_util_pct", value=80.0))
++        return h
++
++
++def demo_factory(race_id: str, cfg: RaceConfig, spec: TargetSpec, kind: ArmKind) -> ArmDeps:
++    return llm_arm(kind, FakeLLM(0.2 if kind == ArmKind.opus else 0.02, seed=cfg.seed), race_id,
++                   GpuFakeRunner(cfg.gpus_per_arm, run_s=0.3))
++
++
++DEMO_RACE = {"name": "demo modal stats", "target": SPEC.name, "arms": ["opus", "opus_bm"], "budget_s": 1.5,
++             "gpus_per_arm": 2, "seed": 0, "llm": "mock", "runner": "modal",
++             "engine_features": {"opus_bm": []}, "modal_apps": APPS, "demo_label": DEMO_LABEL,
++             "gpu_telemetry_s": 1.0}
++PLAIN_RACE = {"name": "plain", "target": SPEC.name, "arms": ["opus", "opus_bm"], "budget_s": 1.0,
++              "gpus_per_arm": 2, "seed": 0, "llm": "mock", "runner": "modal", "engine_features": {"opus_bm": []}}
++
++
++@pytest.fixture()
++def stats() -> FakeStats:
++    return FakeStats({"busy-machines-opus": (0, 2, 1), "busy-machines-bm": (0, 2, 2)})
++
++
++@pytest.fixture()
++def client(stats: FakeStats, tmp_path: Path) -> Any:
++    app = create_app(":memory:", arm_deps_factory=demo_factory, tick_s=0.02, modal_stats_fn=stats,
++                     modal_stats_interval_s=0.05, modal_stats_dir=str(tmp_path / "modal_stats"))
++    with TestClient(app) as c:
++        yield c
++
++
++def test_live_demo_race_streams_modal_stats(client: TestClient, stats: FakeStats, tmp_path: Path) -> None:
++    race_id = client.post("/api/races", json=DEMO_RACE).json()["id"]
++    assert client.post(f"/api/races/{race_id}/start").status_code == 200
++    events: list[Any] = []
++    with client.websocket_connect(f"/ws/races/{race_id}") as ws:
++        while True:
++            ev = parse_event(ws.receive_text())
++            events.append(ev)
++            if ev.type == "race_finished":
++                break
++    ms_events = [e for e in events if isinstance(e, ModalStatsEvent)]
++    assert ms_events, [e.type for e in events]
++    by_arm = {e.arm: e for e in ms_events}
++    assert set(by_arm) == {ArmKind.opus, ArmKind.opus_bm}
++    o, b = by_arm[ArmKind.opus], by_arm[ArmKind.opus_bm]
++    assert (o.app, o.function, o.containers, o.calls_in_flight, o.idle_containers) == \
++        ("busy-machines-opus", "run_l4", 2, 1, 1)
++    assert (b.app, b.containers, b.idle_containers) == ("busy-machines-bm", 2, 0)
++    assert {a for a, _ in stats.calls} == {"busy-machines-opus", "busy-machines-bm"}
++    assert {f for _, f in stats.calls} == {"run_l4"}
++    sampled = [e for e in ms_events if e.runs_sampled > 0]
++    assert sampled, "no GPU sample joined"
++    for e in sampled:
++        assert e.gpu_util_active_pct == 80.0 and e.gpu_util_pct is not None and e.gpu_util_pct <= 80.0
++    assert any(e.call_ids for e in ms_events) and all(c.startswith("fake-") for e in ms_events for c in e.call_ids)
++    assert any(e.latest_call_id for e in ms_events)
++    # the GPU samples are ordinary metric events too (stored like any metric)
++    assert any(isinstance(e, MetricEvent) and e.name == "gpu_util_pct" for e in events)
++    # the poller stops once the race ended; every tick was logged as evidence
++    deadline = time.time() + 3
++    view = client.get(f"/api/races/{race_id}/modal").json()
++    while view["polling"] and time.time() < deadline:
++        time.sleep(0.05)
++        view = client.get(f"/api/races/{race_id}/modal").json()
++    assert view["enabled"] and not view["polling"] and view["race_status"] == "finished"
++    assert view["arms"]["opus"]["stats"]["containers"] == 2
++    assert all(c["modal_call_id"].startswith("fake-") for c in view["arms"]["opus"]["calls"])
++    log = tmp_path / "modal_stats" / f"race-{race_id}.jsonl"
++    lines = [json.loads(x) for x in log.read_text(encoding="utf-8").splitlines()]
++    assert lines and {s["arm"] for s in lines[0]["snapshots"]} == {"opus", "opus_bm"}
++
++
++def test_external_race_polled_on_request_with_gpu_join(client: TestClient, stats: FakeStats) -> None:
++    """A demo race run by another process (scripts/bench.py on the same DB): asking for it starts
++    the poller; GPU samples seen on the bus join Modal's container count; it stops at the end."""
++    state = client.app.state.bm   # type: ignore[attr-defined]
++    cfg = RaceConfig.model_validate(DEMO_RACE)
++    db = state.db
++    db.insert_race(race_id="ext1", target=cfg.target, budget_s=cfg.budget_s, gpus_per_arm=2, seed=0,
++                   config=cfg.model_dump(mode="json"), name=cfg.name, mode="dev", llm_mode="mock", runner="modal")
++    db.update_race("ext1", status="running")
++    for kind in ("opus", "opus_bm"):
++        db.insert_arm(arm_id=f"arm-{kind}", race_id="ext1", kind=kind, model="m", llm_mode="mock", n_slots=2,
++                      hardware="L4", price_per_s=0.0)
++    db.upsert_experiment({"id": "e1", "arm_id": "arm-opus", "race_id": "ext1", "status": "running",
++                          "run_ref": "fc-01ABC", "config": {}, "started_at": time.time(), "hardware": "L4"})
++    db.upsert_experiment({"id": "e0", "arm_id": "arm-opus", "race_id": "ext1", "status": "succeeded",
++                          "run_ref": "fc-00OLD", "config": {}, "started_at": 1.0, "ended_at": 2.0})
++    first = client.get("/api/races/ext1/modal").json()
++    assert first["enabled"] and first["polling"] and first["function"] == "run_l4"
++    client.portal.call(state.bus.publish, MetricEvent(race_id="ext1", arm=ArmKind.opus, experiment_id="e1",  # type: ignore[union-attr]
++                                                      step=0, t=1.0, name="gpu_util_pct", value=90.0))
++    client.portal.call(state.bus.publish, MetricEvent(race_id="ext1", arm=ArmKind.opus, experiment_id="e1",  # type: ignore[union-attr]
++                                                      step=0, t=1.0, name="gpu_mem_mb", value=6000.0))
++    deadline = time.time() + 3
++    view = client.get("/api/races/ext1/modal?history=5").json()
++    while view["arms"]["opus"]["stats"] is None and time.time() < deadline:
++        time.sleep(0.05)
++        view = client.get("/api/races/ext1/modal?history=5").json()
++    opus = view["arms"]["opus"]
++    assert opus["stats"]["containers"] == 2 and opus["stats"]["idle_containers"] == 1
++    assert opus["gpu"] == {"gpu_util_pct": 45.0, "gpu_util_active_pct": 90.0, "gpu_mem_mb": 6000.0,
++                           "runs_sampled": 1, "runs_unsampled": 0}
++    assert opus["calls_in_flight"] == ["fc-01ABC"] and opus["latest_call_id"] == "fc-01ABC"
++    assert {c["modal_call_id"] for c in opus["calls"]} == {"fc-01ABC", "fc-00OLD"}
++    # 2 calls in flight, no sample reached this process: unknown, never shown as 0 %
++    assert view["arms"]["opus_bm"]["gpu"]["gpu_util_pct"] is None
++    assert view["arms"]["opus_bm"]["gpu"]["runs_unsampled"] == 2
++    assert 1 <= len(view["history"]) <= 5
++    db.update_race("ext1", status="finished")
++    deadline = time.time() + 3
++    while client.get("/api/races/ext1/modal").json()["polling"] and time.time() < deadline:
++        time.sleep(0.05)
++    n = len(stats.calls)
++    time.sleep(0.2)
++    assert not client.get("/api/races/ext1/modal").json()["polling"] and len(stats.calls) == n
++
++
++def test_non_demo_races_never_poll_modal(client: TestClient, stats: FakeStats) -> None:
++    race_id = client.post("/api/races", json=PLAIN_RACE).json()["id"]
++    assert client.get(f"/api/races/{race_id}/modal").json() == {
++        "race_id": race_id, "enabled": False,
++        "reason": "live Modal stats are shown for demo races on per-arm Modal apps only"}
++    assert client.post(f"/api/races/{race_id}/start").status_code == 200
++    types: list[str] = []
++    with client.websocket_connect(f"/ws/races/{race_id}") as ws:
++        while True:
++            ev = parse_event(ws.receive_text())
++            types.append(ev.type)
++            if ev.type == "race_finished":
++                break
++    assert "modal_stats" not in types and stats.calls == []
++    assert client.get("/api/races/nope/modal").status_code == 404
++
++
++def test_modal_stats_event_roundtrip() -> None:
++    ev = ModalStatsEvent(race_id="r", arm=ArmKind.opus, app="busy-machines-opus", function="run_l4",
++                         containers=3, calls_in_flight=1, backlog=0, idle_containers=2, gpu_util_pct=30.0,
++                         call_ids=["fc-1"])
++    back = parse_event(ev.model_dump_json())
++    assert back == ev and back.type == "modal_stats"

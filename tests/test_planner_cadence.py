@@ -91,7 +91,7 @@ def test_off_by_default_and_label() -> None:
     assert ENGINE_FEATURE_LABELS["planner_cadence"] == (
         "calls the AI planner at most every N seconds; the no-AI sampler keeps GPUs busy in between")
     for name, p in PRESETS.items():
-        if name not in (PRESET, RL_PRESET, C30_PRESET, CIFAR_PRESET):
+        if name not in (PRESET, RL_PRESET, C30_PRESET, CIFAR_PRESET, "demo-live-60s"):  # demo: tests/test_demo_live.py
             assert not any("planner_cadence" in p.features_for(a) for a in p.arms), name
             assert not p.feature_params, name
     cfg = RaceConfig(target="bm-curve", arms=[ArmKind.opus, ArmKind.opus_bm], budget_s=1, gpus_per_arm=1)

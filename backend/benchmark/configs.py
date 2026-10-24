@@ -149,6 +149,10 @@ BUSY_MACHINES_ARMS: frozenset[ArmKind] = frozenset({ArmKind.opus_bm, ArmKind.mub
 # How every demo race is labelled (plan output, race name tag, fairness manifest "demo", and the
 # refusal notes of scripts/headline.py / scripts/analyze_races.py).
 DEMO_LABEL = "demo run for the video, not a benchmark result"
+# The 60-second live demo on stage (preset demo-live-60s): same rules as every demo race.
+LIVE_DEMO_LABEL = "demo run, not a benchmark result"
+# Demo presets the API may start in one click (POST /api/demo/start, backend/demo.py).
+DEMO_START_PRESETS: tuple[str, ...] = ("demo-live-60s", "demo-cifar-modal-5m")
 # Per-arm Modal apps (RaceConfig.modal_apps; DEMO ONLY): the same functions (run_l4, run_cpu,
 # prepare_data from workers/runners/modal_runner.py) deployed once per arm under its own app name
 # (BUSY_MODAL_APP=<name> at deploy time), so Modal's own dashboard shows each arm's containers and
@@ -231,7 +235,7 @@ class RaceConfig(BaseModel):
     # live demo uses this to show a correction turning into a model update). Dev races always
     # apply them.
     benchmark_corrections: Literal["refuse", "record"] = "refuse"
-    # DEMO ONLY (dev mode, never a headline race). Both fields are left out of every dump while
+    # DEMO ONLY (dev mode, never a headline race). These fields are left out of every dump while
     # unset (exclude_if), so the stored config of every benchmark / ablation race, and of every
     # earlier race, is byte-for-byte what it was before they existed.
     #   modal_apps  arm -> deployed Modal app that arm's ModalRunner looks its functions up in
@@ -240,6 +244,11 @@ class RaceConfig(BaseModel):
     #               written into the fairness manifest ("demo"), refused by scripts/headline.py.
     modal_apps: dict[ArmKind, str] = Field(default_factory=dict, exclude_if=lambda v: not v)
     demo_label: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    #   gpu_telemetry_s  seconds between in-container GPU samples (gpu_util_pct, gpu_mem_mb metric
+    #               points, workers/runners/modal_stats.py; docs/dashboard_modal.md); needs per-arm
+    #               Modal apps. Both arms get the same value. None (every other race): the Modal
+    #               jobs are exactly as before.
+    gpu_telemetry_s: float | None = Field(default=None, gt=0, le=60, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def _check(self) -> RaceConfig:
@@ -346,6 +355,12 @@ class RaceConfig(BaseModel):
             for n in names:
                 if not n or set(n) - _MODAL_APP_NAME_CHARS:
                     raise ValueError(f"invalid Modal app name {n!r} (lowercase letters, digits, - _ .)")
+        if self.gpu_telemetry_s is not None:
+            if self.strict or self.demo_label is None:
+                raise ValueError("gpu_telemetry_s (in-container GPU sampling) is a demo feature: demo races only, "
+                                 "never a benchmark or ablation race")
+            if not self.modal_apps:
+                raise ValueError("gpu_telemetry_s needs per-arm Modal apps (modal_apps)")
         return self
 
     @property
@@ -720,6 +735,34 @@ PRESETS: dict[str, RaceConfig] = {
         cost_cap_usd=3.0, max_estimated_gpu_usd=0.5,
         record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
         modal_apps=dict(PER_ARM_MODAL_APPS), demo_label=DEMO_LABEL,
+        gpu_telemetry_s=1.0,   # live GPU % / memory per run for our dashboard (docs/dashboard_modal.md)
+    ),
+    # LIVE 60-SECOND DEMO ON STAGE: A DEMO RUN, NOT A BENCHMARK RESULT (dev mode: is_dev=1; bench.py
+    # stores it in data/bench/demo.db, the API in its own DB; scripts/headline.py refuses it). The
+    # standard Opus agent (plain v1 loop, effort medium, no engine features) vs Busy Machines with
+    # Opus (lean planner v2 / effort low + backfill + judge policy + planner cadence: a propose call
+    # at most every 10 s, scaled down from the 30 s of lcbench-wide-bm-c30-15m for a 1-minute race).
+    # Real Opus 5.5 on every step through Mubit project A, record off on both arms. The LCBench
+    # surrogate task of lcbench-wide-bm-c30-15m (16 virtual L4 per arm, K <= 8, baseline first,
+    # pipelining off, accept_unsure on, no deadline rule: late runs are cancelled at the deadline,
+    # the same for both arms) with runs held for 0.05 x the surrogate's predicted training time
+    # (most runs 1-3 s), so both arms make several decisions in 60 s. Pacing and cadence picked by a
+    # $0 dry run (mock LLM paced at R62's measured propose latencies, judge 1.8 s): x0.05 gave run
+    # p25-p75 1.1-3.4 s and 4 planner calls per arm; x0.01-x0.02 runs (~1 s) outran the no-AI
+    # sampler. MOCK NUMBERS, not a result. GPU $ is VIRTUAL (2 x 16 x 60 s x $0.000222 = $0.43);
+    # real spend is the LLM only. Per-arm cap $1 (virtual GPU $0.21 + LLM).
+    # Started from the dashboard with POST /api/demo/start?preset=demo-live-60s (docs/dashboard_api.md).
+    "demo-live-60s": RaceConfig(
+        name=f"LCBench live demo 60 s (16 slots, runs x0.05, planner cadence 10 s; {LIVE_DEMO_LABEL})",
+        target="lcbench", arms=[ArmKind.opus, ArmKind.opus_bm],
+        budget_s=60, gpus_per_arm=16, max_proposals_per_call=8, run_baseline_first=True,
+        launch_cutoff_s=None, pipelining=False, accept_unsure=True,
+        mode="dev", llm="mubit", runner="surrogate", surrogate_runtime_mult=0.05,
+        cost_cap_usd=1.0, max_estimated_gpu_usd=1.0,
+        record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+        engine_features={ArmKind.opus_bm: ["backfill", "judge_policy", "lean_planner", "planner_cadence"]},
+        feature_params={ArmKind.opus_bm: {"planner_cadence": {"min_propose_interval_s": 10.0}}},
+        demo_label=LIVE_DEMO_LABEL,
     ),
 }
 
