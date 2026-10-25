@@ -1,7 +1,8 @@
 """One-click demo races for the stage screen: ``POST /api/demo/start?preset=...`` (docs/dashboard_api.md).
 
 Only the demo presets in ``backend.benchmark.configs.DEMO_START_PRESETS`` can be started this way
-(``demo-live-60s``: 60 s, LCBench surrogate, real Opus 5.5 through Mubit; ``demo-cifar-modal-5m``:
+(``demo-live-60s``: 60 s, LCBench surrogate, real Opus 5.5 through Mubit; ``demo-live-10s``: the
+same race cut to 10 s, no baseline run, for the "Get started" page's live test; ``demo-cifar-modal-5m``:
 5 min on Modal L4s, one Modal app per side). Every other preset is refused (400): benchmark and
 ablation races run from ``scripts/bench.py``, never from a button. A demo race is a dev race with
 ``demo_label`` set, so it is labelled "demo run, not a benchmark result" in its name, header and
@@ -15,6 +16,10 @@ never pays twice.
 ``dry_run=true`` rehearses the same preset at $0, like ``scripts/bench.py run --dry-run``: mock
 LLM, the surrogate runner kept (or the laptop CPU runner instead of Modal), no pre-warm. Mock
 numbers, never shown as a result.
+
+``POST /api/mubit/check`` tests a Mubit key for the "Get started" page: with ``{"api_key": ...}``
+one ``max_tokens=1`` Haiku call through the Mubit gateway (record off); without a key, only
+whether the server's configured keys for the live test are present (no call).
 """
 
 from __future__ import annotations
@@ -25,7 +30,8 @@ import math
 import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Body, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from backend.benchmark.configs import DEMO_START_PRESETS, PRESETS, RaceConfig
 from backend.core.types import StepType, new_id
@@ -33,6 +39,19 @@ from backend.db import BenchmarkIntegrityError
 from backend.scheduler import AsymmetricRaceError, RaceEngine, race_spec
 
 log = logging.getLogger(__name__)
+
+# The preset the "Get started" page's live test starts; the key check reports for it.
+LIVE_TEST_PRESET = "demo-live-10s"
+# Dry-run pacing of the live test (mock LLM seconds per call, per arm): R89's measured first-plan
+# latencies (standard Opus plan 9.0-10.3 s, Busy Machines' lean plan 3.7-6.1 s). Mock, not a result.
+LIVE_TEST_DRY_LATENCY_S = {"opus": 9.5, "opus_bm": 4.9}
+
+
+class MubitCheckRequest(BaseModel):
+    """Body of POST /api/mubit/check. ``api_key`` is used for one call and never stored or echoed."""
+
+    api_key: str | None = Field(default=None, max_length=512)
+
 
 DASHBOARD_WS = "/ws/races/{race_id}/dashboard?tick_s=1&raw=false"
 RAW_WS = "/ws/races/{race_id}"
@@ -52,6 +71,8 @@ def demo_config(preset: str, *, dry_run: bool = False, seed: int = 0) -> RaceCon
     if dry_run:
         upd.update(mode="dev", llm="mock", runner="surrogate" if base.runner == "surrogate" else "local",
                    prewarm=False)
+        if preset == LIVE_TEST_PRESET:
+            upd["mock_latency_s"] = dict(LIVE_TEST_DRY_LATENCY_S)
     return RaceConfig.model_validate({**base.model_dump(), **upd})
 
 
@@ -230,6 +251,21 @@ def demo_router(state: Any, *, check_keys: bool = True) -> APIRouter:
             "arms": [k.value for k in cfg.arms], "budget_s": cfg.budget_s, "gpus_per_arm": cfg.gpus_per_arm,
             "llm": cfg.llm, "runner": cfg.runner, "cost_cap_usd": cfg.cost_cap_usd,
         }
+
+    @router.post("/api/mubit/check")
+    async def mubit_check(body: MubitCheckRequest | None = Body(default=None)) -> dict[str, Any]:
+        """Test a Mubit key. With ``api_key``: one ``max_tokens=1`` call on the cheapest model through
+        the Mubit gateway, record off (``check_mubit_key``). Without: whether the server's keys for
+        the live test are configured (names env vars, never keys), with no call at all."""
+        key = (body.api_key or "").strip() if body is not None else ""
+        if key:
+            from backend.agent.mubit_client import check_mubit_key
+
+            res = await check_mubit_key(key)
+            return {"mode": "call", **res}
+        problems = _mubit_key_problems(demo_config(LIVE_TEST_PRESET))
+        return {"mode": "presence", "ok": not problems, "latency_ms": None, "model": None, "request_id": None,
+                "error": "; ".join(problems) or None, "preset": LIVE_TEST_PRESET}
 
     @router.get("/api/demo/presets")
     async def demo_presets() -> list[dict[str, Any]]:

@@ -1,0 +1,12 @@
+/* Engine strip: cells rise in left to right, then busy machines "switch on" (cobalt fills from the bottom). */
+.engine-cell { position: relative; overflow: hidden; }
+.engine-cell > .engine-fill {
+  position: absolute; inset: 0;
+  transform: scaleY(0); transform-origin: center bottom;
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.is-in .engine-cell > .engine-fill { transform: scaleY(1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .engine-cell > .engine-fill { transition: none !important; transform: none; }
+}

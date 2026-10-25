@@ -1,0 +1,18 @@
+/* I · How it works: connectors draw in left to right, then a small dot travels along each one. */
+.how-line { stroke-dasharray: 220; stroke-dashoffset: 220; }
+.is-in .how-line { animation: how-draw 900ms cubic-bezier(0.65, 0, 0.35, 1) both; animation-delay: var(--d, 0ms); }
+@keyframes how-draw { to { stroke-dashoffset: 0; } }
+
+.how-dot { opacity: 0; }
+.is-in .how-dot { animation: how-travel 2.6s ease-in-out infinite; animation-delay: var(--d, 0ms); }
+@keyframes how-travel {
+  0% { transform: translateX(0); opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { transform: translateX(var(--run, 96px)); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .how-line, .is-in .how-line { stroke-dashoffset: 0; animation: none !important; }
+  .is-in .how-dot { animation: none !important; opacity: 0; }
+}

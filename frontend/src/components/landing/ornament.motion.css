@@ -1,0 +1,11 @@
+/* Ornament divider: hairlines draw outward from the medallion, diamonds and medallion fade in. */
+.orn-line { transform: scaleX(0); transition: transform 1100ms cubic-bezier(0.22, 1, 0.36, 1) 250ms; }
+.orn-line-l { transform-origin: right center; }
+.orn-line-r { transform-origin: left center; }
+.orn-dot { opacity: 0; transform: scale(0.6); transition: opacity 700ms ease-out, transform 700ms cubic-bezier(0.22, 1, 0.36, 1); }
+.orn.is-in .orn-line { transform: scaleX(1); }
+.orn.is-in .orn-dot { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .orn-line, .orn-dot { transition: none !important; transform: none; opacity: 1; }
+}

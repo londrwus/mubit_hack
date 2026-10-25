@@ -152,7 +152,7 @@ DEMO_LABEL = "demo run for the video, not a benchmark result"
 # The 60-second live demo on stage (preset demo-live-60s): same rules as every demo race.
 LIVE_DEMO_LABEL = "demo run, not a benchmark result"
 # Demo presets the API may start in one click (POST /api/demo/start, backend/demo.py).
-DEMO_START_PRESETS: tuple[str, ...] = ("demo-live-60s", "demo-cifar-modal-5m")
+DEMO_START_PRESETS: tuple[str, ...] = ("demo-live-60s", "demo-cifar-modal-5m", "demo-live-10s")
 # Per-arm Modal apps (RaceConfig.modal_apps; DEMO ONLY): the same functions (run_l4, run_cpu,
 # prepare_data from workers/runners/modal_runner.py) deployed once per arm under its own app name
 # (BUSY_MODAL_APP=<name> at deploy time), so Modal's own dashboard shows each arm's containers and
@@ -762,6 +762,30 @@ PRESETS: dict[str, RaceConfig] = {
         record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
         engine_features={ArmKind.opus_bm: ["backfill", "judge_policy", "lean_planner", "planner_cadence"]},
         feature_params={ArmKind.opus_bm: {"planner_cadence": {"min_propose_interval_s": 10.0}}},
+        demo_label=LIVE_DEMO_LABEL,
+    ),
+    # LIVE 10-SECOND TEST FROM THE "GET STARTED" PAGE: A DEMO RUN, NOT A BENCHMARK RESULT. It proves
+    # on stage that the platform works and shows the start-up gap: how long each agent takes from
+    # t0 until its first experiment runs, and until its machines are busy. The same race as
+    # demo-live-60s (same arms, task, 16 slots, runs x0.05, K <= 8, real Opus 5.5 through Mubit
+    # project A, record off, $1 per arm) except: 10 s; NO baseline run at t0 on either arm (with
+    # it, slot 0 starts the default config at t0 on both sides and hides the gap; same for both
+    # arms); Busy Machines' planner cadence 5 s instead of 10 s. Why 10 s (the cap) and not ~5 s:
+    # R89 measured the standard agent's first Opus plan at 9.0-10.3 s, so in 5 s its first
+    # experiment could never start and there would be nothing to measure; at 10 s it may just
+    # start (if not, the panel says "none started in 10 s", as measured). GPU $ is VIRTUAL
+    # (2 x 16 x 10 s x $0.000222 = $0.07); the real spend is the LLM only (a few cents).
+    # Started with POST /api/demo/start?preset=demo-live-10s.
+    "demo-live-10s": RaceConfig(
+        name=f"LCBench live test 10 s (16 slots, runs x0.05, no baseline run, planner cadence 5 s; {LIVE_DEMO_LABEL})",
+        target="lcbench", arms=[ArmKind.opus, ArmKind.opus_bm],
+        budget_s=10, gpus_per_arm=16, max_proposals_per_call=8, run_baseline_first=False,
+        launch_cutoff_s=None, pipelining=False, accept_unsure=True,
+        mode="dev", llm="mubit", runner="surrogate", surrogate_runtime_mult=0.05,
+        cost_cap_usd=1.0, max_estimated_gpu_usd=1.0,
+        record_mode={ArmKind.opus: "off", ArmKind.opus_bm: "off"},
+        engine_features={ArmKind.opus_bm: ["backfill", "judge_policy", "lean_planner", "planner_cadence"]},
+        feature_params={ArmKind.opus_bm: {"planner_cadence": {"min_propose_interval_s": 5.0}}},
         demo_label=LIVE_DEMO_LABEL,
     ),
 }

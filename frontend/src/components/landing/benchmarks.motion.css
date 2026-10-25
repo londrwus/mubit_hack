@@ -1,0 +1,11 @@
+/* Figure plate settles in; scoped so it does not set .is-in on the bars inside (each panel triggers its own). */
+.bench-fig {
+  opacity: 0;
+  transform: scale(0.97);
+  transition: opacity 1000ms cubic-bezier(0.22, 1, 0.36, 1) 150ms, transform 1000ms cubic-bezier(0.22, 1, 0.36, 1) 150ms;
+}
+.bench-fig.bench-fig-in { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bench-fig { opacity: 1; transform: none; transition: none; }
+}

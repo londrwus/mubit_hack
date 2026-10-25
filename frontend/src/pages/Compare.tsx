@@ -18,21 +18,31 @@ import {
   WifiOff,
   type LucideIcon,
 } from "lucide-react";
+import { FakesCard } from "@/components/platform/compare/FakesCard";
+import { MachineUse } from "@/components/platform/compare/MachineUse";
+import { QualityChart, qualityDomain } from "@/components/platform/compare/QualityChart";
+import { ReplayBar } from "@/components/platform/compare/ReplayBar";
+import { Tween } from "@/components/platform/compare/Tween";
 import { PageHeader } from "@/components/platform/AppShell";
+import { CountUp } from "@/components/motion/CountUp";
+import "@/components/platform/platform.motion.css";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { API_BASE, type ArmSnapshot, type Slot, type Snapshot } from "@/lib/api";
 import { card, displayed, firstRace, metric, showcase, side, tidyRatio } from "@/lib/showcase";
-import { useReplay, type ReplayPhase } from "@/lib/useReplay";
+import { OFFLINE_LABEL } from "@/lib/offlineReplay";
+import { useReplay, type ReplayControls, type ReplayState } from "@/lib/useReplay";
 import { cn } from "@/lib/utils";
 
-const SPEED = 90;
+const DEFAULT_SPEED = 90;
 
 // ---------------------------------------------------------------- examples (all from showcase.json)
 
 type ExampleId = "game_playing" | "tabular" | "sapling";
 
-type StatValue = { value: string; hover?: string };
+// `num` + `fmt` (live replay values only): the shown number glides from the previous snapshot to this one
+// and ends on fmt(num) === value.
+type StatValue = { value: string; hover?: string; num?: number; fmt?: (n: number) => string };
 type Fallback = {
   label: string;
   left: { ai: StatValue; waiting: StatValue; experiments: StatValue; quality: StatValue };
@@ -168,63 +178,74 @@ function buildExamples(): Example[] {
 
 // ---------------------------------------------------------------- small pieces
 
-function ExampleCard({ ex, selected, onSelect }: { ex: Example; selected: boolean; onSelect: () => void }) {
+function ExampleCard({ ex, selected, onSelect, delay }: { ex: Example; selected: boolean; onSelect: () => void; delay: number }) {
   const Icon = ex.icon;
+  // Entrance on the wrapper; the button keeps its own transform for the hover lift.
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={cn(
-        "flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-2 rounded-[14px] bg-white px-[18px] py-[14px] text-left",
-        selected
-          ? "shadow-[0_4px_14px_#1D3B9420] outline outline-2 -outline-offset-1 outline-cobalt-bright"
-          : "shadow-[0_1px_2px_#1A2F7A0D] outline outline-1 -outline-offset-[0.5px] outline-app-line hover:outline-app-wash-line",
-      )}
-    >
-      <div className="flex w-full items-center gap-[10px]">
-        <span className={cn("grid size-7 place-items-center rounded-[8px]", selected ? "bg-cobalt text-white" : "bg-app-side text-cobalt")}>
-          <Icon size={15} strokeWidth={1.8} />
-        </span>
-        <span className="flex-1 text-[15px] font-semibold text-ink">{ex.title}</span>
-        {selected && (
-          <span className="rounded-full bg-app-wash px-2 py-[3px] text-[11px] font-semibold text-cobalt">Showing</span>
+    <div className="animate-enter flex min-w-0 flex-1" style={{ animationDelay: `${delay}ms` }}>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
+        className={cn(
+          "flex w-full min-w-0 cursor-pointer flex-col items-start gap-[6px] rounded-[14px] bg-white px-4 py-[10px] text-left transition-[transform,box-shadow,outline-color] duration-300 ease-out",
+          selected
+            ? "shadow-[0_4px_14px_#1D3B9420] outline outline-2 -outline-offset-1 outline-cobalt-bright"
+            : "shadow-[0_1px_2px_#1A2F7A0D] outline outline-1 -outline-offset-[0.5px] outline-app-line hover:-translate-y-0.5 hover:shadow-[0_4px_14px_#1A2F7A14] hover:outline-app-wash-line",
         )}
-      </div>
-      <div className="flex flex-col gap-[5px]">
-        {ex.points.map((p) => (
-          <span key={p} className="flex items-center gap-2 text-[13px] leading-4 text-app-text-2">
-            <Check size={13} strokeWidth={2.2} className="text-app-ok" /> {p}
+      >
+        <div className="flex w-full items-center gap-[10px]">
+          <span
+            className={cn(
+              "grid size-7 place-items-center rounded-[8px] transition-colors duration-300 ease-out",
+              selected ? "bg-cobalt text-white" : "bg-app-side text-cobalt",
+            )}
+          >
+            <Icon size={15} strokeWidth={1.8} />
           </span>
-        ))}
-      </div>
-      <span className="mt-auto font-mono text-[10.5px] text-app-muted">{ex.source}</span>
-    </button>
+          <span className="flex-1 text-[15px] font-semibold text-ink">{ex.title}</span>
+          {selected && (
+            <span className="animate-pop-in rounded-full bg-app-wash px-2 py-[3px] text-[11px] font-semibold text-cobalt">Showing</span>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-x-3 gap-y-[3px]">
+          {ex.points.map((p) => (
+            <span key={p} className="flex items-center gap-[6px] text-[12.5px] leading-4 text-app-text-2">
+              <Check size={12} strokeWidth={2.2} className="text-app-ok" /> {p}
+            </span>
+          ))}
+        </div>
+        <span className="mt-auto font-mono text-[10px] text-app-muted">{ex.source}</span>
+      </button>
+    </div>
   );
 }
 
-function Stat({ icon: Icon, label, note, value, hover, chip, strong }: { icon: LucideIcon; label: string; note?: string; value: string; hover?: string; chip?: string | null; strong?: boolean }) {
+function Stat({ icon: Icon, label, note, value, hover, num, fmt, chip, strong, compact }: { icon: LucideIcon; label: string; note?: string; value: string; hover?: string; num?: number; fmt?: (n: number) => string; chip?: string | null; strong?: boolean; compact?: boolean }) {
   return (
     <div
-      className="flex min-h-[100px] min-w-0 flex-1 flex-col justify-center gap-2 rounded-[12px] px-[18px] py-3 outline outline-1 -outline-offset-[0.5px] outline-app-line"
+      className={cn(
+        "flex min-w-0 flex-1 flex-col justify-center rounded-[12px] outline outline-1 -outline-offset-[0.5px] outline-app-line transition-[outline-color] duration-300 hover:outline-app-wash-line",
+        compact ? "min-h-[64px] gap-1 px-[10px] py-2" : "min-h-[100px] gap-2 px-[18px] py-3",
+      )}
       title={hover}
     >
-      <div className="flex items-center gap-[6px]">
-        <Icon size={13} strokeWidth={1.8} className="text-app-slate" />
-        <span className="text-[13.5px] text-app-slate">{label}</span>
-        {note && <span className="text-[11px] text-app-muted">{note}</span>}
+      <div className="flex min-w-0 items-center gap-[6px]">
+        {!compact && <Icon size={13} strokeWidth={1.8} className="shrink-0 text-app-slate" />}
+        <span className={cn("truncate text-app-slate", compact ? "text-[11.5px]" : "text-[13.5px]")} title={compact ? label : undefined}>{label}</span>
+        {note && <span className="truncate text-[11px] text-app-muted">{note}</span>}
       </div>
-      <div className="flex flex-col items-start gap-[6px]">
+      <div className={cn("flex items-start", compact ? "flex-wrap items-center gap-x-2 gap-y-1" : "flex-col gap-[6px]")}>
         <span
           className={cn(
             "whitespace-nowrap font-mono leading-[1.15] font-medium tracking-[-0.5px] tabular-nums",
-            value.length > 9 ? "text-[28px]" : "text-[34px]",
+            compact ? (value.length > 7 ? "text-[19px]" : "text-[22px]") : value.length > 9 ? "text-[28px]" : "text-[34px]",
             strong ? "text-ink" : "text-app-text",
           )}
         >
-          {value}
+          {num != null && fmt ? <Tween value={num} format={fmt} /> : value}
         </span>
-        {chip && <Badge>{chip}</Badge>}
+        {chip && <Badge className="animate-pop-in">{chip}</Badge>}
       </div>
     </div>
   );
@@ -236,20 +257,21 @@ function Tile({ i, state, strong, title }: { i: number; state: Slot["state"] | "
   return (
     <div
       title={title}
+      style={{ animationDelay: `${300 + i * 14}ms` }}
       className={cn(
-        "flex h-[40px] min-w-0 flex-1 flex-col items-start justify-between rounded-[7px] px-[6px] py-[5px] outline outline-1 -outline-offset-[0.5px] transition-colors duration-150",
+        "animate-tile-in flex h-[30px] min-w-0 flex-1 flex-col items-start justify-between rounded-[7px] px-[6px] py-[5px] outline outline-1 -outline-offset-[0.5px] transition-[background-color,outline-color] duration-300 ease-out",
         busy ? (strong ? "bg-cobalt outline-[#16307F]" : "bg-cobalt-busy outline-[#16307F]") : off ? "bg-app-well outline-app-line-2" : "bg-white outline-app-line",
       )}
     >
-      <span className={cn("font-mono text-[8.5px] leading-none", busy ? "text-[#C9D4F2]" : off ? "text-app-muted/60" : "text-app-muted")}>
+      <span className={cn("font-mono text-[8.5px] leading-none transition-colors duration-500", busy ? "text-[#C9D4F2]" : off ? "text-app-muted/60" : "text-app-muted")}>
         {String(i + 1).padStart(2, "0")}
       </span>
-      <span className={cn("block h-[3px] rounded-[2px]", busy ? "w-full bg-ivory/70" : state === "cancelled" ? "w-2 bg-[#E3C07A]" : "w-2 bg-[#E6E3DB]")} />
+      <span className={cn("block h-[3px] rounded-[2px] transition-[width,background-color] duration-500 ease-out", busy ? "w-full bg-ivory/70" : state === "cancelled" ? "w-2 bg-[#E3C07A]" : "w-2 bg-[#E6E3DB]")} />
     </div>
   );
 }
 
-function Grid({ label, count, slots, n, strong, finished }: { label: string; count: string; slots: Slot[] | null; n: number; strong?: boolean; finished?: boolean }) {
+function Grid({ label, count, slots, n, strong, finished, extra }: { label: string; count: string; slots: Slot[] | null; n: number; strong?: boolean; finished?: boolean; extra?: ReactNode }) {
   const cols = n <= 16 ? 8 : 10;
   const rows: number[][] = [];
   for (let i = 0; i < n; i += cols) rows.push(Array.from({ length: Math.min(cols, n - i) }, (_, k) => i + k));
@@ -260,8 +282,9 @@ function Grid({ label, count, slots, n, strong, finished }: { label: string; cou
   return (
     <div className="flex w-full flex-col gap-2 rounded-[12px] bg-app-well p-3 outline outline-1 -outline-offset-[0.5px] outline-app-line-2">
       <div className="flex items-center justify-between">
-        <span className="text-[11.5px] font-medium text-app-slate">{label}</span>
-        <span className={cn("font-mono text-[10.5px]", strong ? "text-cobalt" : "text-app-slate")}>{count}</span>
+        <span className="truncate text-[11.5px] font-medium text-app-slate">{label}</span>
+        <span className="ml-auto mr-3 shrink-0">{extra}</span>
+        <span className={cn("shrink-0 whitespace-nowrap font-mono text-[10.5px]", strong ? "text-cobalt" : "text-app-slate")}>{count}</span>
       </div>
       {rows.map((r, ri) => (
         <div key={ri} className="flex w-full gap-[6px]">
@@ -276,10 +299,13 @@ function Grid({ label, count, slots, n, strong, finished }: { label: string; cou
 }
 
 function ColumnShell({ strong, head, children }: { strong?: boolean; head: ReactNode; children: ReactNode }) {
+  // Baseline slides in from the left, Busy Machines from the right.
   return (
     <div
+      style={{ animationDelay: strong ? "320ms" : "240ms" }}
       className={cn(
         "flex min-w-0 flex-1 flex-col gap-3 rounded-[16px] bg-white p-4",
+        strong ? "animate-slide-right" : "animate-slide-left",
         strong
           ? "shadow-[0_4px_16px_#1D3B9418] outline outline-[1.5px] -outline-offset-[0.75px] outline-app-wash-line"
           : "shadow-[0_1px_2px_#1A2F7A0D] outline outline-1 -outline-offset-[0.5px] outline-app-line",
@@ -323,6 +349,9 @@ function fmtUsd(v: number) {
 function fmtPct(v: number) {
   return `${v.toFixed(1)}%`;
 }
+function fmtCount(v: number) {
+  return Math.round(v).toLocaleString("en-US");
+}
 function bySource(a: ArmSnapshot) {
   const s = a.finished_by_source ?? {};
   const parts = [s.llm ? `${s.llm} planned by the AI` : "", s.sampler ? `${s.sampler} by the built-in tuner` : "", s.baseline ? `${s.baseline} starting model` : ""];
@@ -332,26 +361,51 @@ function bySource(a: ArmSnapshot) {
 function armStats(a: ArmSnapshot, snap: Snapshot) {
   const h = snap.header;
   return {
-    ai: { value: fmtUsd(a.ai_bill_usd), hover: `ai_bill_usd: ${h.ai_cost_note ?? "AI $ at list price (estimate)"}` },
+    ai: { value: fmtUsd(a.ai_bill_usd), num: a.ai_bill_usd, fmt: fmtUsd, hover: `ai_bill_usd: ${h.ai_cost_note ?? "AI $ at list price (estimate)"}` },
     waiting: {
       value: fmtPct(a.waiting_so_far_pct),
+      num: a.waiting_so_far_pct,
+      fmt: fmtPct,
       hover: `waiting_so_far_pct: idle ÷ paid machine time so far · ${h.machines.caption}`,
     },
-    experiments: { value: a.experiments_finished.toLocaleString("en-US"), hover: `experiments_finished${bySource(a) ? `: ${bySource(a)}` : ""}` },
+    experiments: {
+      value: a.experiments_finished.toLocaleString("en-US"),
+      num: a.experiments_finished,
+      fmt: fmtCount,
+      hover: `experiments_finished${bySource(a) ? `: ${bySource(a)}` : ""}` },
     quality: { value: a.model_quality.best_text ?? "—", hover: "model_quality.best: best held-out score of a counted run" },
   };
 }
 
-function RacePanel({ ex, phase, snapshot }: { ex: RaceExample; phase: ReplayPhase; snapshot: Snapshot | null }) {
+function PlanningPill({ thinking }: { thinking: boolean }) {
+  if (!thinking) return null;
+  return (
+    <span
+      aria-live="polite"
+      title="planner.thinking: the AI planner has a request open right now"
+      className={cn(
+        "animate-pop-in inline-flex h-4 items-center gap-[5px] rounded-full bg-app-wash px-2 text-[10.5px] leading-none font-medium text-cobalt",
+      )}
+    >
+      <span className="animate-bm-pulse size-[6px] rounded-full bg-cobalt-bright" />
+      AI is planning…
+    </span>
+  );
+}
+
+type Replay = ReplayState & ReplayControls;
+
+function RacePanel({ ex, r }: { ex: RaceExample; r: Replay }) {
+  const { phase, snapshot } = r;
   const left = snapshot?.arms.find((a) => a.side === "left") ?? null;
   const right = snapshot?.arms.find((a) => a.side === "right") ?? null;
   // A finished race has every slot off. After the finish the grid shows each side's whole sweep
   // instead: tiles filled = share of machine time spent training (100% − machines waiting, the
   // snapshot's own end value), so the picture matches the logged number next to it.
   const finished = snapshot?.status === "finished";
-  const timeSlots = (a: ArmSnapshot): Slot[] => {
-    const filled = Math.round((a.n_slots * (100 - a.waiting_so_far_pct)) / 100);
-    return Array.from({ length: a.n_slots }, (_, i) => ({
+  const fillSlots = (nSlots: number, waitingPct: number): Slot[] => {
+    const filled = Math.round((nSlots * (100 - waitingPct)) / 100);
+    return Array.from({ length: nSlots }, (_, i) => ({
       slot_id: `${i + 1}`,
       state: i < filled ? "busy" : "waiting",
       since_s: null,
@@ -359,16 +413,25 @@ function RacePanel({ ex, phase, snapshot }: { ex: RaceExample; phase: ReplayPhas
       source: null,
     }));
   };
-  const gridSlots = (a: ArmSnapshot | null) => (a ? (finished ? timeSlots(a) : a.slots) : null);
-  const gridLabel = finished ? "Machine time spent training, whole sweep" : "Machines right now";
+  const timeSlots = (a: ArmSnapshot): Slot[] => fillSlots(a.n_slots, a.waiting_so_far_pct);
+  // No snapshot at all (server and offline copy both unreachable): the logged end values, as before.
   const offline = phase === "offline" && !snapshot;
+  const loggedWaiting = (fb: Fallback["left"]) => {
+    const v = parseFloat(fb.waiting.value);
+    return offline && Number.isFinite(v) ? v : null;
+  };
+  const wL = loggedWaiting(ex.fallback.left);
+  const wR = loggedWaiting(ex.fallback.right);
+  const gridSlots = (a: ArmSnapshot | null, w: number | null) =>
+    a ? (finished ? timeSlots(a) : a.slots) : w !== null ? fillSlots(ex.nSlots, w) : null;
+  const gridLabel = finished || wL !== null ? "Time spent training, whole sweep" : "Machines right now";
   const n = snapshot?.header.gpus_per_arm ?? ex.nSlots;
   const done = phase === "finished" || offline;
   const higher = snapshot?.header.higher_is_better ?? true;
 
-  const count = (a: ArmSnapshot | null) => {
-    if (!snapshot || !a) return offline ? "backend offline" : "loading…";
-    if (finished) return `${fmtPct(100 - a.waiting_so_far_pct)} · ${snapshot.finished_text ?? "Finished"}`;
+  const count = (a: ArmSnapshot | null, w: number | null) => {
+    if (!snapshot || !a) return w !== null ? `${fmtPct(100 - w)} · logged replay` : offline ? "backend offline" : "loading…";
+    if (finished) return `${fmtPct(100 - a.waiting_so_far_pct)} · ${snapshot.finished_text?.split(" · ")[0] ?? "Finished"}`;
     if (snapshot.status === "not_started") return "starting";
     return `${a.working_now} of ${a.n_slots} training`;
   };
@@ -381,43 +444,81 @@ function RacePanel({ ex, phase, snapshot }: { ex: RaceExample; phase: ReplayPhas
   const std = showcase.sides.standard;
   const bm = showcase.sides.busy_machines;
 
+  const h = snapshot?.header;
+  const domain = qualityDomain(h?.goal, [left?.model_quality.best, right?.model_quality.best], higher);
+  const lr = h?.logged_race;
+  const qNote = `${higher ? "higher" : "lower"} is better · best so far${lr ? ` · ${lr.ref} run ${lr.run}` : ""}`;
+  const duration = r.duration || h?.budget_s || 900;
+
+  const column = (a: ArmSnapshot | null, s: typeof L, w: number | null, strong: boolean) => (
+    <>
+      <Grid
+        label={gridLabel}
+        count={count(a, w)}
+        slots={gridSlots(a, w)}
+        n={n}
+        strong={strong}
+        finished={finished || w !== null}
+        extra={<PlanningPill thinking={!!a?.planner?.thinking && !finished} />}
+      />
+      <div className="flex w-full gap-2">
+        <Stat compact icon={Receipt} label="AI bill" strong={strong} {...s.ai} />
+        <Stat compact icon={Hourglass} label={waitingLabel} strong={strong} {...s.waiting} />
+        <Stat compact icon={FlaskConical} label="Experiments" strong={strong} {...s.experiments} />
+        <Stat compact icon={TrendingUp} label="Model quality" strong={strong} {...s.quality} />
+      </div>
+      {done && (
+        <div className="animate-pop-in flex h-[22px] w-full items-center gap-2">
+          {strong ? (
+            <>
+              <Badge>{ex.aiChip}</Badge>
+              <Badge>{ex.qualityChip}</Badge>
+            </>
+          ) : (
+            <span className="text-[11.5px] text-app-muted">End-of-sweep values</span>
+          )}
+        </div>
+      )}
+      {snapshot && a ? (
+        <>
+          <QualityChart
+            series={a.model_quality.series ?? []}
+            now={snapshot.race_elapsed_s}
+            duration={duration}
+            domain={domain}
+            goal={h?.goal}
+            goalText={h?.goal_text}
+            higher={higher}
+            bestText={a.model_quality.best_text}
+            note={qNote}
+            strong={strong}
+          />
+          <div className="flex w-full gap-2">
+            <MachineUse
+              history={r.history}
+              side={a.side === "right" ? "right" : "left"}
+              nSlots={a.n_slots}
+              duration={duration}
+              busySoFar={snapshot.status === "not_started" ? null : fmtPct(100 - a.waiting_so_far_pct)}
+              strong={strong}
+            />
+            <FakesCard count={a.fakes_caught} strong={strong} />
+          </div>
+        </>
+      ) : null}
+    </>
+  );
+
   return (
     <div className="flex w-full flex-1 gap-4">
       <ColumnShell head={<ColumnHead name="Standard Opus 5.5 agent" sub="Waits for the AI between experiments" tag="Baseline" hover={std.hover} />}>
-        <Grid label={gridLabel} count={count(left)} slots={gridSlots(left)} n={n} finished={finished} />
-        <div className="flex w-full flex-1 flex-col gap-[10px]">
-          <div className="flex w-full flex-1 gap-[10px]">
-            <Stat icon={Receipt} label="AI bill" {...L.ai} />
-            <Stat icon={Hourglass} label={waitingLabel} {...L.waiting} />
-          </div>
-          <div className="flex w-full flex-1 gap-[10px]">
-            <Stat icon={FlaskConical} label="Experiments" {...L.experiments} />
-            <Stat icon={TrendingUp} label="Model quality" note={higher ? "higher is better" : "lower is better"} {...L.quality} />
-          </div>
-        </div>
+        {column(left, L, wL, false)}
       </ColumnShell>
       <ColumnShell
         strong
         head={<ColumnHead strong name="Busy Machines (same Opus 5.5)" sub="Keeps every machine training while the AI thinks" tag={ex.bmTag} hover={bm.hover} />}
       >
-        <Grid label={gridLabel} count={count(right)} slots={gridSlots(right)} n={n} strong finished={finished} />
-        <div className="flex w-full flex-1 flex-col gap-[10px]">
-          <div className="flex w-full flex-1 gap-[10px]">
-            <Stat icon={Receipt} label="AI bill" strong chip={done ? ex.aiChip : null} {...Rt.ai} />
-            <Stat icon={Hourglass} label={waitingLabel} strong {...Rt.waiting} />
-          </div>
-          <div className="flex w-full flex-1 gap-[10px]">
-            <Stat icon={FlaskConical} label="Experiments" strong {...Rt.experiments} />
-            <Stat
-              icon={TrendingUp}
-              label="Model quality"
-              note={higher ? "higher is better" : "lower is better"}
-              strong
-              chip={done ? ex.qualityChip : null}
-              {...Rt.quality}
-            />
-          </div>
-        </div>
+        {column(right, Rt, wR, true)}
       </ColumnShell>
     </div>
   );
@@ -431,15 +532,16 @@ function ClaimsGrid({ label, caught, of, strong }: { label: string; caught: numb
       <div className="flex items-center justify-between">
         <span className="text-[11.5px] font-medium text-app-slate">{label}</span>
         <span className={cn("font-mono text-[10.5px]", strong ? "text-cobalt" : "text-app-slate")}>
-          {caught} of {of} caught
+          <CountUp value={caught} duration={900} delay={300} /> of {of} caught
         </span>
       </div>
       <div className="grid grid-cols-[repeat(22,minmax(0,1fr))] gap-1" aria-label={`${caught} of ${of} fake wins caught`}>
         {Array.from({ length: of }, (_, i) => (
           <span
             key={i}
+            style={{ animationDelay: `${300 + i * 5}ms` }}
             className={cn(
-              "block aspect-square rounded-[3px] outline outline-1 -outline-offset-[0.5px]",
+              "animate-tile-in block aspect-square rounded-[3px] outline outline-1 -outline-offset-[0.5px]",
               i < caught ? "bg-cobalt outline-[#16307F]" : "bg-white outline-app-line",
             )}
           />
@@ -507,10 +609,10 @@ export default function Compare() {
   const [params, setParams] = useSearchParams();
   const initial = (params.get("example") as ExampleId | null) ?? "game_playing";
   const [selected, setSelected] = useState<ExampleId>(examples.some((e) => e.id === initial) ? initial : "game_playing");
-  const [runToken, setRunToken] = useState(0);
   const ex = examples.find((e) => e.id === selected)!;
   const race = ex.kind === "race" ? ex : null;
-  const { phase, snapshot, error } = useReplay(race?.racePrefix ?? null, SPEED, runToken);
+  const r = useReplay(race?.racePrefix ?? null, DEFAULT_SPEED);
+  const { phase, snapshot, error, source, speed } = r;
 
   useEffect(() => {
     document.title = "Compare · Busy Machines";
@@ -521,13 +623,14 @@ export default function Compare() {
     setParams(id === "game_playing" ? {} : { example: id }, { replace: true });
   };
 
-  const progress = snapshot && snapshot.header.budget_s > 0 ? Math.min(1, snapshot.race_elapsed_s / snapshot.header.budget_s) : 0;
+  const progress = r.duration > 0 ? Math.min(1, r.t / r.duration) : 0;
   const busy = phase === "connecting" || phase === "replaying";
 
   let phaseText = "";
   if (race) {
     if (phase === "connecting") phaseText = "loading the logged sweep…";
-    else if (phase === "replaying" && snapshot) phaseText = `${snapshot.clock} · ${SPEED}× speed`;
+    else if (phase === "replaying" && snapshot) phaseText = `${snapshot.clock} · ${speed}× speed`;
+    else if (phase === "paused" && snapshot) phaseText = `paused at ${snapshot.clock}`;
     else if (phase === "finished") phaseText = "end-of-sweep values";
     else if (phase === "offline") phaseText = snapshot ? "stream stopped" : race.fallback.label;
   }
@@ -540,44 +643,47 @@ export default function Compare() {
         subtitle="Same machines, same budget, same Opus 5.5. Pick an example from our logged sweeps."
         right={
           <div className="flex items-center gap-3">
-            {race && phase === "offline" && (
-              <Badge variant="next" size="status" title={`${error ?? ""}\nStart the API on ${API_BASE} (see frontend/README.md).`}>
-                <WifiOff size={13} /> Backend offline
+            {race && (source === "offline" || phase === "offline") && (
+              <Badge variant="next" size="status" className="animate-pop-in" title={`${error ?? ""}\nStart the API on ${API_BASE} (see frontend/README.md) to stream from the server.`}>
+                <WifiOff size={13} /> {source === "offline" ? "Offline copy" : "Backend offline"}
               </Badge>
             )}
             <Button
-              onClick={() => setRunToken((t) => t + 1)}
+              onClick={r.restart}
               disabled={!race || phase === "connecting"}
-              title={race ? `Replays the logged sweep from the start at ${SPEED}× (15 min in 10 s)` : "A logged result; there is nothing to replay"}
+              title={race ? `Replays the logged sweep from the start at ${speed}× (15 min in ${Math.round(900 / speed)} s)` : "A logged result; there is nothing to replay"}
             >
               {busy ? <span className="animate-bm-pulse size-2 rounded-full bg-white" /> : <Play size={14} />}
-              {phase === "replaying" ? `Replaying · ${SPEED}×` : `Replay · ${SPEED}×`}
+              {phase === "replaying" ? `Replaying · ${speed}×` : `Replay · ${speed}×`}
             </Button>
           </div>
         }
       />
 
       <div className="flex w-full gap-[14px]">
-        {examples.map((e) => (
-          <ExampleCard key={e.id} ex={e} selected={e.id === selected} onSelect={() => select(e.id)} />
+        {examples.map((e, i) => (
+          <ExampleCard key={e.id} ex={e} selected={e.id === selected} onSelect={() => select(e.id)} delay={200 + i * 80} />
         ))}
       </div>
 
-      {race ? <RacePanel ex={race} phase={phase} snapshot={snapshot} /> : <VerifierPanel />}
+      {race && <ReplayBar r={r} />}
 
-      <div className="flex w-full flex-col gap-[6px]">
+      {/* Keyed by example so the two panels slide in again when you switch. */}
+      {race ? <RacePanel key={race.id} ex={race} r={r} /> : <VerifierPanel key="sapling" />}
+
+      <div className="animate-enter flex w-full flex-col gap-[6px]" style={{ animationDelay: "480ms" }}>
         <div className="flex w-full items-center justify-between gap-6">
           <div className="flex min-w-0 items-center gap-2 text-[12.5px]">
             <RotateCcw size={13} className="shrink-0 text-app-text-2" />
             {race ? (
               <>
-                <span className="whitespace-nowrap font-semibold text-app-text-2">Replay of a logged sweep</span>
+                <span className="whitespace-nowrap font-semibold text-app-text-2">{source === "offline" ? OFFLINE_LABEL : "Replay of a logged sweep"}</span>
                 <span className="truncate text-app-slate">
                   · {race.detail} · {phaseText}
                 </span>
                 {phase === "replaying" && (
                   <span className="ml-1 block h-1 w-24 shrink-0 overflow-hidden rounded-full bg-app-line" aria-hidden="true">
-                    <span className="block h-full bg-cobalt-bright" style={{ width: `${progress * 100}%` }} />
+                    <span className="block h-full bg-cobalt-bright transition-[width] duration-200 ease-linear" style={{ width: `${progress * 100}%` }} />
                   </span>
                 )}
               </>

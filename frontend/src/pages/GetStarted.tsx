@@ -5,16 +5,19 @@ import {
   CircleCheck,
   CircleDashed,
   Copy,
-  EyeOff,
   Gamepad2,
   GitBranch,
-  KeyRound,
+  Cloud,
   Laptop,
   Play,
   Server,
   ShieldCheck,
   Timer,
+  Zap,
 } from "lucide-react";
+import { KeyTest } from "@/components/platform/live/KeyTest";
+import { LiveRacePanel } from "@/components/platform/live/LiveRacePanel";
+import { useLiveRace } from "@/lib/liveRace";
 import { PageHeader } from "@/components/platform/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,12 +51,87 @@ const PRESET_BODY = {
   feature_params: { opus_bm: { planner_cadence: { min_propose_interval_s: 60.0 } } },
 };
 
-const CURL = [
-  `# 1. create the race (body = the ${PRESET} preset's RaceConfig)`,
-  `curl -s -X POST ${API_BASE}/api/races -H "content-type: application/json" \\`,
-  `  -d '${JSON.stringify(PRESET_BODY)}'`,
-  `# 2. start it: POST ${API_BASE}/api/races/<id>/start`,
-].join("\n");
+type Compute = "modal" | "local" | "cluster";
+
+// RaceConfig.runner per choice. Prewarm pins Modal containers, so it is Modal only. A cluster needs its own
+// Runner (workers/runners/base.py) registered first; until then the placeholder makes the request fail loudly.
+const RUNNER: Record<Compute, string> = { modal: "modal", local: "local", cluster: "your-runner" };
+
+const COMPUTE: { id: Compute; label: string; icon: typeof Server; detail: string }[] = [
+  { id: "modal", label: "Modal", icon: Cloud, detail: "Serverless cloud machines (L4 GPUs by default), using the Modal token on the server." },
+  { id: "local", label: "Local", icon: Laptop, detail: "This computer's CPU. Good for small tests; no cloud cost." },
+  { id: "cluster", label: "Your cluster", icon: Server, detail: "Plug in your own machines by implementing the Runner interface (workers/runners/base.py)." },
+];
+
+function bodyFor(compute: Compute) {
+  return { ...PRESET_BODY, runner: RUNNER[compute], prewarm: compute === "modal", prewarm_spare: compute === "modal" ? 2 : 0 };
+}
+
+function curlFor(compute: Compute): string {
+  return [
+    ...(compute === "cluster" ? ["# first register your Runner (workers/runners/base.py) and use its name below"] : []),
+    `# 1. create the race (body = the ${PRESET} preset's RaceConfig, runner: ${RUNNER[compute]})`,
+    `curl -s -X POST ${API_BASE}/api/races -H "content-type: application/json" \\`,
+    `  -d '${JSON.stringify(bodyFor(compute))}'`,
+    `# 2. start it: POST ${API_BASE}/api/races/<id>/start`,
+  ].join("\n");
+}
+
+const COMPUTE_KEY = "bm.compute";
+
+function useCompute(): [Compute, (c: Compute) => void] {
+  const [compute, setCompute] = useState<Compute>(() => {
+    try {
+      const v = localStorage.getItem(COMPUTE_KEY);
+      return v === "local" || v === "cluster" ? v : "modal";
+    } catch {
+      return "modal";
+    }
+  });
+  const choose = (c: Compute) => {
+    setCompute(c);
+    try {
+      localStorage.setItem(COMPUTE_KEY, c);
+    } catch {
+      /* private mode: the choice just isn't remembered */
+    }
+  };
+  return [compute, choose];
+}
+
+function ComputePicker({ value, onChange }: { value: Compute; onChange: (c: Compute) => void }) {
+  const current = COMPUTE.find((c) => c.id === value)!;
+  return (
+    <div className="flex flex-col gap-[10px]">
+      <div role="radiogroup" aria-label="Compute" className="flex flex-wrap items-center gap-[10px]">
+        {COMPUTE.map(({ id, label, icon: Icon }) => {
+          const on = id === value;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onChange(id)}
+              className={cn(
+                "flex h-11 cursor-pointer items-center gap-2 rounded-[9px] px-3 text-[13px] outline -outline-offset-[0.5px] transition-[background-color,color,outline-color,box-shadow] duration-300",
+                on
+                  ? "bg-app-wash font-semibold text-cobalt outline-[1.5px] outline-cobalt-bright shadow-[0_2px_8px_#1D3B9418]"
+                  : "bg-app-field text-app-slate outline-1 outline-app-line hover:bg-white hover:text-app-text",
+              )}
+            >
+              {on ? <CircleCheck size={14} className="animate-pop-in" /> : <Icon size={14} />}
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <p key={value} className="animate-enter m-0 text-[12.5px] text-app-slate">
+        {current.detail}
+      </p>
+    </div>
+  );
+}
 
 function useCopied(): [string | null, (key: string, text: string) => void] {
   const [copied, setCopied] = useState<string | null>(null);
@@ -83,39 +161,47 @@ function Status({ done }: { done: boolean }) {
   );
 }
 
-function Step({ n, title, sub, done, current, children }: { n: number; title: string; sub: string; done: boolean; current?: boolean; children: ReactNode }) {
+function Step({ n, title, sub, done, current, delay = 0, children }: { n: number; title: string; sub: string; done: boolean; current?: boolean; delay?: number; children: ReactNode }) {
+  // The entrance runs on a wrapper so it does not pin the card's transform (the card lifts on hover).
   return (
-    <section
-      className={cn(
-        "flex w-full items-start gap-[22px] rounded-[16px] bg-white px-7 py-[22px]",
-        current
-          ? "shadow-[0_4px_16px_#1D3B9418] outline outline-[1.5px] -outline-offset-[0.75px] outline-app-wash-line"
-          : "shadow-[0_1px_2px_#1A2F7A0D] outline outline-1 -outline-offset-[0.5px] outline-app-line",
-      )}
-    >
-      <div
+    <div className="animate-enter w-full" style={{ animationDelay: `${delay}ms` }}>
+      <section
         className={cn(
-          "grid size-11 shrink-0 place-items-center rounded-[12px] font-serif text-[24px] leading-none",
-          current ? "bg-gradient-to-b from-cobalt-bright to-cobalt text-white" : "bg-app-wash text-cobalt",
+          "flex w-full items-start gap-[22px] rounded-[16px] bg-white px-7 py-[22px] transition-[transform,box-shadow] duration-500 ease-out hover:-translate-y-0.5",
+          current
+            ? "shadow-[0_4px_16px_#1D3B9418] outline outline-[1.5px] -outline-offset-[0.75px] outline-app-wash-line hover:shadow-[0_8px_24px_#1D3B9422]"
+            : "shadow-[0_1px_2px_#1A2F7A0D] outline outline-1 -outline-offset-[0.5px] outline-app-line hover:shadow-[0_4px_14px_#1A2F7A14]",
         )}
       >
-        {n}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-[14px]">
-        <div className="flex flex-col gap-1">
-          <h2 className="m-0 text-[20px] font-semibold text-ink">{title}</h2>
-          <p className="m-0 text-[14px] text-app-slate">{sub}</p>
+        <div
+          className={cn(
+            "grid size-11 shrink-0 place-items-center rounded-[12px] font-serif text-[24px] leading-none",
+            current ? "bg-gradient-to-b from-cobalt-bright to-cobalt text-white" : "bg-app-wash text-cobalt",
+          )}
+        >
+          {n}
         </div>
-        {children}
-      </div>
-      <Status done={done} />
-    </section>
+        <div className="flex min-w-0 flex-1 flex-col gap-[14px]">
+          <div className="flex flex-col gap-1">
+            <h2 className="m-0 text-[20px] font-semibold text-ink">{title}</h2>
+            <p className="m-0 text-[14px] text-app-slate">{sub}</p>
+          </div>
+          {children}
+        </div>
+        <div className="animate-pop-in" style={{ animationDelay: `${delay + 300}ms` }}>
+          <Status done={done} />
+        </div>
+      </section>
+    </div>
   );
 }
 
-function Chip({ icon: Icon, children }: { icon: typeof Server; children: ReactNode }) {
+function Chip({ icon: Icon, delay = 0, children }: { icon: typeof Server; delay?: number; children: ReactNode }) {
   return (
-    <span className="flex h-[30px] items-center gap-[6px] rounded-[8px] bg-white px-[10px] text-[12px] text-app-text outline outline-1 -outline-offset-[0.5px] outline-app-line">
+    <span
+      style={{ animationDelay: `${delay}ms` }}
+      className="animate-enter flex h-[30px] items-center gap-[6px] rounded-[8px] bg-white px-[10px] text-[12px] text-app-text outline outline-1 -outline-offset-[0.5px] outline-app-line"
+    >
       <Icon size={12} strokeWidth={1.8} className="text-app-slate" /> {children}
     </span>
   );
@@ -124,6 +210,10 @@ function Chip({ icon: Icon, children }: { icon: typeof Server; children: ReactNo
 /** "/app": three onboarding steps (Pen P6OjMG). */
 export default function GetStarted() {
   const [copied, copy] = useCopied();
+  const [compute, setCompute] = useCompute();
+  const curl = curlFor(compute);
+  const live = useLiveRace();
+  const liveBusy = live.state.phase === "starting" || live.state.phase === "running";
   useEffect(() => {
     document.title = "Get started · Busy Machines";
   }, []);
@@ -142,35 +232,17 @@ export default function GetStarted() {
       />
 
       <div className="flex w-full flex-col gap-4 pt-2">
-        <Step n={1} title="Add your Mubit key" sub="Paste one key. Your provider keys stay in Mubit." done>
-          <div className="flex items-center gap-[10px]">
-            <div className="flex h-11 w-[420px] items-center gap-2 rounded-[9px] bg-app-field px-3 outline outline-1 -outline-offset-[0.5px] outline-app-line">
-              <KeyRound size={14} className="text-app-slate" />
-              <span className="font-mono text-[12px] text-app-slate">MUBIT_API_KEY</span>
-              <span className="flex-1 font-mono text-[13px] text-app-text">mbt_••••••••••••••••</span>
-              <EyeOff size={14} className="text-app-slate" />
-            </div>
-            <span className="flex items-center gap-[6px] rounded-[8px] bg-app-side px-[10px] py-[6px] text-[12px] font-medium text-cobalt">
+        <Step n={1} title="Add your Mubit key" sub="Paste one key. Your provider keys stay in Mubit." done delay={60}>
+          <div className="flex flex-col gap-[10px]">
+            <KeyTest />
+            <span className="flex w-fit items-center gap-[6px] rounded-[8px] bg-app-side px-[10px] py-[6px] text-[12px] font-medium text-cobalt">
               <ShieldCheck size={13} /> Every AI call runs through Mubit
             </span>
           </div>
         </Step>
 
-        <Step n={2} title="Connect your compute" sub="Experiments run on your own machines, never on ours." done>
-          <div className="flex items-center gap-[10px]">
-            <span className="flex h-11 items-center gap-2 rounded-[9px] bg-app-field px-3 outline outline-1 -outline-offset-[0.5px] outline-app-line">
-              <span className="size-2 rounded-full bg-[#2E9B5F]" />
-              <span className="text-[13px] font-semibold text-app-text">Modal</span>
-              <span className="font-mono text-[12px] text-app-slate">token ak-••••••</span>
-            </span>
-            <span className="flex h-11 items-center gap-2 rounded-[9px] px-3 text-[13px] text-app-slate outline outline-1 -outline-offset-[0.5px] outline-app-line">
-              <Laptop size={14} /> Local
-            </span>
-            <span className="flex h-11 items-center gap-2 rounded-[9px] px-3 text-[13px] text-app-slate outline outline-1 -outline-offset-[0.5px] outline-app-line">
-              <Server size={14} /> Your cluster
-            </span>
-            <span className="text-[12.5px] text-app-slate">Modal today; any runner</span>
-          </div>
+        <Step n={2} title="Connect your compute" sub="Experiments run on your own machines, never on ours." done delay={120}>
+          <ComputePicker value={compute} onChange={setCompute} />
         </Step>
 
         <Step
@@ -179,20 +251,21 @@ export default function GetStarted() {
           sub="Pick a preset. Both sides get the same machines, budget and starting code; only when the AI thinks differs."
           done={false}
           current
+          delay={180}
         >
           <div className="flex flex-wrap items-center gap-2">
-            <Chip icon={Gamepad2}>Game-playing preset</Chip>
-            <Chip icon={Server}>30 machines each</Chip>
-            <Chip icon={Timer}>15 minutes</Chip>
-            <Chip icon={GitBranch}>Same starting code</Chip>
+            <Chip icon={Gamepad2} delay={240}>Game-playing preset</Chip>
+            <Chip icon={Server} delay={280}>30 machines each</Chip>
+            <Chip icon={Timer} delay={320}>15 minutes</Chip>
+            <Chip icon={GitBranch} delay={360}>Same starting code</Chip>
           </div>
 
-          <div className="w-full overflow-hidden rounded-[12px] bg-code">
+          <div className="animate-enter w-full overflow-hidden rounded-[12px] bg-code" style={{ animationDelay: "300ms" }}>
             <div className="flex items-center gap-[6px] border-b border-code-line px-[14px] py-[10px]">
               <span className="rounded-[6px] bg-code-line px-[10px] py-1 font-mono text-[11px] font-semibold text-white">API</span>
               <span className="flex-1" />
-              <Button variant="code" size="sm" onClick={() => copy("api", CURL)} title="Copies the full request as curl">
-                {copied === "api" ? <Check size={12} /> : <Copy size={12} />} {copied === "api" ? "Copied" : "Copy"}
+              <Button variant="code" size="sm" onClick={() => copy("api", curl)} title="Copies the full request as curl">
+                {copied === "api" ? <Check size={12} className="animate-pop-in" /> : <Copy size={12} />} {copied === "api" ? "Copied" : "Copy"}
               </Button>
             </div>
             <div className="flex flex-col gap-2 px-5 py-4 font-mono text-[15px]">
@@ -208,6 +281,8 @@ export default function GetStarted() {
                 <span className="text-[#E3C07A]">["opus", "opus_bm", "optuna"]</span>
                 <span className="text-[#C9CEDD]">, "gpus_per_arm": </span>
                 <span className="text-[#E3C07A]">30</span>
+                <span className="text-[#C9CEDD]">, "runner": </span>
+                <span className="text-[#E3C07A]">"{RUNNER[compute]}"</span>
                 <span className="text-[#C9CEDD]">, </span>
                 <span className="text-[#8D93A8]" title={`The rest of the ${PRESET} preset's RaceConfig. Copy includes every field.`}>
                   …
@@ -222,25 +297,64 @@ export default function GetStarted() {
             <div className="flex items-center gap-[10px] border-t border-code-line bg-code-2 px-5 py-[14px]">
               <span className="text-[11px] font-medium text-[#8D93A8]">or</span>
               <span className="font-mono text-[13px] text-[#8D93A8]">$</span>
-              <span className="flex-1 font-mono text-[14px] text-ivory">{CLI}</span>
-              <Button variant="code" size="sm" onClick={() => copy("cli", CLI)} title="Copy the CLI command">
-                {copied === "cli" ? <Check size={12} /> : <Copy size={12} />}
-              </Button>
+              {compute === "modal" ? (
+                <>
+                  <span className="flex-1 font-mono text-[14px] text-ivory">{CLI}</span>
+                  <Button variant="code" size="sm" onClick={() => copy("cli", CLI)} title="Copy the CLI command">
+                    {copied === "cli" ? <Check size={12} className="animate-pop-in" /> : <Copy size={12} />}
+                  </Button>
+                </>
+              ) : (
+                <span className="flex-1 text-[13px] text-[#8D93A8]">
+                  The CLI preset runs on Modal. For {compute === "local" ? "this computer" : "your cluster"}, use the API request above.
+                </span>
+              )}
             </div>
           </div>
 
           <div className="flex items-center justify-between">
             <Button
               size="lg"
-              onClick={() => copy("start", CLI)}
+              onClick={() => copy("start", compute === "modal" ? CLI : curl)}
               title="A real sweep calls Opus 5.5 through Mubit and runs on your compute. This copies the command to run it."
             >
-              {copied === "start" ? <Check size={14} /> : <Play size={14} />}
+              {copied === "start" ? <Check size={14} className="animate-pop-in" /> : <Play size={14} />}
               {copied === "start" ? "Command copied: run it from the repo root" : "Start a sweep"}
             </Button>
-            <Link to="/app/compare" className="text-[13.5px] font-semibold text-cobalt hover:underline">
-              Try it free: replay a logged sweep →
+            <Link to="/app/compare" className="group text-[13.5px] font-semibold text-cobalt hover:underline">
+              Try it free: replay a logged sweep{" "}
+              <span className="inline-block transition-transform duration-300 ease-out group-hover:translate-x-0.5">→</span>
             </Link>
+          </div>
+
+          <div className="animate-enter flex flex-col gap-3 border-t border-app-line pt-4" style={{ animationDelay: "380ms" }}>
+            <div className="flex flex-col gap-1">
+              <span className="text-[15px] font-semibold text-ink">See it work in 10 seconds</span>
+              <span className="text-[13px] text-app-slate">
+                Both agents use Opus 5.5 on 16 simulated machines each. Watch how long each one takes to get its first experiment running.
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                size="lg"
+                onClick={() => void live.start(false)}
+                disabled={liveBusy}
+                title="Real Opus 5.5 calls through Mubit: a few cents. Simulated machines, so no GPU spend."
+              >
+                <Zap size={14} /> Run a 10-second live test
+              </Button>
+              <Button
+                size="lg"
+                onClick={() => void live.start(true)}
+                disabled={liveBusy}
+                className="bg-none bg-white text-cobalt outline-app-wash-line shadow-none hover:bg-app-wash hover:brightness-100"
+                title="Same race with a mock AI paced like Opus: $0, rehearsal numbers only"
+              >
+                <Play size={14} /> Rehearse free (mock AI)
+              </Button>
+              <span className="text-[12px] text-app-muted">Demo run, not a benchmark result.</span>
+            </div>
+            <LiveRacePanel state={live.state} />
           </div>
         </Step>
       </div>

@@ -112,3 +112,58 @@
 .animate-bm-pulse {
   animation: bm-pulse 1.4s ease-in-out infinite;
 }
+
+/* ---- Motion primitives (components/motion/Reveal, CountUp; hooks/useInView) ---- */
+.reveal {
+  transition-property: opacity, transform, filter;
+  transition-duration: 700ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.reveal:not(.is-in) { opacity: 0; }
+.reveal-up:not(.is-in) { transform: translateY(24px); }
+.reveal-left:not(.is-in) { transform: translateX(-32px); }
+.reveal-right:not(.is-in) { transform: translateX(32px); }
+.reveal-scale:not(.is-in) { transform: scale(0.96); }
+.reveal-blur:not(.is-in) { filter: blur(8px); transform: translateY(8px); }
+
+/* Bars grow from their start edge once the parent has .is-in (set a width/height on the bar itself). */
+.grow-x { transform-origin: left center; transform: scaleX(0); transition: transform 1100ms cubic-bezier(0.22, 1, 0.36, 1); }
+.is-in .grow-x, .grow-x.is-in { transform: scaleX(1); }
+.grow-y { transform-origin: center bottom; transform: scaleY(0); transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1); }
+.is-in .grow-y, .grow-y.is-in { transform: scaleY(1); }
+
+/* One-shot entrance for above-the-fold content (no observer needed). Use with style={{animationDelay}}. */
+@keyframes bm-enter {
+  from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+.animate-enter { animation: bm-enter 900ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes bm-spin-slow { to { transform: rotate(360deg); } }
+.animate-spin-slow { animation: bm-spin-slow 60s linear infinite; }
+
+@keyframes bm-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.animate-float { animation: bm-float 6s ease-in-out infinite; }
+
+@keyframes bm-draw { from { stroke-dashoffset: var(--dash, 4000); } to { stroke-dashoffset: 0; } }
+.animate-draw { stroke-dasharray: var(--dash, 4000); animation: bm-draw 2.4s cubic-bezier(0.65, 0, 0.35, 1) both; }
+
+@keyframes bm-shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .grow-x, .grow-y { transition: none !important; }
+  .reveal:not(.is-in) { opacity: 1; transform: none; filter: none; }
+  .grow-x, .grow-y { transform: none; }
+  .animate-enter, .animate-spin-slow, .animate-float, .animate-draw, .animate-bm-pulse { animation: none !important; }
+}
+
+/* Landing: smooth anchor scrolling, and anchors land below the fixed 72px nav. */
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+main:has(.hero-nav) [id] { scroll-margin-top: 72px; }

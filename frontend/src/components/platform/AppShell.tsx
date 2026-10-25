@@ -1,19 +1,28 @@
 import type { ReactNode } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
-import { BookOpen, Columns2, Ellipsis, PanelLeft, Rocket, type LucideIcon } from "lucide-react";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { BookOpen, Columns2, Ellipsis, LayoutGrid, PanelLeft, Rocket, type LucideIcon } from "lucide-react";
 import { DOCS_URL } from "@/lib/links";
 import { cn } from "@/lib/utils";
+import "./platform.motion.css";
 
-const item = "flex h-[38px] w-full items-center gap-[10px] rounded-[9px] px-3 text-[14px]";
+const item =
+  "group flex h-[38px] w-full items-center gap-[10px] rounded-[9px] px-3 text-[14px] transition-[background-color,color,box-shadow,outline-color] duration-300 ease-out";
 const active = "bg-white font-semibold text-ink shadow-[0_1px_3px_#1A2F7A12] outline outline-1 -outline-offset-[0.5px] outline-app-line";
-const idle = "text-app-text-2 hover:bg-white/60";
+const idle = "text-app-text-2 outline outline-1 -outline-offset-[0.5px] outline-transparent hover:bg-white/60 hover:text-ink";
 
 function NavItem({ to, icon: Icon, children, end }: { to: string; icon: LucideIcon; children: ReactNode; end?: boolean }) {
   return (
     <NavLink to={to} end={end} className={({ isActive }) => cn(item, isActive ? active : idle)}>
       {({ isActive }) => (
         <>
-          <Icon size={16} strokeWidth={1.8} className={isActive ? "text-ink" : "text-app-slate"} />
+          <Icon
+            size={16}
+            strokeWidth={1.8}
+            className={cn(
+              "transition-[color,transform] duration-300 ease-out",
+              isActive ? "text-ink" : "text-app-slate group-hover:translate-x-px group-hover:text-app-text-2",
+            )}
+          />
           <span className="flex-1">{children}</span>
         </>
       )}
@@ -23,13 +32,14 @@ function NavItem({ to, icon: Icon, children, end }: { to: string; icon: LucideIc
 
 /** Sidebar + main area of the platform frames (Pen P6OjMG / GKsLR). */
 export function AppShell() {
+  const { pathname } = useLocation();
   return (
     <div className="flex min-h-screen min-w-[1280px] bg-app-bg font-sans text-app-text">
       <aside className="sticky top-0 flex h-screen w-[264px] shrink-0 flex-col gap-[14px] border-r border-app-line bg-app-side px-[14px] py-4">
         <Link
           to="/"
           title="Back to the landing page"
-          className="flex items-center gap-[10px] rounded-[12px] bg-white py-2 pr-[10px] pl-2 shadow-[0_1px_2px_#1A2F7A0D] outline outline-1 -outline-offset-[0.5px] outline-app-line"
+          className="flex items-center gap-[10px] rounded-[12px] bg-white py-2 pr-[10px] pl-2 shadow-[0_1px_2px_#1A2F7A0D] transition-shadow duration-300 hover:shadow-[0_3px_10px_#1A2F7A18] outline outline-1 -outline-offset-[0.5px] outline-app-line"
         >
           <span className="grid size-8 place-items-center rounded-[9px] bg-gradient-to-b from-cobalt-bright to-cobalt font-serif text-[22px] leading-none text-ivory">
             B
@@ -41,6 +51,9 @@ export function AppShell() {
           <PanelLeft size={16} strokeWidth={1.8} className="text-app-slate" />
         </Link>
         <nav className="flex flex-col gap-1 pt-2">
+          <NavItem to="/app/overview" icon={LayoutGrid}>
+            Overview
+          </NavItem>
           <NavItem to="/app" end icon={Rocket}>
             Get started
           </NavItem>
@@ -48,7 +61,7 @@ export function AppShell() {
             Compare
           </NavItem>
           <a href={DOCS_URL} target="_blank" rel="noreferrer" className={cn(item, idle)}>
-            <BookOpen size={16} strokeWidth={1.8} className="text-app-slate" />
+            <BookOpen size={16} strokeWidth={1.8} className="text-app-slate transition-[color,transform] duration-300 ease-out group-hover:translate-x-px group-hover:text-app-text-2" />
             <span className="flex-1">Docs</span>
           </a>
         </nav>
@@ -64,8 +77,11 @@ export function AppShell() {
           <Ellipsis size={16} className="text-app-slate" />
         </div>
       </aside>
-      <main className="flex min-w-0 flex-1 flex-col gap-4 px-10 pt-6 pb-5">
-        <Outlet />
+      <main className="flex min-w-0 flex-1 flex-col px-10 pt-6 pb-5">
+        {/* Keyed by route so each page plays its entrance when you switch pages. */}
+        <div key={pathname} className="animate-page-in flex min-w-0 flex-1 flex-col gap-4">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
@@ -76,11 +92,19 @@ export function PageHeader({ eyebrow, title, subtitle, right }: { eyebrow: strin
   return (
     <div className="flex w-full items-end justify-between gap-6">
       <div className="flex flex-col gap-[6px]">
-        <div className="text-[12px] font-medium text-app-slate">{eyebrow}</div>
-        <h1 className="m-0 whitespace-nowrap font-serif text-[44px] leading-[46px] font-normal text-ink">{title}</h1>
-        <div className="text-[15px] text-app-slate">{subtitle}</div>
+        <div className="animate-enter text-[12px] font-medium text-app-slate">{eyebrow}</div>
+        <h1 className="animate-enter m-0 whitespace-nowrap font-serif text-[44px] leading-[46px] font-normal text-ink" style={{ animationDelay: "70ms" }}>
+          {title}
+        </h1>
+        <div className="animate-enter text-[15px] text-app-slate" style={{ animationDelay: "150ms" }}>
+          {subtitle}
+        </div>
       </div>
-      {right}
+      {right && (
+        <div className="animate-enter" style={{ animationDelay: "220ms" }}>
+          {right}
+        </div>
+      )}
     </div>
   );
 }

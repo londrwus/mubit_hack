@@ -35,6 +35,7 @@ from backend.demo import demo_config
 
 ROOT = Path(__file__).resolve().parents[1]
 LIVE = "demo-live-60s"
+SHORT = "demo-live-10s"
 REF = "lcbench-wide-bm-c30-15m"
 
 
@@ -89,7 +90,7 @@ def test_live_demo_preset_fields() -> None:
     assert cfg.propose_variant_for(ArmKind.opus_bm) == LEAN_PLANNER_PROPOSE
     est = bench.estimate_gpu_cost_usd(cfg, bench.price_per_s("L4"))  # virtual GPU $
     assert est == pytest.approx(2 * 16 * 60 * 0.000222) and est <= (cfg.max_estimated_gpu_usd or 0)
-    assert set(DEMO_START_PRESETS) == {LIVE, "demo-cifar-modal-5m"}
+    assert set(DEMO_START_PRESETS) == {LIVE, "demo-cifar-modal-5m", SHORT}
 
 
 def test_bench_labels_the_live_demo() -> None:
@@ -146,7 +147,7 @@ PRESET_DUMP_SHA = {
 
 
 def test_other_presets_unchanged() -> None:
-    assert set(PRESETS) - set(PRESET_DUMP_SHA) == {LIVE}
+    assert set(PRESETS) - set(PRESET_DUMP_SHA) == {LIVE, SHORT}
     for name, sha in PRESET_DUMP_SHA.items():
         got = hashlib.sha256(PRESETS[name].model_dump_json().encode()).hexdigest()[:16]
         assert got == sha, name
@@ -234,6 +235,11 @@ def test_endpoint_starts_the_demo_and_streams_it(monkeypatch: pytest.MonkeyPatch
         assert last["header"]["demo_run"] is True
         assert last["header"]["mode_tag"] == "Demo run, not a benchmark result"
         assert last["header"]["preset"] == LIVE
+        for arm in last["arms"]:   # measured start-up (event timestamps after t0)
+            st = arm["startup"]
+            assert st["first_experiment_s"] is not None and st["first_experiment_s"] >= 0, arm["kind"]
+            assert st["busy_reached_s"] == sorted(st["busy_reached_s"]) and len(st["busy_reached_s"]) >= 1
+            assert st["first_experiment_s"] == min(st["first_by_source_s"].values())
         deadline = time.time() + 10
         while time.time() < deadline and c.get("/api/health").json()["live_races"]:
             time.sleep(0.05)
@@ -247,3 +253,88 @@ def test_endpoint_starts_the_demo_and_streams_it(monkeypatch: pytest.MonkeyPatch
         r3 = c.post(f"/api/demo/start?preset={LIVE}")
         assert r3.status_code == 201
         c.post(f"/api/races/{r3.json()['race_id']}/stop")
+
+
+# --------------------------------------------------------------------------- 15 s live test + key check
+
+
+def test_short_live_test_is_the_60s_demo_cut_to_10s() -> None:
+    short, live = PRESETS[SHORT], PRESETS[LIVE]
+    assert short.is_demo and not short.strict and short.demo_label == LIVE_DEMO_LABEL in short.name
+    assert short.budget_s == 10 and short.min_propose_interval_for(ArmKind.opus_bm) == 5.0
+    assert short.min_propose_interval_for(ArmKind.opus) is None
+    assert short.run_baseline_first is False   # same for both arms: shows the start-up gap
+    diff = ("name", "budget_s", "feature_params", "run_baseline_first")
+    same = {k: v for k, v in live.model_dump().items() if k not in diff}
+    assert {k: v for k, v in short.model_dump().items() if k in same} == same
+    assert short.propose_setups() == live.propose_setups()   # frozen prompts: no drift
+    assert SHORT in DEMO_START_PRESETS
+    dry = demo_config(SHORT, dry_run=True)
+    assert dry.llm == "mock" and dry.mock_latency_s == {ArmKind.opus: 9.5, ArmKind.opus_bm: 4.9}
+    assert demo_config(SHORT).mock_latency_s == {}
+    assert demo_config(LIVE, dry_run=True).mock_latency_s == {}   # the 60 s rehearsal is unchanged
+
+
+def test_mubit_check_presence_makes_no_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    import backend.agent.mubit_client as mc
+
+    async def boom(*a: Any, **k: Any) -> dict[str, Any]:
+        raise AssertionError("no call without a key in the body")
+
+    monkeypatch.setattr(mc, "check_mubit_key", boom)
+    monkeypatch.setattr(mc, "load_mubit_api_key", lambda env_file=None, env_var="MUBIT_API_KEY": "k" * 20)
+    app = create_app(":memory:", tick_s=0.02)
+    with TestClient(app) as c:
+        r = c.post("/api/mubit/check")
+        assert r.status_code == 200 and r.json()["mode"] == "presence" and r.json()["ok"] is True
+        assert c.post("/api/mubit/check", json={}).json()["ok"] is True
+
+    def no_key(env_file: Any = None, env_var: str = "MUBIT_API_KEY") -> str:
+        raise RuntimeError(f"{env_var} is not set")
+
+    monkeypatch.setattr(mc, "load_mubit_api_key", no_key)
+    with TestClient(create_app(":memory:", tick_s=0.02)) as c:
+        body = c.post("/api/mubit/check").json()
+        assert body["ok"] is False and "MUBIT_API_KEY is not set" in body["error"]
+
+
+def test_mubit_check_with_a_key_sends_one_tiny_unrecorded_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx2
+
+    import backend.agent.mubit_client as mc
+    from backend.agent.llm_base import DEV_MODEL, RECORD_HEADER, REQUEST_ID_HEADER
+
+    seen: list[httpx2.Request] = []
+    secret = "mbt-secret-key-0123456789abcdef"
+
+    def handler(req: httpx2.Request) -> httpx2.Response:
+        seen.append(req)
+        cred = req.headers.get("x-api-key", "") + req.headers.get("authorization", "")
+        if secret not in cred:
+            return httpx2.Response(401, json={"type": "error", "error": {"type": "authentication_error",
+                                                                         "message": f"bad key {cred}"}})
+        return httpx2.Response(200, headers={REQUEST_ID_HEADER: "mreq_check"}, json={
+            "id": "m", "type": "message", "role": "assistant", "model": DEV_MODEL,
+            "content": [{"type": "text", "text": "p"}], "stop_reason": "max_tokens", "stop_sequence": None,
+            "usage": {"input_tokens": 8, "output_tokens": 1}})
+
+    real = mc.check_mubit_key
+
+    async def fake(key: str, **kw: Any) -> dict[str, Any]:
+        return await real(key, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)), **kw)
+
+    monkeypatch.setattr(mc, "check_mubit_key", fake)
+    with TestClient(create_app(":memory:", tick_s=0.02)) as c:
+        ok = c.post("/api/mubit/check", json={"api_key": secret}).json()
+        assert ok["ok"] is True, ok["error"]
+        assert ok["mode"] == "call" and ok["request_id"] == "mreq_check"
+        assert ok["model"] == DEV_MODEL and isinstance(ok["latency_ms"], int)
+        bad = c.post("/api/mubit/check", json={"api_key": "wrong-key-wrong-key-wrong"}).json()
+        assert bad["ok"] is False and "401" in bad["error"]
+        assert secret not in str(ok) and "wrong-key" not in str(bad)
+    assert len(seen) == 2
+    req = seen[0]
+    assert str(req.url).startswith("https://api.mubit.ai/anthropic/")
+    assert req.headers.get(RECORD_HEADER) == "off"
+    sent = __import__("json").loads(req.content)
+    assert sent["max_tokens"] == 1 and sent["model"] == DEV_MODEL

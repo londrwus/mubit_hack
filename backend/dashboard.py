@@ -322,6 +322,10 @@ class _Arm:
     planner_busy_s: float = 0.0
     reported_best: dict[str, Any] | None = None
     final: dict[str, Any] | None = None
+    # Measured start-up (event timestamps): first experiment start per source, and the time the
+    # number of busy machines first reached 1, 2, ... (index i = i + 1 machines busy at once).
+    first_started: dict[str, float] = field(default_factory=dict)
+    busy_reached: list[float] = field(default_factory=list)
 
 
 class DashboardState:
@@ -476,12 +480,16 @@ class DashboardState:
             if st == SlotState.busy.value:
                 s.experiment_id, s.stopped = ev.experiment_id, False
             self._set_display(arm, s, ts, out)
+            n_busy = sum(1 for x in arm.slots.values() if x.display == "busy")
+            while len(arm.busy_reached) < n_busy:
+                arm.busy_reached.append(ts)
         elif isinstance(ev, ExperimentStartedEvent):
             arm = self._arm(ev.arm.value)
             src = ev.source or "unknown"
             self.exps[ev.experiment_id] = {"arm": arm.kind, "source": src, "slot_id": ev.slot_id,
                                            "started_ts": ts}
             arm.started[src] = arm.started.get(src, 0) + 1
+            arm.first_started.setdefault(src, ts)
             s = arm.slots.get(ev.slot_id)
             if s is not None and s.held and s.experiment_id == ev.experiment_id:
                 s.held = False
@@ -647,6 +655,14 @@ class DashboardState:
                                                                       if planner_thinking else 0.0), 3)},
                 "reported_best": arm.reported_best,
                 "final": arm.final,
+                # Measured from event timestamps (race seconds after t0); None = not yet.
+                "startup": {
+                    "first_experiment_s": (self._el(min(arm.first_started.values())) if arm.first_started else None),
+                    "first_by_source_s": {k: self._el(v) for k, v in arm.first_started.items()},
+                    "busy_reached_s": [self._el(v) for v in arm.busy_reached],
+                    "all_busy_s": (self._el(arm.busy_reached[n_slots - 1])
+                                   if n_slots and len(arm.busy_reached) >= n_slots else None),
+                },
             }
             if arm.final is not None:
                 # The stored summary is what the results log quotes: the final frame shows exactly it.

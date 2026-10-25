@@ -578,7 +578,67 @@ def is_benchmark_safe(client: object) -> bool:
     return bool(getattr(client, "benchmark_safe", False))
 
 
+# --------------------------------------------------------------------------- key check (dashboard)
+
+KEY_CHECK_MODEL = DEV_MODEL   # the cheapest model: one call with max_tokens=1 costs a fraction of a cent
+
+
+def _scrub(text: str, secret: str) -> str:
+    """An error message without the key (or any 8+ character slice of it)."""
+    out = text.replace(secret, "[key]") if secret else text
+    if len(secret) >= 16:
+        for i in range(0, len(secret) - 8):
+            out = out.replace(secret[i:i + 8], "[key]")
+    return out[:300]
+
+
+async def check_mubit_key(api_key: str, *, model: str = KEY_CHECK_MODEL, timeout_s: float = 20.0,
+                          http_client: Any | None = None) -> dict[str, Any]:
+    """Test a Mubit key with the smallest possible call: one message, ``max_tokens=1``, the cheapest
+    model, ``x-middleware-record: off`` (never an example), through the Mubit gateway only.
+
+    Returns ``{ok, latency_ms, model, request_id, error}`` and never raises; the key is never
+    returned, logged or kept (the SDK client is closed before returning)."""
+    key = (api_key or "").strip()
+    out: dict[str, Any] = {"ok": False, "latency_ms": None, "model": model, "request_id": None, "error": None}
+    if not key:
+        out["error"] = "no key given"
+        return out
+    client = anthropic.AsyncAnthropic(api_key=key, base_url=MUBIT_ANTHROPIC_BASE_URL, timeout=timeout_s,
+                                      max_retries=0, http_client=http_client)
+    t0 = time.perf_counter()
+    try:
+        raw = await client.messages.with_raw_response.create(
+            model=model, max_tokens=1, messages=[{"role": "user", "content": "ping"}],
+            extra_headers={RECORD_HEADER: "off"})
+        out["latency_ms"] = round((time.perf_counter() - t0) * 1000)
+        out["request_id"] = raw.headers.get(REQUEST_ID_HEADER)
+        msg = raw.parse()
+        out["model"] = getattr(msg, "model", None) or model
+        out["ok"] = True
+    except anthropic.APIStatusError as e:
+        out["latency_ms"] = round((time.perf_counter() - t0) * 1000)
+        reason = {401: "Mubit rejected the key (401 unauthorized)",
+                  403: "the key is not allowed to call this model (403 forbidden)"}.get(e.status_code)
+        out["error"] = reason or _scrub(f"Mubit answered {e.status_code}: {e.message}", key)
+        try:
+            out["request_id"] = e.response.headers.get(REQUEST_ID_HEADER)
+        except Exception:  # noqa: BLE001
+            pass
+    except Exception as e:  # noqa: BLE001 - network errors, timeouts
+        out["latency_ms"] = round((time.perf_counter() - t0) * 1000)
+        out["error"] = _scrub(f"could not reach Mubit: {type(e).__name__}: {e}", key)
+    finally:
+        try:
+            await client.close()
+        except Exception:  # noqa: BLE001
+            pass
+    return out
+
+
 __all__ = [
+    "KEY_CHECK_MODEL",
+    "check_mubit_key",
     "COST_SOURCE_LIST",
     "COST_SOURCE_MUBIT",
     "DEFAULT_ARM_MODELS",

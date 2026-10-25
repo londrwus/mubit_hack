@@ -27,6 +27,7 @@ ModalRunner = modal_runner.ModalRunner
 
 ROOT = Path(__file__).resolve().parents[1]
 DEMO = "demo-cifar-modal-5m"
+LIVE_TEST = "demo-live-10s"   # the "Get started" live test: a demo label, no per-arm apps
 LIVE_DEMO = "demo-live-60s"   # demo label, no per-arm apps (tests/test_demo_live.py)
 
 
@@ -195,7 +196,7 @@ def test_prewarm_default_path_unchanged() -> None:
 
 def test_benchmark_presets_cannot_enable_per_arm_apps() -> None:
     for name, p in PRESETS.items():
-        if name in (DEMO, LIVE_DEMO):
+        if name in (DEMO, LIVE_DEMO, LIVE_TEST):
             continue
         assert not p.modal_apps and p.demo_label is None, name
         if not p.strict:
@@ -220,7 +221,7 @@ def test_stored_config_of_other_presets_has_no_new_keys() -> None:
             assert dumped["modal_apps"] == {"opus": "busy-machines-opus", "opus_bm": "busy-machines-bm"}
             assert dumped["demo_label"] == DEMO_LABEL
             continue
-        if name == LIVE_DEMO:  # a demo label, no per-arm apps
+        if name in (LIVE_DEMO, LIVE_TEST):  # a demo label, no per-arm apps
             assert "modal_apps" not in dumped and dumped["demo_label"] == p.demo_label, name
             assert "gpu_telemetry_s" not in dumped, name
             continue

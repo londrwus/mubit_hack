@@ -4,6 +4,7 @@ import "./index.css";
 import Landing from "@/pages/Landing";
 import GetStarted from "@/pages/GetStarted";
 import Compare from "@/pages/Compare";
+import Overview from "@/pages/Overview";
 import { AppShell } from "@/components/platform/AppShell";
 
 // No StrictMode: its double-run effects would open two replay sessions on the backend per visit.
@@ -13,6 +14,7 @@ createRoot(document.getElementById("root")!).render(
       <Route path="/" element={<Landing />} />
       <Route path="/app" element={<AppShell />}>
         <Route index element={<GetStarted />} />
+        <Route path="overview" element={<Overview />} />
         <Route path="compare" element={<Compare />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

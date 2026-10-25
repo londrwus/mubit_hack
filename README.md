@@ -4,7 +4,7 @@
 
 # Busy Machines
 
-**Compute intelligence for training sweeps. Runs on Mubit.**
+<h1>Compute intelligence for training sweeps. Runs on Mubit.</h1>
 
 AI labs now let a frontier model plan their training sweeps: it reads the results so far, picks the next settings to try, and decides which result is the new best. The model is smart, but it is slow and expensive. While it thinks, the machines wait, and its own calls become most of the bill. Across the standard Opus 5.5 sweeps we measured, **90.6% of the money went to the AI, not to compute** ([R54](docs/results_log.md)).
 
@@ -14,13 +14,39 @@ AI labs now let a frontier model plan their training sweeps: it reads the result
 
 ---
 
+## What we benchmarked
+
+**`night/bench`**, our benchmark, races AI-planned training sweeps on real tasks from public task families, costed in AI and compute dollars. It follows the fixed-budget method of METR's RE-Bench. Every task has two extra parts. One is a **held-out score** that the planner never sees, which is the only score we report as model quality. The other is a **planted shortcut**, a setting that inflates the reported score without making the model better. It tests whether fake improvements get through.
+
+| Task | What is trained | Public source | Compute per side | Model quality = |
+|---|---|---|---|---|
+| **Game-playing (RL)** | A PPO controller that learns to swing up a pendulum whose physics change between levels | Pendulum-v1 (Gym / gymnax equations) | 30 Modal cloud CPU workers, 15 s runs | Return on unseen physics levels |
+| **Tabular model tuning** | Neural nets on an OpenML tabular classification task (task 167168) | LCBench (Zimmer, Lindauer, Hutter 2021), served by the YAHPO Gym surrogate of real training curves | 16 simulated L4 GPUs | Balanced accuracy on the test split |
+| **Image recognition** | A fast CNN on CIFAR-10, in the style of the airbench speedrun | CIFAR-10 speedrun (airbench) | 3 L4 GPUs on Modal | Accuracy on a held-out half of the CIFAR-10 test set |
+
+The repo also includes a fourth task that we haven't raced yet: a nanoGPT-style language model on tiny-shakespeare.
+
+**Three sides in every race**, with the same machines, the same 15 minutes, the same seeds and the same starting code:
+
+1. a **standard Opus 5.5 agent** (Opus plans every step);
+2. **Busy Machines** with the same Opus 5.5;
+3. **Optuna**, a no-AI search baseline.
+
+Each headline result is the mean of 3 runs. Every LLM call on both AI sides goes through Mubit.
+
+**For our verifier model** we used three test sets:
+
+- **500 held-out research claims**: accuracy 22% → 66% ([R42](docs/results_log.md)).
+- **152 real claims from our races**, with known ground truth ([R81](docs/results_log.md)).
+- **400 ContractNLI cases**, Banyan Sapling's original contract domain: 77.3% → 84.3%. It got better on its original domain too, rather than worse ([R42](docs/results_log.md)).
+
 ## The result in one table
 
 Same planner (Opus 5.5 through Mubit), same 30 machines per side, same 15 minutes, same seeds and starting code. Only the loop around the planner differs. Game-playing (RL) sweep, mean of 3 runs ([R78](docs/results_log.md), [R87](docs/results_log.md)):
 
 | | Standard Opus 5.5 agent | **Busy Machines (same Opus 5.5)** | |
 |---|---|---|---|
-| Model quality (penalty, lower is better) | −154.5 | **−154.3** | **same** |
+| Model quality (score on unseen levels, higher is better) | −154.5 | **−154.3** | **same** |
 | AI bill per sweep | $3.30 | **$0.83** | **4.0× cheaper** |
 | Total cost per sweep (AI + compute) | $3.65 | **$1.18** | **3.1× cheaper** |
 | Time to reach the goal | 1.0 min | **0.3 min** | **72% faster** |

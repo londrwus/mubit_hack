@@ -1,5 +1,8 @@
+// In dev the Vite server proxies /api and /ws to the backend (vite.config.ts), so the page only talks to its
+// own origin: no CORS, and nothing for browser privacy settings or add-ons to block.
 export const API_BASE: string =
-  (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "") || "http://127.0.0.1:8765";
+  (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "") ||
+  (import.meta.env.DEV ? window.location.origin : "http://127.0.0.1:8765");
 export const WS_BASE: string = API_BASE.replace(/^http/, "ws");
 
 // ---- dashboard snapshot (schema busy-machines.dashboard/1, docs/dashboard_api.md §3) ----
@@ -27,7 +30,14 @@ export type ArmSnapshot = {
   experiments_finished: number;
   finished_by_source?: Record<string, number>;
   fakes_caught: number;
-  model_quality: { best: number | null; best_text: string | null };
+  model_quality: {
+    best: number | null;
+    best_text: string | null;
+    /** Best-so-far steps as [race seconds, score] (counted runs only). */
+    series?: [number, number][];
+    baseline?: number | null;
+    goal_reached_text?: string | null;
+  };
   planner?: { thinking: boolean };
 };
 
@@ -43,6 +53,7 @@ export type Snapshot = {
     budget_s: number;
     gpus_per_arm: number;
     budget_text: string;
+    goal?: number | null;
     goal_text: string;
     higher_is_better: boolean;
     score_decimals: number;
@@ -73,6 +84,7 @@ export async function createReplay(racePrefix: string, speed: number, signal: Ab
   return (await r.json()) as ReplayCreated;
 }
 
-export function replayDashboardUrl(replayId: string, tickS = 0.2): string {
-  return `${WS_BASE}/ws/replays/${encodeURIComponent(replayId)}/dashboard?tick_s=${tickS}&raw=false&metrics=false`;
+export function replayDashboardUrl(replayId: string, tickS = 0.2, startS = 0): string {
+  const start = startS > 0 ? `&start_s=${startS.toFixed(1)}` : "";
+  return `${WS_BASE}/ws/replays/${encodeURIComponent(replayId)}/dashboard?tick_s=${tickS}&raw=false&metrics=false${start}`;
 }
