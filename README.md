@@ -40,6 +40,16 @@ Each headline result is the mean of 3 runs. Every LLM call on both AI sides goes
 - **152 real claims from our races**, with known ground truth ([R81](docs/results_log.md)).
 - **400 ContractNLI cases**, Banyan Sapling's original contract domain: 77.3% → 84.3%. It got better on its original domain too, rather than worse ([R42](docs/results_log.md)).
 
+### Real races, not mock-ups
+
+Every benchmark number in this README comes from a real race. You can check each one yourself.
+
+- **Real AI calls.** Every planner and checker call was a real Opus 5.5 call through Mubit's gateway, with its Mubit request ID stored. No mock or replayed AI is behind any reported number. Our headline script (`scripts/headline.py`) refuses races in mock, replay, demo or ablation mode, and races whose setups don't match.
+- **Real compute.** The game-playing races ran on real Modal cloud CPU workers, and image recognition on real L4 GPUs on Modal. Each run is stored with its Modal call ID, seed and config. On tabular tuning the training curves are real ones from LCBench, served by the YAHPO Gym surrogate, so the GPU time on that task is simulated. We say so wherever its numbers appear.
+- **Reproducible.** The race exports are committed to [`data/bench/`](data/bench), with 54 races as JSONL. From a fresh clone, anyone can replay the headline race (R78 run 1) event by event and get the same numbers on the dashboard ([R93](docs/results_log.md)).
+- **Decided before the race.** The tabular races had their success lines written down and frozen before they ran ([`preregistration_lcbench_wide.md`](docs/preregistration_lcbench_wide.md), [`preregistration_lcbench_wide_c30.md`](docs/preregistration_lcbench_wide_c30.md)).
+- **Nothing hidden.** Every race on every task is in [`docs/results_log.md`](docs/results_log.md), including the ones we lost: a failed first tabular race ([R75](docs/results_log.md)) and a real-GPU race with a slightly worse model ([R85](docs/results_log.md)). No re-run was dropped and nothing was cherry-picked.
+
 ## The result in one table
 
 Same planner (Opus 5.5 through Mubit), same 30 machines per side, same 15 minutes, same seeds and starting code. Only the loop around the planner differs. Game-playing (RL) sweep, mean of 3 runs ([R78](docs/results_log.md), [R87](docs/results_log.md)):
