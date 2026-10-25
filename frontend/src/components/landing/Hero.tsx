@@ -195,6 +195,16 @@ export function Hero() {
         <div className="absolute top-[132px] left-0 flex h-[90px] w-full items-center justify-center">
           <h1 style={at(120)} className="animate-enter m-0 whitespace-nowrap font-serif text-[60px] font-normal tracking-[-1px] text-ivory">Busy Machines</h1>
         </div>
+        <div className="absolute top-[236px] left-0 flex w-full justify-center">
+          <p
+            style={at(260)}
+            className="animate-enter m-0 flex items-center gap-3 whitespace-nowrap rounded-full bg-cobalt-deep/45 px-5 py-[7px] font-mono text-[16px] font-medium tracking-[3px] text-ivory outline outline-1 -outline-offset-[0.5px] outline-white/25 backdrop-blur-[2px]"
+          >
+            COMPUTE INTELLIGENCE
+            <span className="size-[5px] rounded-full bg-brass" aria-hidden="true" />
+            RUNS ON MUBIT
+          </p>
+        </div>
         <div className="absolute top-[820px] left-0 flex h-[90px] w-full items-center justify-center">
           <p style={at(620)} className="animate-enter m-0 flex flex-col items-center gap-[2px] font-serif text-[30px] leading-[33px] text-ivory">
             <span>Your GPUs should</span>
@@ -205,8 +215,8 @@ export function Hero() {
         <span style={at(520)} className={`${sideLabel} left-[150px]`}>SAME GPUS,</span>
         <span style={at(560)} className={`${sideLabel} left-[1186px]`}>MORE SCIENCE</span>
         <span style={at(300)} className={`${corner} top-[179px] left-[259px]`}>BUILT FOR AI LABS</span>
-        <span style={at(340)} className={`${corner} top-[179px] right-[259px]`}>COMPUTE INTELLIGENCE · RUNS ON MUBIT</span>
-        <span style={at(380)} className={`${corner} top-[767px] left-[259px]`}>FOR TRAINING SWEEPS</span>
+        <span style={at(340)} className={`${corner} top-[179px] right-[259px]`}>FOR TRAINING SWEEPS</span>
+        <span style={at(380)} className={`${corner} top-[767px] left-[259px]`}>SAME MODEL, BUSY MACHINES</span>
         <span style={at(420)} className={`${corner} top-[767px] right-[259px]`}>NIGHT SHIFT LONDON · 2026</span>
       </div>
       </div>
