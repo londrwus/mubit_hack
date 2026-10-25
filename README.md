@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="design/exports/final/KekD1.png" alt="Busy Machines" width="100%">
+  <img src="design/exports/final/hero.jpg" alt="Busy Machines" width="100%">
 </p>
 
 # Busy Machines
